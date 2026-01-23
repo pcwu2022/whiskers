@@ -63,13 +63,25 @@ export default function CodeEditor() {
                 const savedProject = localStorage.getItem(PROJECT_STORAGE_KEY);
                 if (savedProject) {
                     const parsed = JSON.parse(savedProject) as ScratchProject;
+                    
+                    // Migration: Ensure project has a backdrop/stage
+                    const hasBackdrop = parsed.sprites.some(s => s.isStage || s.type === 'backdrop');
+                    if (!hasBackdrop) {
+                        const backdrop = createSprite('Stage', 'backdrop');
+                        parsed.sprites.unshift(backdrop); // Add backdrop at beginning
+                    }
+                    
                     setProject(parsed);
                 } else {
                     // Check for legacy code and migrate
                     const legacyCode = localStorage.getItem(LEGACY_CODE_KEY);
                     const newProject = createProject("My Project");
                     if (legacyCode && legacyCode.trim()) {
-                        newProject.sprites[0].code = legacyCode;
+                        // Put legacy code in the first sprite (not backdrop)
+                        const firstSprite = newProject.sprites.find(s => !s.isStage);
+                        if (firstSprite) {
+                            firstSprite.code = legacyCode;
+                        }
                     }
                     setProject(newProject);
                     // Clean up legacy storage
@@ -358,10 +370,6 @@ export default function CodeEditor() {
     // Keep ref updated with latest handleRun function
     handleRunRef.current = handleRun;
 
-    const closePreview = () => {
-        setShowPreview(false);
-    };
-
     // Loading state
     if (!isLoaded || !project) {
         return (
@@ -478,12 +486,6 @@ export default function CodeEditor() {
                     <div className="w-1/2 flex flex-col border-l border-gray-700">
                         <div className="bg-gray-800 px-3 py-2 flex justify-between items-center border-b border-gray-700">
                             <span className="text-gray-400 text-sm">🎮 Preview</span>
-                            <button
-                                onClick={closePreview}
-                                className="text-gray-400 hover:text-white text-lg leading-none"
-                            >
-                                ×
-                            </button>
                         </div>
                         <div className="flex-1 bg-gray-100">
                             {htmlContent && (

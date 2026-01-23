@@ -105,33 +105,57 @@ export default function FileTabs({
     const regularSprites = sprites.filter(s => s.id !== BACKDROP_ID && !s.isStage);
 
     return (
-        <div className="flex items-center bg-gray-800 border-b border-gray-700 overflow-x-auto">
-            {/* Stage/Backdrop Tab (always first) */}
-            {backdrop && (
-                <div
-                    key={backdrop.id}
-                    className={`group flex items-center gap-1 px-3 py-2 border-r border-gray-700 cursor-pointer transition-colors ${
-                        activeSprite === backdrop.id
-                            ? "bg-purple-900 text-white border-purple-600"
-                            : "bg-gray-750 text-gray-400 hover:bg-gray-700 hover:text-gray-200"
-                    }`}
-                    onClick={() => onSelectSprite(backdrop.id)}
-                    title="Stage - backdrop scripts"
-                >
-                    <span className="text-sm">🎭</span>
-                    <span className="text-sm font-medium">{backdrop.name}</span>
-                </div>
-            )}
+        <>
+            {/* Custom thin black scrollbar */}
+            <style>{`
+                .file-tabs-container::-webkit-scrollbar {
+                    height: 4px;
+                }
+                .file-tabs-container::-webkit-scrollbar-track {
+                    background: #1f2937;
+                }
+                .file-tabs-container::-webkit-scrollbar-thumb {
+                    background: #4b5563;
+                    border-radius: 2px;
+                }
+                .file-tabs-container::-webkit-scrollbar-thumb:hover {
+                    background: #6b7280;
+                }
+                .file-tabs-container {
+                    scrollbar-width: thin;
+                    scrollbar-color: #4b5563 #1f2937;
+                }
+            `}</style>
+            <div 
+                className="file-tabs-container flex items-center bg-gray-800 border-b border-gray-700 overflow-x-auto flex-shrink-0"
+                style={{ minHeight: '40px' }}
+            >
+                {/* Stage/Backdrop Tab (always first) */}
+                {backdrop && (
+                    <div
+                        key={backdrop.id}
+                        className={`flex-shrink-0 group flex items-center gap-1 px-3 py-2 border-r border-gray-700 cursor-pointer transition-colors whitespace-nowrap ${
+                            activeSprite === backdrop.id
+                                ? "bg-purple-900 text-white border-purple-600"
+                                : "bg-gray-750 text-gray-400 hover:bg-gray-700 hover:text-gray-200"
+                        }`}
+                        onClick={() => onSelectSprite(backdrop.id)}
+                        title="Stage - backdrop scripts"
+                    >
+                        <span className="text-sm">🎭</span>
+                        <span className="text-sm font-medium">{backdrop.name}</span>
+                    </div>
+                )}
 
-            {/* Separator */}
-            <div className="w-px h-6 bg-gray-600 mx-1" />
+                {/* Separator */}
+                <div className="flex-shrink-0 w-px h-6 bg-gray-600 mx-1" />
 
-            {/* Sprite Tabs */}
-            <div className="flex items-center">
+                {/* Sprite Tabs */}
+                <div className="flex items-center flex-shrink-0">
                 {regularSprites.map((sprite) => (
                     <div
                         key={sprite.id}
-                        className={`group flex items-center gap-1 px-3 py-2 border-r border-gray-700 cursor-pointer transition-colors ${
+                        className={`flex-shrink-0 group flex items-center gap-1 px-3 py-2 border-r border-gray-700 cursor-pointer transition-colors whitespace-nowrap ${
                             activeSprite === sprite.id
                                 ? "bg-gray-700 text-white"
                                 : "text-gray-400 hover:bg-gray-750 hover:text-gray-200"
@@ -174,11 +198,12 @@ export default function FileTabs({
             {/* Add Sprite Button */}
             <button
                 onClick={onAddSprite}
-                className="px-3 py-2 text-gray-400 hover:text-green-400 hover:bg-gray-700 transition-colors"
+                className="flex-shrink-0 px-3 py-2 text-gray-400 hover:text-green-400 hover:bg-gray-700 transition-colors"
                 title="Add new sprite"
             >
                 <span className="text-lg">+</span>
             </button>
+            </div>
 
             {/* Context Menu */}
             {contextMenu && (
@@ -236,6 +261,6 @@ export default function FileTabs({
                     })()}
                 </div>
             )}
-        </div>
+        </>
     );
 }
