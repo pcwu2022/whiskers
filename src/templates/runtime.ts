@@ -284,6 +284,12 @@ const scratchRuntime = {
             spriteDiv.style.left = (sprite.x + this.stage.width/2 - 15) + 'px';
             spriteDiv.style.bottom = (sprite.y + this.stage.height/2 - 15) + 'px';
         }
+        // Also update speech bubble position if it exists
+        const bubble = document.getElementById('speech-' + name);
+        if (bubble && sprite) {
+            bubble.style.left = (sprite.x + this.stage.width/2 + 20) + 'px';
+            bubble.style.bottom = (sprite.y + this.stage.height/2 + 30) + 'px';
+        }
     },
 
     // Update sprite transform (rotation and size)
@@ -358,8 +364,8 @@ const scratchRuntime = {
     // Show speech bubble
     showSpeechBubble: function(spriteName, message, seconds, isThought) {
         const sprite = this.sprites[spriteName];
-        const stageDiv = document.getElementById('stage');
-        if (!stageDiv || !sprite) return;
+        const stageContent = document.getElementById('stage-content');
+        if (!stageContent || !sprite) return;
 
         // Remove existing bubble
         const existingBubble = document.getElementById('speech-' + spriteName);
@@ -381,7 +387,7 @@ const scratchRuntime = {
         bubble.style.zIndex = '100';
         bubble.style.fontSize = '14px';
         bubble.textContent = isThought ? '💭 ' + message : message;
-        stageDiv.appendChild(bubble);
+        stageContent.appendChild(bubble);
 
         console.log(spriteName + (isThought ? ' thinks: ' : ' says: ') + message);
 
@@ -392,8 +398,8 @@ const scratchRuntime = {
 
     // Create DOM element for a sprite
     createSpriteElement: function(name) {
-        const stageDiv = document.getElementById('stage');
-        if (!stageDiv) return;
+        const stageContent = document.getElementById('stage-content');
+        if (!stageContent) return;
         
         // Don't create duplicate elements
         if (document.getElementById('sprite-' + name)) return;
@@ -445,9 +451,12 @@ const scratchRuntime = {
             
             document.addEventListener('mousemove', function(e) {
                 if (isDragging) {
+                    const stageDiv = document.getElementById('stage');
                     const rect = stageDiv.getBoundingClientRect();
-                    sprite.x = (e.clientX - rect.left - self.stage.width/2) - dragOffsetX;
-                    sprite.y = (self.stage.height/2 - (e.clientY - rect.top)) + dragOffsetY;
+                    // Account for scaling when converting mouse to sprite coordinates
+                    const scale = stageDiv.clientWidth / 480;
+                    sprite.x = ((e.clientX - rect.left) / scale - self.stage.width/2) - dragOffsetX;
+                    sprite.y = (self.stage.height/2 - (e.clientY - rect.top) / scale) + dragOffsetY;
                     self.updateSpritePosition(name);
                 }
             });
@@ -458,7 +467,7 @@ const scratchRuntime = {
             });
         }
         
-        stageDiv.appendChild(spriteDiv);
+        stageContent.appendChild(spriteDiv);
     },
 
     // Clone management
@@ -539,15 +548,15 @@ const scratchRuntime = {
     init: function() {
         const self = this;
         
+        // Stage is always logical 480x360 (scaling is handled by CSS)
+        self.stage.width = 480;
+        self.stage.height = 360;
+        
         // Setup UI when DOM is ready
         const setupUI = function() {
             const stageDiv = document.getElementById('stage');
-            if (stageDiv) {
-                // Use the actual rendered size of the stage
-                const rect = stageDiv.getBoundingClientRect();
-                self.stage.width = rect.width || 480;
-                self.stage.height = rect.height || 360;
-                
+            const stageContent = document.getElementById('stage-content');
+            if (stageDiv && stageContent) {
                 stageDiv.style.backgroundColor = self.stage.backgroundColor;
                 stageDiv.style.position = 'relative';
                 stageDiv.style.overflow = 'hidden';
@@ -565,13 +574,16 @@ const scratchRuntime = {
             setupUI();
         }
 
-        // Track mouse position
+        // Track mouse position (accounting for stage scaling)
         document.addEventListener('mousemove', function(e) {
             const stageDiv = document.getElementById('stage');
             if (stageDiv) {
                 const rect = stageDiv.getBoundingClientRect();
-                self.mouse.x = e.clientX - rect.left - self.stage.width/2;
-                self.mouse.y = self.stage.height/2 - (e.clientY - rect.top);
+                // Calculate scale factor (CSS scales the 480x360 content)
+                const scale = stageDiv.clientWidth / 480;
+                // Convert screen coordinates to logical Scratch coordinates
+                self.mouse.x = (e.clientX - rect.left) / scale - 240;
+                self.mouse.y = 180 - (e.clientY - rect.top) / scale;
             }
         });
         
@@ -696,8 +708,8 @@ const scratchRuntime = {
     ask: async function(question) {
         const self = this;
         return new Promise(function(resolve) {
-            const stageDiv = document.getElementById('stage');
-            if (!stageDiv) { resolve(''); return; }
+            const stageContent = document.getElementById('stage-content');
+            if (!stageContent) { resolve(''); return; }
 
             const askDiv = document.createElement('div');
             askDiv.id = 'ask-prompt';
@@ -746,7 +758,7 @@ const scratchRuntime = {
                 if (e.key === 'Enter') submit();
             });
 
-            stageDiv.appendChild(askDiv);
+            stageContent.appendChild(askDiv);
             inputField.focus();
         });
     },

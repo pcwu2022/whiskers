@@ -35,13 +35,16 @@ export default function CodeEditor() {
 
     // Compilation state
     const [compiledJsCode, setCompiledJsCode] = useState<string | null>(null);
-    const [loading, setLoading] = useState(false);
+    const [_loading, setLoading] = useState(false);
     const [compiled, setCompiled] = useState(false);
-    const [running, setRunning] = useState(false);
+    const [_running, setRunning] = useState(false);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
     const [htmlContent, setHtmlContent] = useState<string | null>(null);
-    const [showPreview, setShowPreview] = useState(false);
+    const [showPreview, setShowPreview] = useState(true);
     const [showCode, setShowCode] = useState(false);
+    const [autoStart, setAutoStart] = useState(false);
+    const [isFullscreen, setIsFullscreen] = useState(false);
+    const previewIframeRef = useRef<HTMLIFrameElement>(null);
 
     // UI state for future toolbox (reserved)
     const [showToolbox, setShowToolbox] = useState(false);
@@ -50,6 +53,7 @@ export default function CodeEditor() {
     const [showSaveNotification, setShowSaveNotification] = useState(false);
 
     const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
+    const handleRunRef = useRef<() => void>(() => {});
     const monacoInstance = useMonaco();
 
     // Load project from localStorage on mount
@@ -87,6 +91,17 @@ export default function CodeEditor() {
         }
     }, [project, isLoaded]);
 
+    // Auto-compile on first load to show preview immediately
+    useEffect(() => {
+        if (project && isLoaded && !compiled) {
+            // Small delay to ensure everything is ready
+            const timer = setTimeout(() => {
+                handleRunRef.current();
+            }, 100);
+            return () => clearTimeout(timer);
+        }
+    }, [project, isLoaded, compiled]);
+
     // Handle Ctrl+S to show save notification instead of browser save dialog
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
@@ -104,6 +119,40 @@ export default function CodeEditor() {
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, []);
+
+    // Listen for messages from the preview iframe
+    useEffect(() => {
+        const handleMessage = (event: MessageEvent) => {
+            if (event.data && event.data.type === 'scratch-recompile') {
+                // Set autoStart so the new iframe will auto-run
+                setAutoStart(true);
+                // Trigger recompile using ref to get latest function
+                handleRunRef.current();
+            } else if (event.data && event.data.type === 'scratch-fullscreen') {
+                setIsFullscreen(event.data.enabled);
+                // Try to use browser fullscreen API
+                if (event.data.enabled) {
+                    document.documentElement.requestFullscreen?.().catch(() => {});
+                } else {
+                    document.exitFullscreen?.().catch(() => {});
+                }
+            }
+        };
+
+        // Listen for exiting fullscreen via ESC key
+        const handleFullscreenChange = () => {
+            if (!document.fullscreenElement && isFullscreen) {
+                setIsFullscreen(false);
+            }
+        };
+
+        window.addEventListener('message', handleMessage);
+        document.addEventListener('fullscreenchange', handleFullscreenChange);
+        return () => {
+            window.removeEventListener('message', handleMessage);
+            document.removeEventListener('fullscreenchange', handleFullscreenChange);
+        };
+    }, [isFullscreen]); // Include isFullscreen to get latest value
 
     // Setup Monaco language
     useEffect(() => {
@@ -294,6 +343,9 @@ export default function CodeEditor() {
         setRunning(false);
     };
 
+    // Keep ref updated with latest handleRun function
+    handleRunRef.current = handleRun;
+
     const closePreview = () => {
         setShowPreview(false);
     };
@@ -328,18 +380,6 @@ export default function CodeEditor() {
                         onImportProject={handleImportProject}
                         onImportSprite={handleImportSprite}
                     />
-                    <div className="w-px h-6 bg-gray-600" />
-                    <button
-                        onClick={handleRun}
-                        disabled={running || loading}
-                        className={`px-5 py-2 rounded font-medium text-sm transition-colors ${
-                            running || loading
-                                ? "bg-gray-600 text-gray-400 cursor-not-allowed"
-                                : "bg-green-600 hover:bg-green-700 text-white"
-                        }`}
-                    >
-                        {loading ? "⚙ Compiling..." : running ? "▶ Running..." : "▶ Run"}
-                    </button>
                     {compiled && (
                         <button
                             onClick={() => setShowCode(!showCode)}
@@ -422,7 +462,7 @@ export default function CodeEditor() {
                 </div>
 
                 {/* Preview Panel */}
-                {showPreview && htmlContent && (
+                {showPreview && !isFullscreen && (
                     <div className="w-1/2 flex flex-col border-l border-gray-700">
                         <div className="bg-gray-800 px-3 py-2 flex justify-between items-center border-b border-gray-700">
                             <span className="text-gray-400 text-sm">🎮 Preview</span>
@@ -434,16 +474,40 @@ export default function CodeEditor() {
                             </button>
                         </div>
                         <div className="flex-1 bg-gray-100">
-                            <iframe
-                                srcDoc={htmlContent}
-                                className="w-full h-full border-0"
-                                title="Preview"
-                                sandbox="allow-scripts"
-                            />
+                            {htmlContent && (
+                                <iframe
+                                    ref={previewIframeRef}
+                                    srcDoc={htmlContent.replace('__AUTO_START__', 'false').replace('__IS_FULLSCREEN__', 'false')}
+                                    className="w-full h-full border-0"
+                                    title="Preview"
+                                    sandbox="allow-scripts"
+                                    onLoad={() => {
+                                        // If autoStart is set, send message to iframe to start
+                                        if (autoStart && previewIframeRef.current) {
+                                            previewIframeRef.current.contentWindow?.postMessage({ type: 'scratch-autostart' }, '*');
+                                            setAutoStart(false);
+                                        }
+                                    }}
+                                />
+                            )}
                         </div>
                     </div>
                 )}
             </div>
+
+            {/* Fullscreen Preview Overlay */}
+            {isFullscreen && htmlContent && (
+                <div className="fixed inset-0 z-50 bg-gray-900 flex items-center justify-center">
+                    <div className="w-full h-full max-w-[calc(100vh*4/3)] max-h-[calc(100vw*3/4)]">
+                        <iframe
+                            srcDoc={htmlContent.replace('__AUTO_START__', 'true').replace('__IS_FULLSCREEN__', 'true')}
+                            className="w-full h-full border-0"
+                            title="Preview Fullscreen"
+                            sandbox="allow-scripts"
+                        />
+                    </div>
+                </div>
+            )}
 
             {/* Error message bar */}
             {errorMessage && (
