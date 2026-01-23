@@ -363,6 +363,48 @@ define myBlock (param1) (param2)
 myBlock "Hello" 50
 ```
 
+### Complete Working Example
+
+This example demonstrates motion, speech, loops, and keyboard controls. It's the default code shown when you first open the compiler:
+
+```scratch
+// Welcome to Scratch Compiler! 🐱
+// Click the green "Run" button to see this code in action
+
+when flagClicked
+    say "Hello! Watch me dance!"
+    wait 1
+    repeat 4
+        move 50
+        turn right 90
+        wait 0.3
+
+// Keyboard controls - try pressing these keys!
+when keyPressed space
+    say "You pressed space!"
+
+when keyPressed up
+    move 20
+
+when keyPressed down
+    move -20
+
+when keyPressed left
+    turn left 15
+
+when keyPressed right
+    turn right 15
+```
+
+**What this example demonstrates:**
+- `when flagClicked` - Main program entry point
+- `say` - Display speech bubbles
+- `wait` - Pause execution
+- `repeat` - Loop a block of code
+- `move` / `turn` - Sprite motion
+- `when keyPressed` - Keyboard event handlers
+- Comments with `//`
+
 ## 📦 Project Structure
 
 Projects are saved as `.scratch.zip` files containing:

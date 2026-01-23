@@ -51,30 +51,16 @@ export const DEFAULT_SPRITE_CODE = `// Welcome to Scratch Compiler! 🐱
 // Click the green "Run" button to see this code in action
 
 when flagClicked
-    say "Hello! I'm going to dance!"
+    say "Hello! Watch me dance!"
     wait 1
-    
-    // Do a fun dance pattern
     repeat 4
         move 50
         turn right 90
         wait 0.3
-    
-    say "Now watch me spin!"
-    wait 1
-    
-    // Spin around
-    repeat 12
-        turn right 30
-        wait 0.1
-    
-    say "Try editing this code!"
-    wait 2
-    say ""
 
-// You can also use keyboard controls!
+// Keyboard controls - try pressing these keys!
 when keyPressed space
-    say "You pressed space!" for 1 seconds
+    say "You pressed space!"
 
 when keyPressed up
     move 20

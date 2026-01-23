@@ -1488,10 +1488,13 @@ export class MultiSpriteCodeGenerator {
     private generateBlock(block: BlockNode, indent: number, spriteName: string, isStage: boolean = false): void {
         const spaces = "    ".repeat(indent);
         const spriteRef = isStage ? `null` : `scratchRuntime.sprites["${spriteName}"]`;
+        
+        // Track if the block handler consumed block.next internally
+        let nextHandled = false;
 
         switch (block.type) {
             case "event":
-                this.generateEventBlock(block, indent, spriteName, isStage);
+                nextHandled = this.generateEventBlock(block, indent, spriteName, isStage);
                 break;
             case "motion":
                 if (!isStage) {
@@ -1502,7 +1505,7 @@ export class MultiSpriteCodeGenerator {
                 this.generateLooksBlock(block, indent, spriteRef, spriteName, isStage);
                 break;
             case "control":
-                this.generateControlBlock(block, indent, spriteName, isStage);
+                nextHandled = this.generateControlBlock(block, indent, spriteName, isStage);
                 break;
             case "sound":
                 this.generateSoundBlock(block, indent);
@@ -1534,14 +1537,18 @@ export class MultiSpriteCodeGenerator {
                 this.output += `${spaces}// Unknown block type: ${block.type}, name: ${block.name}\n`;
         }
 
-        if (block.next) {
+        // Only process block.next if the handler didn't already consume it
+        if (block.next && !nextHandled) {
             this.generateBlock(block.next, indent, spriteName, isStage);
         }
     }
 
-    private generateEventBlock(block: BlockNode, indent: number, spriteName: string, isStage: boolean): void {
+    private generateEventBlock(block: BlockNode, indent: number, spriteName: string, isStage: boolean): boolean {
         const spaces = "    ".repeat(indent);
 
+        // Mark that we handled the event to prevent block.next from being generated twice
+        let eventHandled = false;
+        
         if (block.name === "when" && block.args[0] === "flagClicked") {
             this.output += `${spaces}// When green flag clicked\n`;
             this.output += `${spaces}scratchRuntime.onGreenFlag(async function() {\n`;
@@ -1550,8 +1557,23 @@ export class MultiSpriteCodeGenerator {
                 this.generateBlock(block.next, indent + 1, spriteName, isStage);
             }
             this.output += `${spaces}});\n\n`;
-        } else if (block.name === "when" && String(block.args[0]).includes("keyPressed")) {
-            const key = String(block.args[0]).replace("keyPressed", "").toLowerCase().replace("_", "");
+            eventHandled = true;
+        } else if (block.name === "when" && (String(block.args[0]) === "keyPressed" || String(block.args[0]).includes("keyPressed"))) {
+            // Handle "when keyPressed space" where args are ["keyPressed", "space"]
+            // or "when keyPressed_space" where args are ["keyPressed_space"]
+            let key = "";
+            if (block.args.length > 1 && typeof block.args[1] === "string") {
+                key = String(block.args[1]).toLowerCase();
+            } else {
+                key = String(block.args[0]).replace("keyPressed", "").replace("_", "").toLowerCase();
+            }
+            // Map common key names
+            if (key === "up" || key === "arrowup") key = "arrowup";
+            else if (key === "down" || key === "arrowdown") key = "arrowdown";
+            else if (key === "left" || key === "arrowleft") key = "arrowleft";
+            else if (key === "right" || key === "arrowright") key = "arrowright";
+            else if (key === "space" || key === " ") key = " ";
+            
             this.output += `${spaces}// When ${key} key pressed\n`;
             this.output += `${spaces}scratchRuntime.onEvent("keyPressed_${key}", async function() {\n`;
             this.output += `${spaces}    scratchRuntime.currentSprite = "${spriteName}";\n`;
@@ -1559,6 +1581,7 @@ export class MultiSpriteCodeGenerator {
                 this.generateBlock(block.next, indent + 1, spriteName, isStage);
             }
             this.output += `${spaces}});\n\n`;
+            eventHandled = true;
         } else if (block.name === "when" && String(block.args[0]) === "thisSprite" && String(block.args[1]) === "clicked") {
             this.output += `${spaces}// When this sprite clicked\n`;
             this.output += `${spaces}scratchRuntime.onEvent("spriteClicked_${spriteName}", async function() {\n`;
@@ -1567,6 +1590,7 @@ export class MultiSpriteCodeGenerator {
                 this.generateBlock(block.next, indent + 1, spriteName, isStage);
             }
             this.output += `${spaces}});\n\n`;
+            eventHandled = true;
         } else if (block.name === "when" && String(block.args[0]) === "backdrop" && String(block.args[1]) === "switches") {
             const backdrop = this.formatArg(block.args[2]);
             this.output += `${spaces}// When backdrop switches to ${backdrop}\n`;
@@ -1576,6 +1600,7 @@ export class MultiSpriteCodeGenerator {
                 this.generateBlock(block.next, indent + 1, spriteName, isStage);
             }
             this.output += `${spaces}});\n\n`;
+            eventHandled = true;
         } else if (block.name === "when" && String(block.args[0]) === "clone" && String(block.args[1]) === "starts") {
             this.output += `${spaces}// When I start as a clone\n`;
             this.output += `${spaces}scratchRuntime.onEvent("cloneStart_${spriteName}", async function() {\n`;
@@ -1583,6 +1608,7 @@ export class MultiSpriteCodeGenerator {
                 this.generateBlock(block.next, indent + 1, spriteName, isStage);
             }
             this.output += `${spaces}});\n\n`;
+            eventHandled = true;
         } else if (block.name === "whenReceived" || (block.name === "when" && block.args[0] === "receive")) {
             const message = this.formatArg(block.args.length > 1 ? block.args[1] : block.args[0]);
             this.output += `${spaces}// When I receive ${message}\n`;
@@ -1592,11 +1618,15 @@ export class MultiSpriteCodeGenerator {
                 this.generateBlock(block.next, indent + 1, spriteName, isStage);
             }
             this.output += `${spaces}});\n\n`;
+            eventHandled = true;
         } else if (block.name === "broadcast") {
             this.output += `${spaces}scratchRuntime.broadcast(${this.formatArg(block.args[0])});\n`;
         } else if (block.name === "broadcastAndWait") {
             this.output += `${spaces}await scratchRuntime.broadcastAndWait(${this.formatArg(block.args[0])});\n`;
         }
+        
+        // Return whether this was an event that handled its own block.next
+        return eventHandled;
     }
 
     private generateMotionBlock(block: BlockNode, indent: number, spriteRef: string, _spriteName: string): void {
@@ -1835,52 +1865,70 @@ export class MultiSpriteCodeGenerator {
         }
     }
 
-    private generateControlBlock(block: BlockNode, indent: number, spriteName: string, isStage: boolean): void {
+    private generateControlBlock(block: BlockNode, indent: number, spriteName: string, isStage: boolean): boolean {
         const spaces = "    ".repeat(indent);
         // Note: spriteRef could be used for clone-specific behavior
         // const spriteRef = isStage ? `null` : `scratchRuntime.sprites["${spriteName}"]`;
+        
+        // Track if we consumed block.next as a loop/conditional body
+        let consumedNext = false;
         
         switch (block.name) {
             case "wait":
                 this.output += `${spaces}await scratchRuntime.wait(${this.formatArg(block.args[0])});\n`;
                 break;
-            case "repeat":
+            case "repeat": {
                 this.output += `${spaces}for (let _i = 0; _i < ${this.formatArg(block.args[0])}; _i++) {\n`;
-                // Handle body from args[1] or block.body
+                // Handle body from args[1], block.body, or block.next (parser may attach body to next)
                 if (block.args.length > 1 && typeof block.args[1] === "object") {
                     this.generateBlock(block.args[1] as BlockNode, indent + 1, spriteName, isStage);
-                } else if (block.body) {
+                } else if (block.body && block.body.length > 0) {
                     for (const child of block.body) {
                         this.generateBlock(child, indent + 1, spriteName, isStage);
                     }
+                } else if (block.next) {
+                    // Parser attached body to block.next - generate the entire chain inside the loop
+                    this.generateBlock(block.next, indent + 1, spriteName, isStage);
+                    consumedNext = true;
                 }
                 this.output += `${spaces}}\n`;
                 break;
-            case "forever":
+            }
+            case "forever": {
                 this.output += `${spaces}(async function _forever() {\n`;
                 this.output += `${spaces}    while (scratchRuntime.running) {\n`;
                 if (block.args.length > 0 && typeof block.args[0] === "object") {
                     this.generateBlock(block.args[0] as BlockNode, indent + 2, spriteName, isStage);
-                } else if (block.body) {
+                } else if (block.body && block.body.length > 0) {
                     for (const child of block.body) {
                         this.generateBlock(child, indent + 2, spriteName, isStage);
                     }
+                } else if (block.next) {
+                    // Parser attached body to block.next
+                    this.generateBlock(block.next, indent + 2, spriteName, isStage);
+                    consumedNext = true;
                 }
                 this.output += `${spaces}        await scratchRuntime.wait(0.01);\n`;
                 this.output += `${spaces}    }\n`;
                 this.output += `${spaces}})();\n`;
                 break;
-            case "if":
+            }
+            case "if": {
                 this.output += `${spaces}if (${this.formatCondition(block.args[0])}) {\n`;
                 if (block.args.length > 1 && typeof block.args[1] === "object") {
                     this.generateBlock(block.args[1] as BlockNode, indent + 1, spriteName, isStage);
-                } else if (block.body) {
+                } else if (block.body && block.body.length > 0) {
                     for (const child of block.body) {
                         this.generateBlock(child, indent + 1, spriteName, isStage);
                     }
+                } else if (block.next) {
+                    // Parser attached body to block.next
+                    this.generateBlock(block.next, indent + 1, spriteName, isStage);
+                    consumedNext = true;
                 }
                 this.output += `${spaces}}\n`;
                 break;
+            }
             case "ifElse":
                 this.output += `${spaces}if (${this.formatCondition(block.args[0])}) {\n`;
                 if (block.body) {
@@ -1901,18 +1949,22 @@ export class MultiSpriteCodeGenerator {
                 this.output += `${spaces}    await scratchRuntime.wait(0.05);\n`;
                 this.output += `${spaces}}\n`;
                 break;
-            case "repeatUntil":
+            case "repeatUntil": {
                 this.output += `${spaces}while (!(${this.formatCondition(block.args[0])})) {\n`;
                 if (block.args.length > 1 && typeof block.args[1] === "object") {
                     this.generateBlock(block.args[1] as BlockNode, indent + 1, spriteName, isStage);
-                } else if (block.body) {
+                } else if (block.body && block.body.length > 0) {
                     for (const child of block.body) {
                         this.generateBlock(child, indent + 1, spriteName, isStage);
                     }
+                } else if (block.next) {
+                    this.generateBlock(block.next, indent + 1, spriteName, isStage);
+                    consumedNext = true;
                 }
                 this.output += `${spaces}    await scratchRuntime.wait(0.01);\n`;
                 this.output += `${spaces}}\n`;
                 break;
+            }
             case "stop":
                 const stopTarget = block.args[0];
                 if (stopTarget === "all") {
@@ -1937,6 +1989,8 @@ export class MultiSpriteCodeGenerator {
             default:
                 this.output += `${spaces}// Control block: ${block.name}\n`;
         }
+        
+        return consumedNext;
     }
 
     private generateSensingBlock(block: BlockNode, indent: number, spriteName: string, isStage: boolean): void {
