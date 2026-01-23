@@ -263,7 +263,6 @@ export function generateHTMLTemplate(jsCode: string): string {
     <script>
         // State
         let outputCollapsed = false;
-        const AUTO_START = __AUTO_START__;
         const IS_FULLSCREEN = __IS_FULLSCREEN__;
         
         // Scale the stage content to fit the actual stage size

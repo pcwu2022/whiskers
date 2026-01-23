@@ -102,6 +102,18 @@ export default function CodeEditor() {
         }
     }, [project, isLoaded, compiled]);
 
+    // Handle auto-start after recompile - send message to iframe when new content is loaded
+    useEffect(() => {
+        if (autoStart && htmlContent && previewIframeRef.current) {
+            // Small delay to ensure iframe has loaded the new content
+            const timer = setTimeout(() => {
+                previewIframeRef.current?.contentWindow?.postMessage({ type: 'scratch-autostart' }, '*');
+                setAutoStart(false);
+            }, 150);
+            return () => clearTimeout(timer);
+        }
+    }, [autoStart, htmlContent]);
+
     // Handle Ctrl+S to show save notification instead of browser save dialog
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
@@ -289,7 +301,7 @@ export default function CodeEditor() {
         setLoading(true);
         setCompiledJsCode(null);
         setErrorMessage(null);
-        setHtmlContent(null);
+        // Don't clear htmlContent here - keep showing old preview until new one is ready
 
         let retValue = { js: "", html: "" };
 
@@ -477,17 +489,10 @@ export default function CodeEditor() {
                             {htmlContent && (
                                 <iframe
                                     ref={previewIframeRef}
-                                    srcDoc={htmlContent.replace('__AUTO_START__', 'false').replace('__IS_FULLSCREEN__', 'false')}
+                                    srcDoc={htmlContent.replace('__IS_FULLSCREEN__', 'false')}
                                     className="w-full h-full border-0"
                                     title="Preview"
                                     sandbox="allow-scripts"
-                                    onLoad={() => {
-                                        // If autoStart is set, send message to iframe to start
-                                        if (autoStart && previewIframeRef.current) {
-                                            previewIframeRef.current.contentWindow?.postMessage({ type: 'scratch-autostart' }, '*');
-                                            setAutoStart(false);
-                                        }
-                                    }}
                                 />
                             )}
                         </div>
@@ -500,7 +505,8 @@ export default function CodeEditor() {
                 <div className="fixed inset-0 z-50 bg-gray-900 flex items-center justify-center">
                     <div className="w-full h-full max-w-[calc(100vh*4/3)] max-h-[calc(100vw*3/4)]">
                         <iframe
-                            srcDoc={htmlContent.replace('__AUTO_START__', 'true').replace('__IS_FULLSCREEN__', 'true')}
+                            ref={previewIframeRef}
+                            srcDoc={htmlContent.replace('__IS_FULLSCREEN__', 'true')}
                             className="w-full h-full border-0"
                             title="Preview Fullscreen"
                             sandbox="allow-scripts"
