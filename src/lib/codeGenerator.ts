@@ -1294,14 +1294,15 @@ export class CodeGenerator {
 /**
  * MultiSpriteCodeGenerator: Generates code for multiple sprites
  * Each sprite gets its own initialization and script code
+ * Supports all Scratch 3.0 block categories
  */
 export class MultiSpriteCodeGenerator {
-    private sprites: { name: string; program: Program }[];
+    private sprites: { name: string; program: Program; isStage?: boolean }[];
     private output: string = "";
     private htmlOutput: string = "";
     private procedures: Map<string, string[]> = new Map();
 
-    constructor(sprites: { name: string; program: Program }[]) {
+    constructor(sprites: { name: string; program: Program; isStage?: boolean }[]) {
         this.sprites = sprites;
     }
 
@@ -1347,7 +1348,7 @@ export class MultiSpriteCodeGenerator {
     }
 
     private findProcedures(block: BlockNode): void {
-        if (block.type === "procedure" && block.name === "define") {
+        if ((block.type === "procedure" || block.type === "custom") && block.name === "define") {
             const procName = String(block.args[0]);
             const params = block.args.slice(1).map((a) => String(a));
             this.procedures.set(procName, params);
@@ -1407,7 +1408,7 @@ export class MultiSpriteCodeGenerator {
     private generateSpriteInitializations(): void {
         this.output += `// Initialize Sprites\n`;
         
-        // Skip default Sprite1 if it's not in our list
+        // Remove default Sprite1 if it's not in our sprite list
         const spriteNames = this.sprites.map(s => s.name);
         if (!spriteNames.includes("Sprite1")) {
             this.output += `delete scratchRuntime.sprites["Sprite1"];\n`;
@@ -1417,14 +1418,24 @@ export class MultiSpriteCodeGenerator {
             const sprite = this.sprites[i];
             const safeName = sprite.name.replace(/[^a-zA-Z0-9_]/g, "_");
             
-            // Initialize the sprite if it doesn't exist
-            if (sprite.name !== "Sprite1") {
-                this.output += `scratchRuntime.initSprite("${safeName}");\n`;
+            // Skip backdrop/stage visual initialization (it's the background)
+            if (sprite.isStage) {
+                this.output += `// Stage (backdrop) initialized - no visual sprite element\n`;
+                continue;
             }
             
-            // Position sprites slightly apart so they're visible
+            // Initialize the sprite with options
             const xOffset = (i - Math.floor(this.sprites.length / 2)) * 50;
-            this.output += `scratchRuntime.sprites["${safeName}"].x = ${xOffset};\n`;
+            this.output += `scratchRuntime.initSprite("${safeName}", {\n`;
+            this.output += `    x: ${xOffset},\n`;
+            this.output += `    y: 0,\n`;
+            this.output += `    direction: 90,\n`;
+            this.output += `    visible: true,\n`;
+            this.output += `    size: 100,\n`;
+            this.output += `    rotationStyle: 'all around',\n`;
+            this.output += `    costumes: ['costume1'],\n`;
+            this.output += `    currentCostume: 0\n`;
+            this.output += `});\n`;
         }
         
         this.output += `\n`;
@@ -1450,10 +1461,15 @@ export class MultiSpriteCodeGenerator {
         
         for (const sprite of this.sprites) {
             const safeName = sprite.name.replace(/[^a-zA-Z0-9_]/g, "_");
+            const isStage = sprite.isStage || false;
             this.output += `// === ${sprite.name} Scripts ===\n`;
             this.output += `(function() {\n`;
             this.output += `    const CURRENT_SPRITE = "${safeName}";\n`;
-            this.output += `    const sprite = scratchRuntime.sprites[CURRENT_SPRITE];\n\n`;
+            this.output += `    const IS_STAGE = ${isStage};\n`;
+            if (!isStage) {
+                this.output += `    const sprite = scratchRuntime.sprites[CURRENT_SPRITE];\n`;
+            }
+            this.output += `\n`;
             
             // Generate each script
             for (let i = 0; i < sprite.program.scripts.length; i++) {
@@ -1461,7 +1477,7 @@ export class MultiSpriteCodeGenerator {
                 this.output += `    // Script ${i + 1}\n`;
                 
                 for (const block of script.blocks) {
-                    this.generateBlock(block, 1, safeName);
+                    this.generateBlock(block, 1, safeName, isStage);
                 }
             }
             
@@ -1469,32 +1485,36 @@ export class MultiSpriteCodeGenerator {
         }
     }
 
-    private generateBlock(block: BlockNode, indent: number, spriteName: string): void {
+    private generateBlock(block: BlockNode, indent: number, spriteName: string, isStage: boolean = false): void {
         const spaces = "    ".repeat(indent);
-        const spriteRef = `scratchRuntime.sprites["${spriteName}"]`;
+        const spriteRef = isStage ? `null` : `scratchRuntime.sprites["${spriteName}"]`;
 
         switch (block.type) {
             case "event":
-                this.generateEventBlock(block, indent, spriteName);
+                this.generateEventBlock(block, indent, spriteName, isStage);
                 break;
             case "motion":
-                this.generateMotionBlock(block, indent, spriteRef);
+                if (!isStage) {
+                    this.generateMotionBlock(block, indent, spriteRef, spriteName);
+                }
                 break;
             case "looks":
-                this.generateLooksBlock(block, indent, spriteRef);
+                this.generateLooksBlock(block, indent, spriteRef, spriteName, isStage);
                 break;
             case "control":
-                this.generateControlBlock(block, indent, spriteName);
+                this.generateControlBlock(block, indent, spriteName, isStage);
                 break;
             case "sound":
-                this.output += `${spaces}// Sound: ${block.name}\n`;
+                this.generateSoundBlock(block, indent);
                 break;
             case "sensing":
-                this.generateSensingBlock(block, indent, spriteName);
+                this.generateSensingBlock(block, indent, spriteName, isStage);
                 break;
+            case "operators":
             case "operator":
-                // Operators are usually inline expressions
+                // Operators are usually inline expressions, handled by formatArg
                 break;
+            case "variables":
             case "variable":
                 this.generateVariableBlock(block, indent);
                 break;
@@ -1502,49 +1522,84 @@ export class MultiSpriteCodeGenerator {
                 this.generateListBlock(block, indent);
                 break;
             case "procedure":
-                this.generateProcedureBlock(block, indent, spriteName);
+            case "custom":
+                this.generateProcedureBlock(block, indent, spriteName, isStage);
+                break;
+            case "pen":
+                if (!isStage) {
+                    this.generatePenBlock(block, indent, spriteRef);
+                }
                 break;
             default:
-                this.output += `${spaces}// Unknown block type: ${block.type}\n`;
+                this.output += `${spaces}// Unknown block type: ${block.type}, name: ${block.name}\n`;
         }
 
         if (block.next) {
-            this.generateBlock(block.next, indent, spriteName);
+            this.generateBlock(block.next, indent, spriteName, isStage);
         }
     }
 
-    private generateEventBlock(block: BlockNode, indent: number, spriteName: string): void {
+    private generateEventBlock(block: BlockNode, indent: number, spriteName: string, isStage: boolean): void {
         const spaces = "    ".repeat(indent);
 
         if (block.name === "when" && block.args[0] === "flagClicked") {
             this.output += `${spaces}// When green flag clicked\n`;
             this.output += `${spaces}scratchRuntime.onGreenFlag(async function() {\n`;
+            this.output += `${spaces}    scratchRuntime.currentSprite = "${spriteName}";\n`;
             if (block.next) {
-                this.generateBlock(block.next, indent + 1, spriteName);
+                this.generateBlock(block.next, indent + 1, spriteName, isStage);
             }
             this.output += `${spaces}});\n\n`;
         } else if (block.name === "when" && String(block.args[0]).includes("keyPressed")) {
-            const key = String(block.args[0]).replace("keyPressed", "").toLowerCase();
+            const key = String(block.args[0]).replace("keyPressed", "").toLowerCase().replace("_", "");
             this.output += `${spaces}// When ${key} key pressed\n`;
             this.output += `${spaces}scratchRuntime.onEvent("keyPressed_${key}", async function() {\n`;
+            this.output += `${spaces}    scratchRuntime.currentSprite = "${spriteName}";\n`;
             if (block.next) {
-                this.generateBlock(block.next, indent + 1, spriteName);
+                this.generateBlock(block.next, indent + 1, spriteName, isStage);
             }
             this.output += `${spaces}});\n\n`;
-        } else if (block.name === "whenReceived") {
-            const message = this.formatArg(block.args[0]);
+        } else if (block.name === "when" && String(block.args[0]) === "thisSprite" && String(block.args[1]) === "clicked") {
+            this.output += `${spaces}// When this sprite clicked\n`;
+            this.output += `${spaces}scratchRuntime.onEvent("spriteClicked_${spriteName}", async function() {\n`;
+            this.output += `${spaces}    scratchRuntime.currentSprite = "${spriteName}";\n`;
+            if (block.next) {
+                this.generateBlock(block.next, indent + 1, spriteName, isStage);
+            }
+            this.output += `${spaces}});\n\n`;
+        } else if (block.name === "when" && String(block.args[0]) === "backdrop" && String(block.args[1]) === "switches") {
+            const backdrop = this.formatArg(block.args[2]);
+            this.output += `${spaces}// When backdrop switches to ${backdrop}\n`;
+            this.output += `${spaces}scratchRuntime.onEvent("backdropSwitch_" + ${backdrop}, async function() {\n`;
+            this.output += `${spaces}    scratchRuntime.currentSprite = "${spriteName}";\n`;
+            if (block.next) {
+                this.generateBlock(block.next, indent + 1, spriteName, isStage);
+            }
+            this.output += `${spaces}});\n\n`;
+        } else if (block.name === "when" && String(block.args[0]) === "clone" && String(block.args[1]) === "starts") {
+            this.output += `${spaces}// When I start as a clone\n`;
+            this.output += `${spaces}scratchRuntime.onEvent("cloneStart_${spriteName}", async function() {\n`;
+            if (block.next) {
+                this.generateBlock(block.next, indent + 1, spriteName, isStage);
+            }
+            this.output += `${spaces}});\n\n`;
+        } else if (block.name === "whenReceived" || (block.name === "when" && block.args[0] === "receive")) {
+            const message = this.formatArg(block.args.length > 1 ? block.args[1] : block.args[0]);
             this.output += `${spaces}// When I receive ${message}\n`;
             this.output += `${spaces}scratchRuntime.onBroadcast(${message}, async function() {\n`;
+            this.output += `${spaces}    scratchRuntime.currentSprite = "${spriteName}";\n`;
             if (block.next) {
-                this.generateBlock(block.next, indent + 1, spriteName);
+                this.generateBlock(block.next, indent + 1, spriteName, isStage);
             }
             this.output += `${spaces}});\n\n`;
         } else if (block.name === "broadcast") {
             this.output += `${spaces}scratchRuntime.broadcast(${this.formatArg(block.args[0])});\n`;
+        } else if (block.name === "broadcastAndWait") {
+            this.output += `${spaces}await scratchRuntime.broadcastAndWait(${this.formatArg(block.args[0])});\n`;
         }
     }
 
-    private generateMotionBlock(block: BlockNode, indent: number, spriteRef: string): void {
+    private generateMotionBlock(block: BlockNode, indent: number, spriteRef: string, _spriteName: string): void {
         const spaces = "    ".repeat(indent);
         
         switch (block.name) {
@@ -1559,7 +1614,59 @@ export class MultiSpriteCodeGenerator {
                 this.output += `${spaces}${spriteRef}.turnLeft(${this.formatArg(block.args[0])});\n`;
                 break;
             case "goTo":
+            case "goto":
+                if (block.args.length === 2 && typeof block.args[0] === "number") {
+                    this.output += `${spaces}${spriteRef}.goTo(${this.formatArg(block.args[0])}, ${this.formatArg(block.args[1])});\n`;
+                } else {
+                    this.output += `${spaces}${spriteRef}.goToTarget(${this.formatArg(block.args[0])});\n`;
+                }
+                break;
+            case "goToXY":
                 this.output += `${spaces}${spriteRef}.goTo(${this.formatArg(block.args[0])}, ${this.formatArg(block.args[1])});\n`;
+                break;
+            case "glide":
+            case "glideToXY":
+                const seconds = this.formatArg(block.args[0]);
+                const targetX = this.formatArg(block.args[1]);
+                const targetY = this.formatArg(block.args[2]);
+                this.output += `${spaces}// Glide to position\n`;
+                this.output += `${spaces}await (async function() {\n`;
+                this.output += `${spaces}    const startX = ${spriteRef}.x;\n`;
+                this.output += `${spaces}    const startY = ${spriteRef}.y;\n`;
+                this.output += `${spaces}    const duration = ${seconds} * 1000;\n`;
+                this.output += `${spaces}    const startTime = Date.now();\n`;
+                this.output += `${spaces}    while (Date.now() - startTime < duration) {\n`;
+                this.output += `${spaces}        const progress = (Date.now() - startTime) / duration;\n`;
+                this.output += `${spaces}        ${spriteRef}.goTo(startX + (${targetX} - startX) * progress, startY + (${targetY} - startY) * progress);\n`;
+                this.output += `${spaces}        await scratchRuntime.wait(0.016);\n`;
+                this.output += `${spaces}    }\n`;
+                this.output += `${spaces}    ${spriteRef}.goTo(${targetX}, ${targetY});\n`;
+                this.output += `${spaces}})();\n`;
+                break;
+            case "glideTo":
+                const glideSeconds = this.formatArg(block.args[0]);
+                const target = this.formatArg(block.args[1]);
+                this.output += `${spaces}// Glide to target\n`;
+                this.output += `${spaces}await (async function() {\n`;
+                this.output += `${spaces}    let targetX, targetY;\n`;
+                this.output += `${spaces}    if (${target} === 'mouse-pointer') {\n`;
+                this.output += `${spaces}        targetX = scratchRuntime.mouse.x; targetY = scratchRuntime.mouse.y;\n`;
+                this.output += `${spaces}    } else if (${target} === 'random') {\n`;
+                this.output += `${spaces}        targetX = Math.random() * scratchRuntime.stage.width - scratchRuntime.stage.width/2;\n`;
+                this.output += `${spaces}        targetY = Math.random() * scratchRuntime.stage.height - scratchRuntime.stage.height/2;\n`;
+                this.output += `${spaces}    } else if (scratchRuntime.sprites[${target}]) {\n`;
+                this.output += `${spaces}        targetX = scratchRuntime.sprites[${target}].x; targetY = scratchRuntime.sprites[${target}].y;\n`;
+                this.output += `${spaces}    } else { return; }\n`;
+                this.output += `${spaces}    const startX = ${spriteRef}.x, startY = ${spriteRef}.y;\n`;
+                this.output += `${spaces}    const duration = ${glideSeconds} * 1000;\n`;
+                this.output += `${spaces}    const startTime = Date.now();\n`;
+                this.output += `${spaces}    while (Date.now() - startTime < duration) {\n`;
+                this.output += `${spaces}        const progress = (Date.now() - startTime) / duration;\n`;
+                this.output += `${spaces}        ${spriteRef}.goTo(startX + (targetX - startX) * progress, startY + (targetY - startY) * progress);\n`;
+                this.output += `${spaces}        await scratchRuntime.wait(0.016);\n`;
+                this.output += `${spaces}    }\n`;
+                this.output += `${spaces}    ${spriteRef}.goTo(targetX, targetY);\n`;
+                this.output += `${spaces}})();\n`;
                 break;
             case "setX":
                 this.output += `${spaces}${spriteRef}.setX(${this.formatArg(block.args[0])});\n`;
@@ -1576,69 +1683,200 @@ export class MultiSpriteCodeGenerator {
             case "pointInDirection":
                 this.output += `${spaces}${spriteRef}.pointInDirection(${this.formatArg(block.args[0])});\n`;
                 break;
+            case "pointTowards":
+                this.output += `${spaces}${spriteRef}.pointTowards(${this.formatArg(block.args[0])});\n`;
+                break;
+            case "ifOnEdgeBounce":
+                this.output += `${spaces}${spriteRef}.ifOnEdgeBounce();\n`;
+                break;
+            case "setRotationStyle":
+                this.output += `${spaces}${spriteRef}.setRotationStyle(${this.formatArg(block.args[0])});\n`;
+                break;
+            default:
+                this.output += `${spaces}// Motion block: ${block.name}\n`;
         }
     }
 
-    private generateLooksBlock(block: BlockNode, indent: number, spriteRef: string): void {
+    private generateLooksBlock(block: BlockNode, indent: number, spriteRef: string, spriteName: string, isStage: boolean): void {
         const spaces = "    ".repeat(indent);
         
         switch (block.name) {
             case "say":
-                if (block.args.length > 1) {
-                    this.output += `${spaces}${spriteRef}.say(${this.formatArg(block.args[0])}, ${this.formatArg(block.args[1])});\n`;
-                } else {
-                    this.output += `${spaces}${spriteRef}.say(${this.formatArg(block.args[0])});\n`;
+            case "sayFor":
+                if (!isStage) {
+                    if (block.args.length > 1 && typeof block.args[1] === "number") {
+                        this.output += `${spaces}${spriteRef}.say(${this.formatArg(block.args[0])}, ${this.formatArg(block.args[1])});\n`;
+                        this.output += `${spaces}await scratchRuntime.wait(${this.formatArg(block.args[1])});\n`;
+                    } else {
+                        this.output += `${spaces}${spriteRef}.say(${this.formatArg(block.args[0])});\n`;
+                    }
                 }
                 break;
             case "think":
-                this.output += `${spaces}${spriteRef}.think(${this.formatArg(block.args[0])});\n`;
+            case "thinkFor":
+                if (!isStage) {
+                    if (block.args.length > 1 && typeof block.args[1] === "number") {
+                        this.output += `${spaces}${spriteRef}.think(${this.formatArg(block.args[0])}, ${this.formatArg(block.args[1])});\n`;
+                        this.output += `${spaces}await scratchRuntime.wait(${this.formatArg(block.args[1])});\n`;
+                    } else {
+                        this.output += `${spaces}${spriteRef}.think(${this.formatArg(block.args[0])});\n`;
+                    }
+                }
                 break;
             case "show":
-                this.output += `${spaces}${spriteRef}.show();\n`;
+                if (!isStage) {
+                    this.output += `${spaces}${spriteRef}.show();\n`;
+                }
                 break;
             case "hide":
-                this.output += `${spaces}${spriteRef}.hide();\n`;
+                if (!isStage) {
+                    this.output += `${spaces}${spriteRef}.hide();\n`;
+                }
+                break;
+            case "switchCostume":
+            case "switch":
+                if (!isStage) {
+                    this.output += `${spaces}${spriteRef}.switchCostume(${this.formatArg(block.args[0])});\n`;
+                }
+                break;
+            case "nextCostume":
+            case "next":
+                if (!isStage) {
+                    this.output += `${spaces}${spriteRef}.nextCostume();\n`;
+                }
+                break;
+            case "switchBackdrop":
+                this.output += `${spaces}scratchRuntime.switchBackdrop(${this.formatArg(block.args[0])});\n`;
+                break;
+            case "nextBackdrop":
+                this.output += `${spaces}scratchRuntime.nextBackdrop();\n`;
+                break;
+            case "changeEffect":
+            case "change":
+                if (!isStage && block.args.length >= 2) {
+                    this.output += `${spaces}${spriteRef}.changeEffect(${this.formatArg(block.args[0])}, ${this.formatArg(block.args[1])});\n`;
+                }
+                break;
+            case "setEffect":
+            case "set":
+                if (!isStage && block.args.length >= 2) {
+                    this.output += `${spaces}${spriteRef}.setEffect(${this.formatArg(block.args[0])}, ${this.formatArg(block.args[1])});\n`;
+                }
+                break;
+            case "clearEffects":
+            case "clear":
+                if (!isStage) {
+                    this.output += `${spaces}${spriteRef}.clearEffects();\n`;
+                }
                 break;
             case "changeSize":
-                this.output += `${spaces}${spriteRef}.changeSize(${this.formatArg(block.args[0])});\n`;
+                if (!isStage) {
+                    this.output += `${spaces}${spriteRef}.changeSize(${this.formatArg(block.args[0])});\n`;
+                }
                 break;
             case "setSize":
-                this.output += `${spaces}${spriteRef}.setSize(${this.formatArg(block.args[0])});\n`;
+                if (!isStage) {
+                    this.output += `${spaces}${spriteRef}.setSize(${this.formatArg(block.args[0])});\n`;
+                }
                 break;
+            case "goToFrontLayer":
+                if (!isStage) {
+                    this.output += `${spaces}${spriteRef}.goToFrontLayer();\n`;
+                }
+                break;
+            case "goToBackLayer":
+                if (!isStage) {
+                    this.output += `${spaces}${spriteRef}.goToBackLayer();\n`;
+                }
+                break;
+            case "goForwardLayers":
+                if (!isStage) {
+                    this.output += `${spaces}${spriteRef}.goForwardLayers(${this.formatArg(block.args[0])});\n`;
+                }
+                break;
+            case "goBackwardLayers":
+                if (!isStage) {
+                    this.output += `${spaces}${spriteRef}.goBackwardLayers(${this.formatArg(block.args[0])});\n`;
+                }
+                break;
+            default:
+                this.output += `${spaces}// Looks block: ${block.name}\n`;
         }
     }
 
-    private generateControlBlock(block: BlockNode, indent: number, spriteName: string): void {
+    private generateSoundBlock(block: BlockNode, indent: number): void {
         const spaces = "    ".repeat(indent);
+        
+        switch (block.name) {
+            case "playSound":
+            case "play":
+                this.output += `${spaces}scratchRuntime.playSound(${this.formatArg(block.args[0])});\n`;
+                break;
+            case "playSoundUntilDone":
+                this.output += `${spaces}await scratchRuntime.playSoundUntilDone(${this.formatArg(block.args[0])});\n`;
+                break;
+            case "startSound":
+                this.output += `${spaces}scratchRuntime.playSound(${this.formatArg(block.args[0])});\n`;
+                break;
+            case "stopAllSounds":
+            case "stop":
+                if (block.args[0] === "all" || block.args[0] === "sounds") {
+                    this.output += `${spaces}scratchRuntime.stopAllSounds();\n`;
+                }
+                break;
+            case "changeVolume":
+                this.output += `${spaces}scratchRuntime.changeVolume(${this.formatArg(block.args[0])});\n`;
+                break;
+            case "setVolume":
+                this.output += `${spaces}scratchRuntime.setVolume(${this.formatArg(block.args[0])});\n`;
+                break;
+            default:
+                this.output += `${spaces}// Sound block: ${block.name}\n`;
+        }
+    }
+
+    private generateControlBlock(block: BlockNode, indent: number, spriteName: string, isStage: boolean): void {
+        const spaces = "    ".repeat(indent);
+        // Note: spriteRef could be used for clone-specific behavior
+        // const spriteRef = isStage ? `null` : `scratchRuntime.sprites["${spriteName}"]`;
         
         switch (block.name) {
             case "wait":
                 this.output += `${spaces}await scratchRuntime.wait(${this.formatArg(block.args[0])});\n`;
                 break;
             case "repeat":
-                this.output += `${spaces}for (let i = 0; i < ${this.formatArg(block.args[0])}; i++) {\n`;
-                if (block.body) {
+                this.output += `${spaces}for (let _i = 0; _i < ${this.formatArg(block.args[0])}; _i++) {\n`;
+                // Handle body from args[1] or block.body
+                if (block.args.length > 1 && typeof block.args[1] === "object") {
+                    this.generateBlock(block.args[1] as BlockNode, indent + 1, spriteName, isStage);
+                } else if (block.body) {
                     for (const child of block.body) {
-                        this.generateBlock(child, indent + 1, spriteName);
+                        this.generateBlock(child, indent + 1, spriteName, isStage);
                     }
                 }
                 this.output += `${spaces}}\n`;
                 break;
             case "forever":
-                this.output += `${spaces}while (scratchRuntime.running) {\n`;
-                if (block.body) {
+                this.output += `${spaces}(async function _forever() {\n`;
+                this.output += `${spaces}    while (scratchRuntime.running) {\n`;
+                if (block.args.length > 0 && typeof block.args[0] === "object") {
+                    this.generateBlock(block.args[0] as BlockNode, indent + 2, spriteName, isStage);
+                } else if (block.body) {
                     for (const child of block.body) {
-                        this.generateBlock(child, indent + 1, spriteName);
+                        this.generateBlock(child, indent + 2, spriteName, isStage);
                     }
                 }
-                this.output += `${spaces}    await scratchRuntime.wait(0.01);\n`;
-                this.output += `${spaces}}\n`;
+                this.output += `${spaces}        await scratchRuntime.wait(0.01);\n`;
+                this.output += `${spaces}    }\n`;
+                this.output += `${spaces}})();\n`;
                 break;
             case "if":
                 this.output += `${spaces}if (${this.formatCondition(block.args[0])}) {\n`;
-                if (block.body) {
+                if (block.args.length > 1 && typeof block.args[1] === "object") {
+                    this.generateBlock(block.args[1] as BlockNode, indent + 1, spriteName, isStage);
+                } else if (block.body) {
                     for (const child of block.body) {
-                        this.generateBlock(child, indent + 1, spriteName);
+                        this.generateBlock(child, indent + 1, spriteName, isStage);
                     }
                 }
                 this.output += `${spaces}}\n`;
@@ -1647,26 +1885,86 @@ export class MultiSpriteCodeGenerator {
                 this.output += `${spaces}if (${this.formatCondition(block.args[0])}) {\n`;
                 if (block.body) {
                     for (const child of block.body) {
-                        this.generateBlock(child, indent + 1, spriteName);
+                        this.generateBlock(child, indent + 1, spriteName, isStage);
                     }
                 }
                 this.output += `${spaces}} else {\n`;
                 if (block.elseBody) {
                     for (const child of block.elseBody) {
-                        this.generateBlock(child, indent + 1, spriteName);
+                        this.generateBlock(child, indent + 1, spriteName, isStage);
                     }
                 }
                 this.output += `${spaces}}\n`;
                 break;
+            case "waitUntil":
+                this.output += `${spaces}while (!(${this.formatCondition(block.args[0])})) {\n`;
+                this.output += `${spaces}    await scratchRuntime.wait(0.05);\n`;
+                this.output += `${spaces}}\n`;
+                break;
+            case "repeatUntil":
+                this.output += `${spaces}while (!(${this.formatCondition(block.args[0])})) {\n`;
+                if (block.args.length > 1 && typeof block.args[1] === "object") {
+                    this.generateBlock(block.args[1] as BlockNode, indent + 1, spriteName, isStage);
+                } else if (block.body) {
+                    for (const child of block.body) {
+                        this.generateBlock(child, indent + 1, spriteName, isStage);
+                    }
+                }
+                this.output += `${spaces}    await scratchRuntime.wait(0.01);\n`;
+                this.output += `${spaces}}\n`;
+                break;
+            case "stop":
+                const stopTarget = block.args[0];
+                if (stopTarget === "all") {
+                    this.output += `${spaces}scratchRuntime.stopAll(); return;\n`;
+                } else if (stopTarget === "thisScript" || stopTarget === "this") {
+                    this.output += `${spaces}return;\n`;
+                } else {
+                    this.output += `${spaces}// Stop other scripts in sprite\n`;
+                }
+                break;
+            case "createClone":
+            case "create":
+                const cloneTarget = block.args[0] === "myself" ? `"${spriteName}"` : this.formatArg(block.args[0]);
+                this.output += `${spaces}scratchRuntime.createClone(${cloneTarget});\n`;
+                break;
+            case "deleteClone":
+            case "delete":
+                if (!isStage) {
+                    this.output += `${spaces}scratchRuntime.deleteClone(CURRENT_SPRITE); return;\n`;
+                }
+                break;
+            default:
+                this.output += `${spaces}// Control block: ${block.name}\n`;
         }
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    private generateSensingBlock(block: BlockNode, indent: number, _spriteName: string): void {
+    private generateSensingBlock(block: BlockNode, indent: number, spriteName: string, isStage: boolean): void {
         const spaces = "    ".repeat(indent);
+        const spriteRef = isStage ? `null` : `scratchRuntime.sprites["${spriteName}"]`;
         
-        if (block.name === "ask") {
-            this.output += `${spaces}await scratchRuntime.ask(${this.formatArg(block.args[0])});\n`;
+        switch (block.name) {
+            case "ask":
+            case "askAndWait":
+                if (!isStage) {
+                    this.output += `${spaces}${spriteRef}.say(${this.formatArg(block.args[0])});\n`;
+                }
+                this.output += `${spaces}await scratchRuntime.ask(${this.formatArg(block.args[0])});\n`;
+                if (!isStage) {
+                    this.output += `${spaces}${spriteRef}.say('');\n`;
+                }
+                break;
+            case "resetTimer":
+            case "reset":
+                this.output += `${spaces}scratchRuntime.resetTimer();\n`;
+                break;
+            case "setDragMode":
+                if (!isStage) {
+                    this.output += `${spaces}${spriteRef}.draggable = (${this.formatArg(block.args[0])} === 'draggable');\n`;
+                }
+                break;
+            default:
+                this.output += `${spaces}// Sensing block: ${block.name}\n`;
         }
     }
 
@@ -1676,11 +1974,21 @@ export class MultiSpriteCodeGenerator {
         
         switch (block.name) {
             case "set":
+            case "setVariable":
                 this.output += `${spaces}scratchRuntime.variables["${varName}"] = ${this.formatArg(block.args[1])};\n`;
                 break;
             case "change":
-                this.output += `${spaces}scratchRuntime.variables["${varName}"] += ${this.formatArg(block.args[1])};\n`;
+            case "changeVariable":
+                this.output += `${spaces}scratchRuntime.variables["${varName}"] = Number(scratchRuntime.variables["${varName}"]) + Number(${this.formatArg(block.args[1])});\n`;
                 break;
+            case "showVariable":
+                this.output += `${spaces}// Show variable: ${varName}\n`;
+                break;
+            case "hideVariable":
+                this.output += `${spaces}// Hide variable: ${varName}\n`;
+                break;
+            default:
+                this.output += `${spaces}// Variable block: ${block.name}\n`;
         }
     }
 
@@ -1689,29 +1997,51 @@ export class MultiSpriteCodeGenerator {
         const listName = String(block.args[0]);
         
         switch (block.name) {
+            case "add":
             case "addToList":
-                this.output += `${spaces}scratchRuntime.lists["${listName}"].push(${this.formatArg(block.args[1])});\n`;
+                this.output += `${spaces}scratchRuntime.addToList("${listName}", ${this.formatArg(block.args[1])});\n`;
                 break;
-            case "deleteFromList":
-                this.output += `${spaces}scratchRuntime.lists["${listName}"].splice(${this.formatArg(block.args[1])} - 1, 1);\n`;
+            case "delete":
+            case "deleteOfList":
+                this.output += `${spaces}scratchRuntime.deleteOfList("${listName}", ${this.formatArg(block.args[1])});\n`;
                 break;
-            case "clearList":
+            case "deleteAllOfList":
                 this.output += `${spaces}scratchRuntime.lists["${listName}"] = [];\n`;
                 break;
+            case "insert":
+            case "insertAtList":
+                this.output += `${spaces}scratchRuntime.insertAtList("${listName}", ${this.formatArg(block.args[1])}, ${this.formatArg(block.args[2])});\n`;
+                break;
+            case "replace":
+            case "replaceItemOfList":
+                this.output += `${spaces}scratchRuntime.replaceItemOfList("${listName}", ${this.formatArg(block.args[1])}, ${this.formatArg(block.args[2])});\n`;
+                break;
+            case "showList":
+                this.output += `${spaces}// Show list: ${listName}\n`;
+                break;
+            case "hideList":
+                this.output += `${spaces}// Hide list: ${listName}\n`;
+                break;
+            default:
+                this.output += `${spaces}// List block: ${block.name}\n`;
         }
     }
 
-    private generateProcedureBlock(block: BlockNode, indent: number, spriteName: string): void {
+    private generateProcedureBlock(block: BlockNode, indent: number, spriteName: string, isStage: boolean): void {
         const spaces = "    ".repeat(indent);
         
         if (block.name === "define") {
             const procName = String(block.args[0]);
             const params = block.args.slice(1).map(a => String(a)).join(", ");
             this.output += `${spaces}scratchRuntime.procedures["${procName}"] = async function(${params}) {\n`;
+            this.output += `${spaces}    scratchRuntime.currentSprite = "${spriteName}";\n`;
             if (block.body) {
                 for (const child of block.body) {
-                    this.generateBlock(child, indent + 1, spriteName);
+                    this.generateBlock(child, indent + 1, spriteName, isStage);
                 }
+            }
+            if (block.next) {
+                this.generateBlock(block.next, indent + 1, spriteName, isStage);
             }
             this.output += `${spaces}};\n`;
         } else if (block.name === "call") {
@@ -1721,18 +2051,60 @@ export class MultiSpriteCodeGenerator {
         }
     }
 
+    private generatePenBlock(block: BlockNode, indent: number, spriteRef: string): void {
+        const spaces = "    ".repeat(indent);
+        
+        switch (block.name) {
+            case "penDown":
+            case "pen":
+                if (block.args[0] === "down") {
+                    this.output += `${spaces}${spriteRef}.penDown && ${spriteRef}.penDown();\n`;
+                } else if (block.args[0] === "up") {
+                    this.output += `${spaces}${spriteRef}.penUp && ${spriteRef}.penUp();\n`;
+                }
+                break;
+            case "penUp":
+                this.output += `${spaces}${spriteRef}.penUp && ${spriteRef}.penUp();\n`;
+                break;
+            case "eraseAll":
+            case "erase":
+                this.output += `${spaces}// Erase all pen marks\n`;
+                this.output += `${spaces}const canvas = document.getElementById('pen-canvas');\n`;
+                this.output += `${spaces}if (canvas) canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);\n`;
+                break;
+            case "stamp":
+                this.output += `${spaces}${spriteRef}.stamp && ${spriteRef}.stamp();\n`;
+                break;
+            case "setPenColor":
+                this.output += `${spaces}${spriteRef}.setPenColor && ${spriteRef}.setPenColor(${this.formatArg(block.args[0])});\n`;
+                break;
+            case "setPenSize":
+                this.output += `${spaces}${spriteRef}.setPenSize && ${spriteRef}.setPenSize(${this.formatArg(block.args[0])});\n`;
+                break;
+            case "changePenSize":
+                this.output += `${spaces}${spriteRef}.changePenSize && ${spriteRef}.changePenSize(${this.formatArg(block.args[0])});\n`;
+                break;
+            default:
+                this.output += `${spaces}// Pen block: ${block.name}\n`;
+        }
+    }
+
     private formatArg(arg: unknown): string {
         if (typeof arg === "string") {
             // Check if it's a variable reference
-            if (arg.startsWith("var:")) {
-                return `scratchRuntime.variables["${arg.slice(4)}"]`;
+            if (arg.startsWith("var:") || arg.startsWith("$")) {
+                const varName = arg.startsWith("var:") ? arg.slice(4) : arg.slice(1);
+                return `scratchRuntime.variables["${varName}"]`;
             }
             // Check if it's a list reference
-            if (arg.startsWith("list:")) {
-                return `scratchRuntime.lists["${arg.slice(5)}"]`;
+            if (arg.startsWith("list:") || arg.startsWith("#")) {
+                const listName = arg.startsWith("list:") ? arg.slice(5) : arg.slice(1);
+                return `scratchRuntime.lists["${listName}"]`;
             }
             return `"${arg}"`;
         } else if (typeof arg === "number") {
+            return String(arg);
+        } else if (typeof arg === "boolean") {
             return String(arg);
         } else if (typeof arg === "object" && arg !== null && "type" in arg) {
             // Handle nested blocks/expressions
@@ -1745,14 +2117,19 @@ export class MultiSpriteCodeGenerator {
     private formatExpression(block: BlockNode): string {
         switch (block.type) {
             case "operator":
+            case "operators":
                 return this.formatOperator(block);
             case "sensing":
-                if (block.name === "answer") {
-                    return `scratchRuntime.answer`;
-                }
-                break;
+                return this.formatSensingReporter(block);
+            case "motion":
+                return this.formatMotionReporter(block);
+            case "looks":
+                return this.formatLooksReporter(block);
             case "variable":
+            case "variables":
                 return `scratchRuntime.variables["${block.args[0]}"]`;
+            case "list":
+                return this.formatListReporter(block);
         }
         return JSON.stringify(block);
     }
@@ -1760,19 +2137,24 @@ export class MultiSpriteCodeGenerator {
     private formatOperator(block: BlockNode): string {
         switch (block.name) {
             case "add":
-                return `(${this.formatArg(block.args[0])} + ${this.formatArg(block.args[1])})`;
+                return `(Number(${this.formatArg(block.args[0])}) + Number(${this.formatArg(block.args[1])}))`;
             case "subtract":
-                return `(${this.formatArg(block.args[0])} - ${this.formatArg(block.args[1])})`;
+                return `(Number(${this.formatArg(block.args[0])}) - Number(${this.formatArg(block.args[1])}))`;
             case "multiply":
-                return `(${this.formatArg(block.args[0])} * ${this.formatArg(block.args[1])})`;
+                return `(Number(${this.formatArg(block.args[0])}) * Number(${this.formatArg(block.args[1])}))`;
             case "divide":
-                return `(${this.formatArg(block.args[0])} / ${this.formatArg(block.args[1])})`;
+                return `(Number(${this.formatArg(block.args[0])}) / Number(${this.formatArg(block.args[1])}))`;
+            case "mod":
+                return `(Number(${this.formatArg(block.args[0])}) % Number(${this.formatArg(block.args[1])}))`;
             case "random":
-                return `Math.floor(Math.random() * (${this.formatArg(block.args[1])} - ${this.formatArg(block.args[0])} + 1) + ${this.formatArg(block.args[0])})`;
+            case "pickRandom":
+                return `scratchRuntime.pickRandom(${this.formatArg(block.args[0])}, ${this.formatArg(block.args[1])})`;
             case "greaterThan":
-                return `(${this.formatArg(block.args[0])} > ${this.formatArg(block.args[1])})`;
+            case "greater":
+                return `(Number(${this.formatArg(block.args[0])}) > Number(${this.formatArg(block.args[1])}))`;
             case "lessThan":
-                return `(${this.formatArg(block.args[0])} < ${this.formatArg(block.args[1])})`;
+            case "less":
+                return `(Number(${this.formatArg(block.args[0])}) < Number(${this.formatArg(block.args[1])}))`;
             case "equals":
                 return `(${this.formatArg(block.args[0])} == ${this.formatArg(block.args[1])})`;
             case "and":
@@ -1782,20 +2164,139 @@ export class MultiSpriteCodeGenerator {
             case "not":
                 return `!(${this.formatCondition(block.args[0])})`;
             case "join":
-                return `String(${this.formatArg(block.args[0])}) + String(${this.formatArg(block.args[1])})`;
-            case "mod":
-                return `(${this.formatArg(block.args[0])} % ${this.formatArg(block.args[1])})`;
+                return `(String(${this.formatArg(block.args[0])}) + String(${this.formatArg(block.args[1])}))`;
+            case "letterOf":
+            case "letter":
+                return `String(${this.formatArg(block.args[1])}).charAt(${this.formatArg(block.args[0])} - 1)`;
+            case "length":
+            case "lengthOf":
+                return `String(${this.formatArg(block.args[0])}).length`;
+            case "contains":
+                return `String(${this.formatArg(block.args[0])}).includes(String(${this.formatArg(block.args[1])}))`;
             case "round":
-                return `Math.round(${this.formatArg(block.args[0])})`;
+                return `Math.round(Number(${this.formatArg(block.args[0])}))`;
             case "abs":
-                return `Math.abs(${this.formatArg(block.args[0])})`;
+                return `Math.abs(Number(${this.formatArg(block.args[0])}))`;
+            case "floor":
+                return `Math.floor(Number(${this.formatArg(block.args[0])}))`;
+            case "ceiling":
+                return `Math.ceil(Number(${this.formatArg(block.args[0])}))`;
+            case "sqrt":
+                return `Math.sqrt(Number(${this.formatArg(block.args[0])}))`;
+            case "sin":
+                return `Math.sin(Number(${this.formatArg(block.args[0])}) * Math.PI / 180)`;
+            case "cos":
+                return `Math.cos(Number(${this.formatArg(block.args[0])}) * Math.PI / 180)`;
+            case "tan":
+                return `Math.tan(Number(${this.formatArg(block.args[0])}) * Math.PI / 180)`;
+            case "asin":
+                return `(Math.asin(Number(${this.formatArg(block.args[0])})) * 180 / Math.PI)`;
+            case "acos":
+                return `(Math.acos(Number(${this.formatArg(block.args[0])})) * 180 / Math.PI)`;
+            case "atan":
+                return `(Math.atan(Number(${this.formatArg(block.args[0])})) * 180 / Math.PI)`;
+            case "ln":
+                return `Math.log(Number(${this.formatArg(block.args[0])}))`;
+            case "log":
+                return `Math.log10(Number(${this.formatArg(block.args[0])}))`;
+            case "ePow":
+            case "e^":
+                return `Math.exp(Number(${this.formatArg(block.args[0])}))`;
+            case "tenPow":
+            case "10^":
+                return `Math.pow(10, Number(${this.formatArg(block.args[0])}))`;
         }
         return "null";
+    }
+
+    private formatSensingReporter(block: BlockNode): string {
+        switch (block.name) {
+            case "answer":
+                return `scratchRuntime.answer`;
+            case "mouseX":
+                return `scratchRuntime.mouse.x`;
+            case "mouseY":
+                return `scratchRuntime.mouse.y`;
+            case "mouseDown":
+                return `scratchRuntime.mouse.down`;
+            case "keyPressed":
+            case "key":
+                return `scratchRuntime.isKeyPressed(${this.formatArg(block.args[0])})`;
+            case "touching":
+                return `scratchRuntime.sprites[scratchRuntime.currentSprite].isTouching(${this.formatArg(block.args[0])})`;
+            case "distanceTo":
+                return `scratchRuntime.sprites[scratchRuntime.currentSprite].distanceTo(${this.formatArg(block.args[0])})`;
+            case "timer":
+                return `scratchRuntime.getTimer()`;
+            case "loudness":
+                return `0`; // Placeholder
+            case "username":
+                return `scratchRuntime.getUsername()`;
+            case "current":
+                const dateOption = block.args[0];
+                if (dateOption === "year") return `new Date().getFullYear()`;
+                if (dateOption === "month") return `(new Date().getMonth() + 1)`;
+                if (dateOption === "date") return `new Date().getDate()`;
+                if (dateOption === "dayofweek") return `(new Date().getDay() + 1)`;
+                if (dateOption === "hour") return `new Date().getHours()`;
+                if (dateOption === "minute") return `new Date().getMinutes()`;
+                if (dateOption === "second") return `new Date().getSeconds()`;
+                return `0`;
+            case "daysSince2000":
+                return `Math.floor((Date.now() - new Date(2000, 0, 1).getTime()) / 86400000)`;
+        }
+        return "null";
+    }
+
+    private formatMotionReporter(block: BlockNode): string {
+        switch (block.name) {
+            case "xPosition":
+                return `scratchRuntime.sprites[scratchRuntime.currentSprite].x`;
+            case "yPosition":
+                return `scratchRuntime.sprites[scratchRuntime.currentSprite].y`;
+            case "direction":
+                return `scratchRuntime.sprites[scratchRuntime.currentSprite].direction`;
+        }
+        return "0";
+    }
+
+    private formatLooksReporter(block: BlockNode): string {
+        switch (block.name) {
+            case "costumeNumber":
+                return `(scratchRuntime.sprites[scratchRuntime.currentSprite].currentCostume + 1)`;
+            case "costumeName":
+                return `scratchRuntime.sprites[scratchRuntime.currentSprite].costumes[scratchRuntime.sprites[scratchRuntime.currentSprite].currentCostume]`;
+            case "backdropNumber":
+                return `(scratchRuntime.stage.currentBackdrop + 1)`;
+            case "backdropName":
+                return `scratchRuntime.stage.backdrops[scratchRuntime.stage.currentBackdrop]`;
+            case "size":
+                return `scratchRuntime.sprites[scratchRuntime.currentSprite].size`;
+        }
+        return "0";
+    }
+
+    private formatListReporter(block: BlockNode): string {
+        const listName = String(block.args[0]);
+        switch (block.name) {
+            case "itemOfList":
+                return `scratchRuntime.itemOfList("${listName}", ${this.formatArg(block.args[1])})`;
+            case "itemNumberInList":
+                return `scratchRuntime.itemNumberInList("${listName}", ${this.formatArg(block.args[1])})`;
+            case "lengthOfList":
+                return `scratchRuntime.lengthOfList("${listName}")`;
+            case "listContains":
+                return `scratchRuntime.listContains("${listName}", ${this.formatArg(block.args[1])})`;
+        }
+        return "[]";
     }
 
     private formatCondition(condition: unknown): string {
         if (typeof condition === "object" && condition !== null && "type" in condition) {
             return this.formatExpression(condition as BlockNode);
+        }
+        if (typeof condition === "boolean") {
+            return String(condition);
         }
         return String(condition);
     }

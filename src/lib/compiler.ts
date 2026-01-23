@@ -11,6 +11,7 @@ import Debugger from "./debugger";
 interface SpriteInput {
     name: string;
     code: string;
+    isStage?: boolean;
 }
 
 // Main compiler class
@@ -69,7 +70,7 @@ export class ScratchTextCompiler {
     // compileMultiSprite: Compile multiple sprites into a single program
     compileMultiSprite(sprites: SpriteInput[]): { js: string; html: string; error?: string } {
         try {
-            const parsedSprites: { name: string; program: ReturnType<Parser["parse"]> }[] = [];
+            const parsedSprites: { name: string; program: ReturnType<Parser["parse"]>; isStage?: boolean }[] = [];
 
             // Parse each sprite's code
             for (const sprite of sprites) {
@@ -83,6 +84,7 @@ export class ScratchTextCompiler {
                 parsedSprites.push({
                     name: sprite.name,
                     program,
+                    isStage: sprite.isStage,
                 });
             }
 

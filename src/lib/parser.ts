@@ -296,12 +296,15 @@ export class Parser {
             "when",
             "broadcast",
             "receive",
+            
             // Motion
             "move",
             "turn",
+            "go",
             "goto",
             "glide",
             "point",
+            
             // Looks
             "say",
             "think",
@@ -310,9 +313,14 @@ export class Parser {
             "switch",
             "change",
             "set",
+            "clear",
+            "next",
+            
             // Sound
             "play",
+            "start",
             "stop",
+            
             // Control
             "wait",
             "repeat",
@@ -320,19 +328,30 @@ export class Parser {
             "if",
             "else",
             "until",
-            "while",
-            "stop",
+            "create",
+            "delete",
+            
             // Sensing
             "ask",
             "touching",
+            "reset",
+            
             // Variables
-            "set",
-            "change",
+            "add",
+            "insert",
+            "replace",
+            
             // Operators (rarely start blocks)
             "join",
+            "pick",
+            
             // Pen
             "pen",
             "stamp",
+            "erase",
+            
+            // Custom
+            "define",
         ];
 
         return blockStartKeywords.includes(this.current.value);

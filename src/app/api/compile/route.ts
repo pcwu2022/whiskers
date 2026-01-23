@@ -6,6 +6,7 @@ import { compile, compileMultiSprite } from "@/lib/compiler";
 interface SpriteInput {
     name: string;
     code: string;
+    isStage?: boolean;
 }
 
 export async function POST(request: Request) {

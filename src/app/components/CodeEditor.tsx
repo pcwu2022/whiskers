@@ -45,6 +45,9 @@ export default function CodeEditor() {
 
     // UI state for future toolbox (reserved)
     const [showToolbox, setShowToolbox] = useState(false);
+    
+    // Save notification state
+    const [showSaveNotification, setShowSaveNotification] = useState(false);
 
     const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
     const monacoInstance = useMonaco();
@@ -83,6 +86,24 @@ export default function CodeEditor() {
             localStorage.setItem(PROJECT_STORAGE_KEY, JSON.stringify(project));
         }
     }, [project, isLoaded]);
+
+    // Handle Ctrl+S to show save notification instead of browser save dialog
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+                e.preventDefault();
+                // Project is already auto-saved, just show notification
+                setShowSaveNotification(true);
+                // Hide notification after 2 seconds
+                setTimeout(() => {
+                    setShowSaveNotification(false);
+                }, 2000);
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, []);
 
     // Setup Monaco language
     useEffect(() => {
@@ -234,6 +255,7 @@ export default function CodeEditor() {
                     sprites: project.sprites.map((s) => ({
                         name: s.name,
                         code: s.code,
+                        isStage: s.isStage,
                     })),
                 }),
             });
@@ -293,6 +315,12 @@ export default function CodeEditor() {
                     <h1 className="text-white font-bold text-lg">🐱 Scratch Compiler</h1>
                     <span className="text-gray-400 text-sm">|</span>
                     <span className="text-gray-300 text-sm">{project.name}</span>
+                    {/* Save notification */}
+                    {showSaveNotification && (
+                        <span className="text-green-400 text-sm animate-pulse transition-opacity">
+                            ✓ Saved to your local computer
+                        </span>
+                    )}
                 </div>
                 <div className="flex items-center gap-3">
                     <ProjectToolbar

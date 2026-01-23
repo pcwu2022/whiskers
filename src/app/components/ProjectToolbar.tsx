@@ -4,7 +4,7 @@
 "use client";
 
 import React, { useRef } from "react";
-import { ScratchProject, SpriteFile } from "@/types/projectTypes";
+import { ScratchProject, SpriteFile, createSprite } from "@/types/projectTypes";
 import JSZip from "jszip";
 
 interface ProjectToolbarProps {
@@ -140,24 +140,31 @@ export default function ProjectToolbar({
 
                 // Second pass: combine into sprites
                 for (const name of Object.keys(scratchFiles)) {
-                    const meta = metaFiles[name] as { id?: string; createdAt?: number; updatedAt?: number } | undefined;
-                    sprites.push({
-                        id: meta?.id || `sprite_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-                        name,
-                        code: scratchFiles[name],
-                        createdAt: meta?.createdAt || Date.now(),
-                        updatedAt: meta?.updatedAt || Date.now(),
-                    });
+                    const meta = metaFiles[name] as { id?: string; createdAt?: number; updatedAt?: number; isStage?: boolean; type?: string } | undefined;
+                    const isStage = name === "Stage" || meta?.isStage || meta?.type === "backdrop";
+                    const sprite = createSprite(name, isStage ? "backdrop" : "sprite");
+                    sprite.code = scratchFiles[name];
+                    if (meta?.id) sprite.id = meta.id;
+                    if (meta?.createdAt) sprite.createdAt = meta.createdAt;
+                    if (meta?.updatedAt) sprite.updatedAt = meta.updatedAt;
+                    sprites.push(sprite);
                 }
+            }
+
+            // Ensure we have a backdrop if not present
+            let finalSprites = sprites;
+            if (sprites.length > 0 && !sprites.some(s => s.isStage)) {
+                const backdrop = createSprite("Stage", "backdrop");
+                finalSprites = [backdrop, ...sprites];
             }
 
             // Create the imported project
             const importedProject: ScratchProject = {
                 id: projectMeta.id || `project_${Date.now()}`,
                 name: projectMeta.name || file.name.replace(".scratch.zip", "").replace(".zip", ""),
-                version: projectMeta.version || "1.0.0",
-                sprites: sprites.length > 0 ? sprites : project.sprites,
-                activeSprite: sprites.length > 0 ? sprites[0].id : project.activeSprite,
+                version: projectMeta.version || "1.1.0",
+                sprites: finalSprites.length > 0 ? finalSprites : project.sprites,
+                activeSprite: finalSprites.length > 0 ? (finalSprites.find(s => !s.isStage)?.id || finalSprites[0].id) : project.activeSprite,
                 createdAt: projectMeta.createdAt || Date.now(),
                 updatedAt: Date.now(),
             };
@@ -180,28 +187,31 @@ export default function ProjectToolbar({
                 .map(async (path) => {
                     const content = await zip.files[path].async("text");
                     const name = path.split("/").pop()?.replace(".scratch", "") || "Sprite";
-                    sprites.push({
-                        id: `sprite_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-                        name,
-                        code: content,
-                        createdAt: Date.now(),
-                        updatedAt: Date.now(),
-                    });
+                    const isStage = name === "Stage";
+                    const sprite = createSprite(name, isStage ? "backdrop" : "sprite");
+                    sprite.code = content;
+                    sprites.push(sprite);
                 })
         );
 
         if (sprites.length > 0) {
+            // Ensure we have a backdrop if not present
+            if (!sprites.some(s => s.isStage)) {
+                const backdrop = createSprite("Stage", "backdrop");
+                sprites.unshift(backdrop);
+            }
+            
             const importedProject: ScratchProject = {
                 id: `project_${Date.now()}`,
                 name: "Imported Project",
-                version: "1.0.0",
+                version: "1.1.0",
                 sprites,
-                activeSprite: sprites[0].id,
+                activeSprite: sprites.find(s => !s.isStage)?.id || sprites[0].id,
                 createdAt: Date.now(),
                 updatedAt: Date.now(),
             };
             onImportProject(importedProject);
-            alert(`Imported ${sprites.length} sprite(s) successfully!`);
+            alert(`Imported ${sprites.filter(s => !s.isStage).length} sprite(s) successfully!`);
         }
     };
 
@@ -211,13 +221,8 @@ export default function ProjectToolbar({
             const content = await file.text();
             const name = file.name.replace(".scratch", "");
             
-            const sprite: SpriteFile = {
-                id: `sprite_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-                name,
-                code: content,
-                createdAt: Date.now(),
-                updatedAt: Date.now(),
-            };
+            const sprite = createSprite(name, "sprite");
+            sprite.code = content;
             
             onImportSprite(sprite);
             alert(`Sprite "${name}" imported successfully!`);
