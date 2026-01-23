@@ -4,8 +4,14 @@
 
 import { Lexer } from "./lexer";
 import { Parser } from "./parser";
-import { CodeGenerator } from "./codeGenerator";
+import { CodeGenerator, MultiSpriteCodeGenerator } from "./codeGenerator";
 import Debugger from "./debugger";
+
+// Sprite input for multi-sprite compilation
+interface SpriteInput {
+    name: string;
+    code: string;
+}
 
 // Main compiler class
 export class ScratchTextCompiler {
@@ -59,6 +65,43 @@ export class ScratchTextCompiler {
             };
         }
     }
+
+    // compileMultiSprite: Compile multiple sprites into a single program
+    compileMultiSprite(sprites: SpriteInput[]): { js: string; html: string; error?: string } {
+        try {
+            const parsedSprites: { name: string; program: ReturnType<Parser["parse"]> }[] = [];
+
+            // Parse each sprite's code
+            for (const sprite of sprites) {
+                const lexer = new Lexer(sprite.code);
+                const tokens = lexer.tokenize();
+                const parser = new Parser(tokens);
+                const program = parser.parse();
+
+                this.debugger.log("info", `Parsed sprite: ${sprite.name}`, program);
+
+                parsedSprites.push({
+                    name: sprite.name,
+                    program,
+                });
+            }
+
+            // Generate combined JavaScript code
+            const generator = new MultiSpriteCodeGenerator(parsedSprites);
+            const jsCode = generator.generate();
+
+            this.debugger.log("info", "Multi-sprite generator output", jsCode);
+
+            return jsCode;
+        } catch (error) {
+            console.error("Multi-sprite compilation error:", error);
+            return {
+                js: "",
+                html: "",
+                error: `// Compilation error: ${error instanceof Error ? error.message : String(error)}`,
+            };
+        }
+    }
 }
 
 // compile: Asynchronous function that wraps the compiler and handles potential errors.
@@ -76,5 +119,17 @@ export async function compile(code: string): Promise<{ js: string; html: string 
         console.error("Error in compile function:", error);
         // Return an error object indicating compilation failure.
         return { error: "Compilation failed in compiler function." };
+    }
+}
+
+// compileMultiSprite: Compile multiple sprites
+export async function compileMultiSprite(sprites: SpriteInput[]): Promise<{ js: string; html: string } | { error: string }> {
+    try {
+        const compiler = new ScratchTextCompiler();
+        const { js, html } = compiler.compileMultiSprite(sprites);
+        return { js, html };
+    } catch (error) {
+        console.error("Error in compileMultiSprite function:", error);
+        return { error: "Multi-sprite compilation failed." };
     }
 }

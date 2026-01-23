@@ -89,6 +89,8 @@ const scratchRuntime = {
                 scratchRuntime.showSpeechBubble(name, message, seconds, true);
             }
         };
+        // Create visual element if stage is already rendered
+        this.createSpriteElement(name);
     },
 
     // Update sprite position in DOM
@@ -153,6 +155,43 @@ const scratchRuntime = {
         }
     },
 
+    // Create DOM element for a sprite
+    createSpriteElement: function(name) {
+        const stageDiv = document.getElementById('stage');
+        if (!stageDiv) return;
+        
+        // Don't create duplicate elements
+        if (document.getElementById('sprite-' + name)) return;
+        
+        const sprite = this.sprites[name];
+        if (!sprite) return;
+        
+        // Use different colors for different sprites
+        const colors = ['#ff6b6b', '#4ecdc4', '#ffe66d', '#95e1d3', '#f38181', '#aa96da'];
+        const colorIndex = Object.keys(this.sprites).indexOf(name) % colors.length;
+        
+        const spriteDiv = document.createElement('div');
+        spriteDiv.id = 'sprite-' + name;
+        spriteDiv.style.position = 'absolute';
+        spriteDiv.style.width = '30px';
+        spriteDiv.style.height = '30px';
+        spriteDiv.style.backgroundColor = colors[colorIndex];
+        spriteDiv.style.borderRadius = '50%';
+        spriteDiv.style.left = (sprite.x + this.stage.width/2 - 15) + 'px';
+        spriteDiv.style.bottom = (sprite.y + this.stage.height/2 - 15) + 'px';
+        spriteDiv.style.transform = 'rotate(0deg)';
+        spriteDiv.style.transition = 'left 0.05s, bottom 0.05s';
+        spriteDiv.style.display = 'flex';
+        spriteDiv.style.alignItems = 'center';
+        spriteDiv.style.justifyContent = 'center';
+        spriteDiv.style.fontSize = '10px';
+        spriteDiv.style.fontWeight = 'bold';
+        spriteDiv.style.color = 'white';
+        spriteDiv.style.textShadow = '0 0 2px black';
+        spriteDiv.textContent = name.charAt(0);
+        stageDiv.appendChild(spriteDiv);
+    },
+
     // Initialize the runtime
     init: function() {
         // Initialize default sprite
@@ -173,19 +212,10 @@ const scratchRuntime = {
                 stageDiv.style.position = 'relative';
                 stageDiv.style.overflow = 'hidden';
 
-                // Create sprite element
-                const spriteDiv = document.createElement('div');
-                spriteDiv.id = 'sprite-Sprite1';
-                spriteDiv.style.position = 'absolute';
-                spriteDiv.style.width = '30px';
-                spriteDiv.style.height = '30px';
-                spriteDiv.style.backgroundColor = '#ff6b6b';
-                spriteDiv.style.borderRadius = '50%';
-                spriteDiv.style.left = (self.stage.width/2 - 15) + 'px';
-                spriteDiv.style.bottom = (self.stage.height/2 - 15) + 'px';
-                spriteDiv.style.transform = 'rotate(0deg)';
-                spriteDiv.style.transition = 'left 0.05s, bottom 0.05s';
-                stageDiv.appendChild(spriteDiv);
+                // Create sprite elements for all initialized sprites
+                Object.keys(self.sprites).forEach(function(name) {
+                    self.createSpriteElement(name);
+                });
             }
         };
 

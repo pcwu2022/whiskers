@@ -8,8 +8,12 @@ export type BlockType =
     | "control"
     | "sensing"
     | "operators"
+    | "operator"
     | "variables"
+    | "variable"
+    | "list"
     | "custom"
+    | "procedure"
     | "pen";
 
 export interface BlockNode {
@@ -17,6 +21,8 @@ export interface BlockNode {
     name: string;
     args: (string | number | BlockNode)[];
     next?: BlockNode;
+    body?: BlockNode[];      // For control structures (repeat, if, etc.)
+    elseBody?: BlockNode[];  // For if-else structures
 }
 
 export interface Script {

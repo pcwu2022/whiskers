@@ -1290,3 +1290,513 @@ export class CodeGenerator {
         this.htmlOutput = generateHTMLTemplate(this.output);
     }
 }
+
+/**
+ * MultiSpriteCodeGenerator: Generates code for multiple sprites
+ * Each sprite gets its own initialization and script code
+ */
+export class MultiSpriteCodeGenerator {
+    private sprites: { name: string; program: Program }[];
+    private output: string = "";
+    private htmlOutput: string = "";
+    private procedures: Map<string, string[]> = new Map();
+
+    constructor(sprites: { name: string; program: Program }[]) {
+        this.sprites = sprites;
+    }
+
+    generate(): { js: string; html: string } {
+        // Add runtime support code
+        this.output = SCRATCH_RUNTIME;
+
+        // Collect all procedures from all sprites
+        this.collectAllProcedures();
+
+        // Generate variables (global scope)
+        this.generateGlobalVariables();
+
+        // Generate lists (global scope)
+        this.generateGlobalLists();
+
+        // Initialize all sprites
+        this.generateSpriteInitializations();
+
+        // Generate custom procedures
+        this.generateProcedures();
+
+        // Generate code for each sprite's scripts
+        this.generateSpriteScripts();
+
+        // Generate HTML
+        this.htmlOutput = generateHTMLTemplate(this.output);
+
+        return {
+            js: this.output,
+            html: this.htmlOutput,
+        };
+    }
+
+    private collectAllProcedures(): void {
+        for (const sprite of this.sprites) {
+            for (const script of sprite.program.scripts) {
+                for (const block of script.blocks) {
+                    this.findProcedures(block);
+                }
+            }
+        }
+    }
+
+    private findProcedures(block: BlockNode): void {
+        if (block.type === "procedure" && block.name === "define") {
+            const procName = String(block.args[0]);
+            const params = block.args.slice(1).map((a) => String(a));
+            this.procedures.set(procName, params);
+        }
+        if (block.body) {
+            for (const child of block.body) {
+                this.findProcedures(child);
+            }
+        }
+        if (block.next) {
+            this.findProcedures(block.next);
+        }
+    }
+
+    private generateGlobalVariables(): void {
+        this.output += `// Variables\n`;
+        const allVars = new Map<string, unknown>();
+        for (const sprite of this.sprites) {
+            sprite.program.variables.forEach((value, name) => {
+                allVars.set(name, value);
+            });
+        }
+        if (allVars.size > 0) {
+            allVars.forEach((value, name) => {
+                if (typeof value === "number") {
+                    this.output += `scratchRuntime.variables["${name}"] = ${value};\n`;
+                } else if (typeof value === "string") {
+                    this.output += `scratchRuntime.variables["${name}"] = "${value}";\n`;
+                } else {
+                    this.output += `scratchRuntime.variables["${name}"] = ${JSON.stringify(value)};\n`;
+                }
+            });
+        } else {
+            this.output += `// No variables defined\n`;
+        }
+        this.output += `\n`;
+    }
+
+    private generateGlobalLists(): void {
+        this.output += `// Lists\n`;
+        const allLists = new Map<string, unknown[]>();
+        for (const sprite of this.sprites) {
+            sprite.program.lists.forEach((value, name) => {
+                allLists.set(name, value);
+            });
+        }
+        if (allLists.size > 0) {
+            allLists.forEach((value, name) => {
+                this.output += `scratchRuntime.lists["${name}"] = ${JSON.stringify(value)};\n`;
+            });
+        } else {
+            this.output += `// No lists defined\n`;
+        }
+        this.output += `\n`;
+    }
+
+    private generateSpriteInitializations(): void {
+        this.output += `// Initialize Sprites\n`;
+        
+        // Skip default Sprite1 if it's not in our list
+        const spriteNames = this.sprites.map(s => s.name);
+        if (!spriteNames.includes("Sprite1")) {
+            this.output += `delete scratchRuntime.sprites["Sprite1"];\n`;
+        }
+
+        for (let i = 0; i < this.sprites.length; i++) {
+            const sprite = this.sprites[i];
+            const safeName = sprite.name.replace(/[^a-zA-Z0-9_]/g, "_");
+            
+            // Initialize the sprite if it doesn't exist
+            if (sprite.name !== "Sprite1") {
+                this.output += `scratchRuntime.initSprite("${safeName}");\n`;
+            }
+            
+            // Position sprites slightly apart so they're visible
+            const xOffset = (i - Math.floor(this.sprites.length / 2)) * 50;
+            this.output += `scratchRuntime.sprites["${safeName}"].x = ${xOffset};\n`;
+        }
+        
+        this.output += `\n`;
+    }
+
+    private generateProcedures(): void {
+        this.output += `// Custom Procedures\n`;
+        if (this.procedures.size === 0) {
+            this.output += `// No procedures defined\n`;
+        } else {
+            this.procedures.forEach((params, name) => {
+                const paramList = params.join(", ");
+                this.output += `scratchRuntime.procedures["${name}"] = async function(${paramList}) {\n`;
+                this.output += `    // Procedure body will be filled by scripts\n`;
+                this.output += `};\n`;
+            });
+        }
+        this.output += `\n`;
+    }
+
+    private generateSpriteScripts(): void {
+        this.output += `// Scripts\n`;
+        
+        for (const sprite of this.sprites) {
+            const safeName = sprite.name.replace(/[^a-zA-Z0-9_]/g, "_");
+            this.output += `// === ${sprite.name} Scripts ===\n`;
+            this.output += `(function() {\n`;
+            this.output += `    const CURRENT_SPRITE = "${safeName}";\n`;
+            this.output += `    const sprite = scratchRuntime.sprites[CURRENT_SPRITE];\n\n`;
+            
+            // Generate each script
+            for (let i = 0; i < sprite.program.scripts.length; i++) {
+                const script = sprite.program.scripts[i];
+                this.output += `    // Script ${i + 1}\n`;
+                
+                for (const block of script.blocks) {
+                    this.generateBlock(block, 1, safeName);
+                }
+            }
+            
+            this.output += `})();\n\n`;
+        }
+    }
+
+    private generateBlock(block: BlockNode, indent: number, spriteName: string): void {
+        const spaces = "    ".repeat(indent);
+        const spriteRef = `scratchRuntime.sprites["${spriteName}"]`;
+
+        switch (block.type) {
+            case "event":
+                this.generateEventBlock(block, indent, spriteName);
+                break;
+            case "motion":
+                this.generateMotionBlock(block, indent, spriteRef);
+                break;
+            case "looks":
+                this.generateLooksBlock(block, indent, spriteRef);
+                break;
+            case "control":
+                this.generateControlBlock(block, indent, spriteName);
+                break;
+            case "sound":
+                this.output += `${spaces}// Sound: ${block.name}\n`;
+                break;
+            case "sensing":
+                this.generateSensingBlock(block, indent, spriteName);
+                break;
+            case "operator":
+                // Operators are usually inline expressions
+                break;
+            case "variable":
+                this.generateVariableBlock(block, indent);
+                break;
+            case "list":
+                this.generateListBlock(block, indent);
+                break;
+            case "procedure":
+                this.generateProcedureBlock(block, indent, spriteName);
+                break;
+            default:
+                this.output += `${spaces}// Unknown block type: ${block.type}\n`;
+        }
+
+        if (block.next) {
+            this.generateBlock(block.next, indent, spriteName);
+        }
+    }
+
+    private generateEventBlock(block: BlockNode, indent: number, spriteName: string): void {
+        const spaces = "    ".repeat(indent);
+
+        if (block.name === "when" && block.args[0] === "flagClicked") {
+            this.output += `${spaces}// When green flag clicked\n`;
+            this.output += `${spaces}scratchRuntime.onGreenFlag(async function() {\n`;
+            if (block.next) {
+                this.generateBlock(block.next, indent + 1, spriteName);
+            }
+            this.output += `${spaces}});\n\n`;
+        } else if (block.name === "when" && String(block.args[0]).includes("keyPressed")) {
+            const key = String(block.args[0]).replace("keyPressed", "").toLowerCase();
+            this.output += `${spaces}// When ${key} key pressed\n`;
+            this.output += `${spaces}scratchRuntime.onEvent("keyPressed_${key}", async function() {\n`;
+            if (block.next) {
+                this.generateBlock(block.next, indent + 1, spriteName);
+            }
+            this.output += `${spaces}});\n\n`;
+        } else if (block.name === "whenReceived") {
+            const message = this.formatArg(block.args[0]);
+            this.output += `${spaces}// When I receive ${message}\n`;
+            this.output += `${spaces}scratchRuntime.onBroadcast(${message}, async function() {\n`;
+            if (block.next) {
+                this.generateBlock(block.next, indent + 1, spriteName);
+            }
+            this.output += `${spaces}});\n\n`;
+        } else if (block.name === "broadcast") {
+            this.output += `${spaces}scratchRuntime.broadcast(${this.formatArg(block.args[0])});\n`;
+        }
+    }
+
+    private generateMotionBlock(block: BlockNode, indent: number, spriteRef: string): void {
+        const spaces = "    ".repeat(indent);
+        
+        switch (block.name) {
+            case "move":
+                this.output += `${spaces}${spriteRef}.move(${this.formatArg(block.args[0])});\n`;
+                break;
+            case "turn":
+            case "turnRight":
+                this.output += `${spaces}${spriteRef}.turnRight(${this.formatArg(block.args[0])});\n`;
+                break;
+            case "turnLeft":
+                this.output += `${spaces}${spriteRef}.turnLeft(${this.formatArg(block.args[0])});\n`;
+                break;
+            case "goTo":
+                this.output += `${spaces}${spriteRef}.goTo(${this.formatArg(block.args[0])}, ${this.formatArg(block.args[1])});\n`;
+                break;
+            case "setX":
+                this.output += `${spaces}${spriteRef}.setX(${this.formatArg(block.args[0])});\n`;
+                break;
+            case "setY":
+                this.output += `${spaces}${spriteRef}.setY(${this.formatArg(block.args[0])});\n`;
+                break;
+            case "changeX":
+                this.output += `${spaces}${spriteRef}.changeX(${this.formatArg(block.args[0])});\n`;
+                break;
+            case "changeY":
+                this.output += `${spaces}${spriteRef}.changeY(${this.formatArg(block.args[0])});\n`;
+                break;
+            case "pointInDirection":
+                this.output += `${spaces}${spriteRef}.pointInDirection(${this.formatArg(block.args[0])});\n`;
+                break;
+        }
+    }
+
+    private generateLooksBlock(block: BlockNode, indent: number, spriteRef: string): void {
+        const spaces = "    ".repeat(indent);
+        
+        switch (block.name) {
+            case "say":
+                if (block.args.length > 1) {
+                    this.output += `${spaces}${spriteRef}.say(${this.formatArg(block.args[0])}, ${this.formatArg(block.args[1])});\n`;
+                } else {
+                    this.output += `${spaces}${spriteRef}.say(${this.formatArg(block.args[0])});\n`;
+                }
+                break;
+            case "think":
+                this.output += `${spaces}${spriteRef}.think(${this.formatArg(block.args[0])});\n`;
+                break;
+            case "show":
+                this.output += `${spaces}${spriteRef}.show();\n`;
+                break;
+            case "hide":
+                this.output += `${spaces}${spriteRef}.hide();\n`;
+                break;
+            case "changeSize":
+                this.output += `${spaces}${spriteRef}.changeSize(${this.formatArg(block.args[0])});\n`;
+                break;
+            case "setSize":
+                this.output += `${spaces}${spriteRef}.setSize(${this.formatArg(block.args[0])});\n`;
+                break;
+        }
+    }
+
+    private generateControlBlock(block: BlockNode, indent: number, spriteName: string): void {
+        const spaces = "    ".repeat(indent);
+        
+        switch (block.name) {
+            case "wait":
+                this.output += `${spaces}await scratchRuntime.wait(${this.formatArg(block.args[0])});\n`;
+                break;
+            case "repeat":
+                this.output += `${spaces}for (let i = 0; i < ${this.formatArg(block.args[0])}; i++) {\n`;
+                if (block.body) {
+                    for (const child of block.body) {
+                        this.generateBlock(child, indent + 1, spriteName);
+                    }
+                }
+                this.output += `${spaces}}\n`;
+                break;
+            case "forever":
+                this.output += `${spaces}while (scratchRuntime.running) {\n`;
+                if (block.body) {
+                    for (const child of block.body) {
+                        this.generateBlock(child, indent + 1, spriteName);
+                    }
+                }
+                this.output += `${spaces}    await scratchRuntime.wait(0.01);\n`;
+                this.output += `${spaces}}\n`;
+                break;
+            case "if":
+                this.output += `${spaces}if (${this.formatCondition(block.args[0])}) {\n`;
+                if (block.body) {
+                    for (const child of block.body) {
+                        this.generateBlock(child, indent + 1, spriteName);
+                    }
+                }
+                this.output += `${spaces}}\n`;
+                break;
+            case "ifElse":
+                this.output += `${spaces}if (${this.formatCondition(block.args[0])}) {\n`;
+                if (block.body) {
+                    for (const child of block.body) {
+                        this.generateBlock(child, indent + 1, spriteName);
+                    }
+                }
+                this.output += `${spaces}} else {\n`;
+                if (block.elseBody) {
+                    for (const child of block.elseBody) {
+                        this.generateBlock(child, indent + 1, spriteName);
+                    }
+                }
+                this.output += `${spaces}}\n`;
+                break;
+        }
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    private generateSensingBlock(block: BlockNode, indent: number, _spriteName: string): void {
+        const spaces = "    ".repeat(indent);
+        
+        if (block.name === "ask") {
+            this.output += `${spaces}await scratchRuntime.ask(${this.formatArg(block.args[0])});\n`;
+        }
+    }
+
+    private generateVariableBlock(block: BlockNode, indent: number): void {
+        const spaces = "    ".repeat(indent);
+        const varName = String(block.args[0]);
+        
+        switch (block.name) {
+            case "set":
+                this.output += `${spaces}scratchRuntime.variables["${varName}"] = ${this.formatArg(block.args[1])};\n`;
+                break;
+            case "change":
+                this.output += `${spaces}scratchRuntime.variables["${varName}"] += ${this.formatArg(block.args[1])};\n`;
+                break;
+        }
+    }
+
+    private generateListBlock(block: BlockNode, indent: number): void {
+        const spaces = "    ".repeat(indent);
+        const listName = String(block.args[0]);
+        
+        switch (block.name) {
+            case "addToList":
+                this.output += `${spaces}scratchRuntime.lists["${listName}"].push(${this.formatArg(block.args[1])});\n`;
+                break;
+            case "deleteFromList":
+                this.output += `${spaces}scratchRuntime.lists["${listName}"].splice(${this.formatArg(block.args[1])} - 1, 1);\n`;
+                break;
+            case "clearList":
+                this.output += `${spaces}scratchRuntime.lists["${listName}"] = [];\n`;
+                break;
+        }
+    }
+
+    private generateProcedureBlock(block: BlockNode, indent: number, spriteName: string): void {
+        const spaces = "    ".repeat(indent);
+        
+        if (block.name === "define") {
+            const procName = String(block.args[0]);
+            const params = block.args.slice(1).map(a => String(a)).join(", ");
+            this.output += `${spaces}scratchRuntime.procedures["${procName}"] = async function(${params}) {\n`;
+            if (block.body) {
+                for (const child of block.body) {
+                    this.generateBlock(child, indent + 1, spriteName);
+                }
+            }
+            this.output += `${spaces}};\n`;
+        } else if (block.name === "call") {
+            const procName = String(block.args[0]);
+            const args = block.args.slice(1).map(a => this.formatArg(a)).join(", ");
+            this.output += `${spaces}await scratchRuntime.procedures["${procName}"](${args});\n`;
+        }
+    }
+
+    private formatArg(arg: unknown): string {
+        if (typeof arg === "string") {
+            // Check if it's a variable reference
+            if (arg.startsWith("var:")) {
+                return `scratchRuntime.variables["${arg.slice(4)}"]`;
+            }
+            // Check if it's a list reference
+            if (arg.startsWith("list:")) {
+                return `scratchRuntime.lists["${arg.slice(5)}"]`;
+            }
+            return `"${arg}"`;
+        } else if (typeof arg === "number") {
+            return String(arg);
+        } else if (typeof arg === "object" && arg !== null && "type" in arg) {
+            // Handle nested blocks/expressions
+            const block = arg as BlockNode;
+            return this.formatExpression(block);
+        }
+        return JSON.stringify(arg);
+    }
+
+    private formatExpression(block: BlockNode): string {
+        switch (block.type) {
+            case "operator":
+                return this.formatOperator(block);
+            case "sensing":
+                if (block.name === "answer") {
+                    return `scratchRuntime.answer`;
+                }
+                break;
+            case "variable":
+                return `scratchRuntime.variables["${block.args[0]}"]`;
+        }
+        return JSON.stringify(block);
+    }
+
+    private formatOperator(block: BlockNode): string {
+        switch (block.name) {
+            case "add":
+                return `(${this.formatArg(block.args[0])} + ${this.formatArg(block.args[1])})`;
+            case "subtract":
+                return `(${this.formatArg(block.args[0])} - ${this.formatArg(block.args[1])})`;
+            case "multiply":
+                return `(${this.formatArg(block.args[0])} * ${this.formatArg(block.args[1])})`;
+            case "divide":
+                return `(${this.formatArg(block.args[0])} / ${this.formatArg(block.args[1])})`;
+            case "random":
+                return `Math.floor(Math.random() * (${this.formatArg(block.args[1])} - ${this.formatArg(block.args[0])} + 1) + ${this.formatArg(block.args[0])})`;
+            case "greaterThan":
+                return `(${this.formatArg(block.args[0])} > ${this.formatArg(block.args[1])})`;
+            case "lessThan":
+                return `(${this.formatArg(block.args[0])} < ${this.formatArg(block.args[1])})`;
+            case "equals":
+                return `(${this.formatArg(block.args[0])} == ${this.formatArg(block.args[1])})`;
+            case "and":
+                return `(${this.formatCondition(block.args[0])} && ${this.formatCondition(block.args[1])})`;
+            case "or":
+                return `(${this.formatCondition(block.args[0])} || ${this.formatCondition(block.args[1])})`;
+            case "not":
+                return `!(${this.formatCondition(block.args[0])})`;
+            case "join":
+                return `String(${this.formatArg(block.args[0])}) + String(${this.formatArg(block.args[1])})`;
+            case "mod":
+                return `(${this.formatArg(block.args[0])} % ${this.formatArg(block.args[1])})`;
+            case "round":
+                return `Math.round(${this.formatArg(block.args[0])})`;
+            case "abs":
+                return `Math.abs(${this.formatArg(block.args[0])})`;
+        }
+        return "null";
+    }
+
+    private formatCondition(condition: unknown): string {
+        if (typeof condition === "object" && condition !== null && "type" in condition) {
+            return this.formatExpression(condition as BlockNode);
+        }
+        return String(condition);
+    }
+}
