@@ -1,5 +1,7 @@
 # Scratch Text Compiler
 
+[https://scratch-compiler.vercel.app/](https://scratch-compiler.vercel.app/)
+
 A web-based compiler that transforms text-based Scratch-like syntax into executable JavaScript. Built with Next.js and Monaco Editor.
 
 ## 🎯 Overview
