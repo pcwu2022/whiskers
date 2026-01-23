@@ -403,7 +403,7 @@ export default function CodeEditor() {
                     {compiled && (
                         <button
                             onClick={() => setShowCode(!showCode)}
-                            className={`px-4 py-2 rounded font-medium text-sm transition-colors ${
+                            className={`px-4 py-1.5 rounded font-medium text-sm transition-colors ${
                                 showCode
                                     ? "bg-purple-700 text-white"
                                     : "bg-purple-600 hover:bg-purple-700 text-white"
