@@ -106,52 +106,37 @@ export class CodeGenerator {
         this.output += `    answer: '',\n`;
         this.output += `    broadcasts: {},\n`;
         this.output += `    init: function() {\n`;
-        this.output += `        // Initialize stage\n`;
-        this.output += `        this.stage = {\n`;
-        this.output += `            width: 480,\n`;
-        this.output += `            height: 360,\n`;
-        this.output += `            backgroundColor: '#ffffff',\n`;
-        this.output += `            tempo: 60,\n`;
-        this.output += `            volume: 100\n`;
-        this.output += `        };\n\n`;
-
-        this.output += `        // Initialize default sprite\n`;
-        this.output += `        this.sprites.Sprite1 = {\n`;
-        this.output += `            x: 0,\n`;
-        this.output += `            y: 0,\n`;
-        this.output += `            direction: 90,\n`;
-        this.output += `            costumes: ['default'],\n`;
-        this.output += `            currentCostume: 0,\n`;
-        this.output += `            visible: true,\n`;
-        this.output += `            size: 100,\n`;
-        this.output += `            effects: { color: 0, fisheye: 0, whirl: 0, pixelate: 0, mosaic: 0, brightness: 0, ghost: 0 },\n`;
-        this.output += `            say: function(message, seconds) {\n`;
-        this.output += `                const spriteDiv = document.getElementById(\`sprite-\${scratchRuntime.currentSprite}\`);\n`;
-        this.output += `                const sayDiv = document.getElementById('say-bubble');\n`;
-        this.output += `                if (!sayDiv) {\n`;
-        this.output += `                    const newSayDiv = document.createElement('div');\n`;
-        this.output += `                    newSayDiv.id = 'say-bubble';\n`;
-        this.output += `                    newSayDiv.style.position = 'absolute';\n`;
-        this.output += `                    newSayDiv.style.backgroundColor = 'white';\n`;
-        this.output += `                    newSayDiv.style.border = '2px solid black';\n`;
-        this.output += `                    newSayDiv.style.borderRadius = '10px';\n`;
-        this.output += `                    newSayDiv.style.padding = '5px';\n`;
-        this.output += `                    newSayDiv.style.top = '50px';\n`;
-        this.output += `                    newSayDiv.style.left = '150px';\n`;
-        this.output += `                    newSayDiv.textContent = message;\n`;
-        this.output += `                    document.getElementById('stage').appendChild(newSayDiv);\n`;
-        this.output += `                } else {\n`;
-        this.output += `                    sayDiv.textContent = message;\n`;
-        this.output += `                    sayDiv.style.display = 'block';\n`;
-        this.output += `                }\n`;
-        this.output += `                console.log(\`\${scratchRuntime.currentSprite} says: \${message}\`);\n`;
-        this.output += `                if (seconds) {\n`;
-        this.output += `                    setTimeout(() => {\n`;
-        this.output += `                        const sayDiv = document.getElementById('say-bubble');\n`;
-        this.output += `                        if (sayDiv) sayDiv.style.display = 'none';\n`;
-        this.output += `                        console.log(\`\${scratchRuntime.currentSprite} stopped saying\`);\n`;
-        this.output += `                    }, seconds * 1000);\n`;
-        this.output += `                }\n`;
+        this.output += `        // Create visual stage (deferred until DOM is ready)\n`;
+        this.output += `        const setupUI = () => {\n`;
+        this.output += `            const stageDiv = document.getElementById('stage');\n`;
+        this.output += `            if (stageDiv) {\n`;
+        this.output += `                stageDiv.style.width = this.stage.width + 'px';\n`;
+        this.output += `                stageDiv.style.height = this.stage.height + 'px';\n`;
+        this.output += `                stageDiv.style.backgroundColor = this.stage.backgroundColor;\n`;
+        this.output += `                stageDiv.style.position = 'relative';\n`;
+        this.output += `                stageDiv.style.overflow = 'hidden';\n`;
+        this.output += `                stageDiv.style.border = '2px solid black';\n`;
+        this.output += `\n`;
+        this.output += `                // Create sprite element\n`;
+        this.output += `                const spriteDiv = document.createElement('div');\n`;
+        this.output += `                spriteDiv.id = 'sprite-Sprite1';\n`;
+        this.output += `                spriteDiv.style.position = 'absolute';\n`;
+        this.output += `                spriteDiv.style.width = '30px';\n`;
+        this.output += `                spriteDiv.style.height = '30px';\n`;
+        this.output += `                spriteDiv.style.backgroundColor = 'red';\n`;
+        this.output += `                spriteDiv.style.borderRadius = '50%';\n`;
+        this.output += `                spriteDiv.style.left = (this.sprites.Sprite1.x + this.stage.width/2) + 'px';\n`;
+        this.output += `                spriteDiv.style.bottom = (this.sprites.Sprite1.y + this.stage.height/2) + 'px';\n`;
+        this.output += `                spriteDiv.style.transform = 'rotate(0deg)';\n`;
+        this.output += `                stageDiv.appendChild(spriteDiv);\n`;
+        this.output += `            }\n`;
+        this.output += `        };\n`;
+        this.output += `\n`;
+        this.output += `        if (document.readyState === 'loading') {\n`;
+        this.output += `            document.addEventListener('DOMContentLoaded', setupUI);\n`;
+        this.output += `        } else {\n`;
+        this.output += `            setupUI();\n`;
+        this.output += `        }\n`;
         this.output += `            },\n`;
         this.output += `            move: function(steps) {\n`;
         this.output += `                const radians = this.direction * Math.PI / 180;\n`;
@@ -527,10 +512,7 @@ export class CodeGenerator {
             this.write(`await new Promise(resolve => setTimeout(resolve, 100));\n`);
         }
 
-        // Process next block if it exists
-        if (block.next) {
-            this.generateBlockCode(block.next);
-        }
+        // Note: Do not process block.next here - event handler bodies are generated above
     }
 
     /**
@@ -751,33 +733,45 @@ export class CodeGenerator {
                 this.write(`// Repeat loop\n`);
                 this.write(`for (let i = 0; i < ${count}; i++) {\n`);
                 this.indent++;
+                // Generate code for the blocks inside the loop body.
+                // Prefer args[1] if present; fall back to block.next when the parser attached
+                // the body incorrectly to `next` instead of as an arg.
+                let nextAfterRepeat: BlockNode | undefined = undefined;
+                let bodyBlock: BlockNode | undefined;
 
-                // Generate code for the blocks inside the loop body
-                // Bug fix: Process the nested block in args[1] instead of block.next
                 if (block.args.length > 1 && typeof block.args[1] === "object") {
-                    const nestedBlock = block.args[1] as BlockNode;
-                    this.generateBlockCode(nestedBlock);
+                    bodyBlock = block.args[1] as BlockNode;
+                } else if (block.next) {
+                    // Treat block.next as the loop body if args don't contain it
+                    bodyBlock = block.next as BlockNode;
+                    nextAfterRepeat = block.next.next;
+                }
 
-                    // The previous fix didn't properly process nested blocks with their own "next" chains
-                    // This is no longer needed as we're now handling the entire chain in generateBlockCode
+                if (bodyBlock) {
+                    this.generateBlockCode(bodyBlock);
                 }
 
                 this.indent--;
                 this.write(`}\n`);
 
                 // Process the next block after the repeat block if it exists
-                if (block.next) {
+                if (!nextAfterRepeat && block.next) {
                     this.generateBlockCode(block.next);
+                } else if (nextAfterRepeat) {
+                    this.generateBlockCode(nextAfterRepeat);
                 }
                 break;
             case "forever":
                 this.write(`// Forever loop (using setInterval for browser compatibility)\n`);
                 this.write(`(async function forever() {\n`);
                 this.indent++;
-
-                // Bug fix: Process the nested block in args[0] instead of block.next
+                // Prefer args[0] for body; fall back to block.next if parser attached body to next
                 if (block.args.length > 0 && typeof block.args[0] === "object") {
                     this.generateBlockCode(block.args[0] as BlockNode);
+                } else if (block.next) {
+                    this.generateBlockCode(block.next as BlockNode);
+                    // Skip generating block.next again below
+                    return;
                 }
 
                 this.write(`setTimeout(forever, 10); // Small delay to prevent UI freezing\n`);
@@ -795,9 +789,12 @@ export class CodeGenerator {
                 this.write(`if (${condition}) {\n`);
                 this.indent++;
 
-                // Bug fix: Process the nested block in args[1] instead of block.next
+                // Prefer args[1] for then-body; fall back to block.next when parser attached body to next
                 if (block.args.length > 1 && typeof block.args[1] === "object") {
                     this.generateBlockCode(block.args[1] as BlockNode);
+                } else if (block.next) {
+                    this.generateBlockCode(block.next as BlockNode);
+                    // If we used block.next as the body, advance the next chain appropriately below
                 }
 
                 this.indent--;
@@ -872,9 +869,11 @@ export class CodeGenerator {
                 this.write(`while (!(${repeatCondition})) {\n`);
                 this.indent++;
 
-                // Bug fix: Process the nested block in args[1] instead of block.next
+                // Prefer args[1] for body; fall back to block.next
                 if (block.args.length > 1 && typeof block.args[1] === "object") {
                     this.generateBlockCode(block.args[1] as BlockNode);
+                } else if (block.next) {
+                    this.generateBlockCode(block.next as BlockNode);
                 }
 
                 // Add a small delay to prevent browser from freezing
@@ -1626,6 +1625,11 @@ export class CodeGenerator {
                     consoleDiv.appendChild(logLine);
                     consoleDiv.scrollTop = consoleDiv.scrollHeight;
                 }
+                try {
+                    if (window.parent && window.parent !== window) {
+                        window.parent.postMessage({ type: 'scratch-log', message: Array.from(arguments).join(' ') }, '*');
+                    }
+                } catch (e) {}
             };
             
             // Setup controls
@@ -1646,7 +1650,23 @@ export class CodeGenerator {
             });
             
             // Generated program code
-            ${this.output}
+
+            const outputProgram = async () => {
+                try {
+                    ${this.output}
+                    return true;
+                } catch (error) {
+                    throw error;
+                }
+            };
+
+            outputProgram()
+                .then((data) => {
+                    console.log(data);
+                })
+                .catch((error) => {
+                    console.error(error);
+                });
         </script>
     </body>
     </html>`;

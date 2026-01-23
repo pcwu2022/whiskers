@@ -14,7 +14,10 @@ export class Parser {
     // Current position in the token array.
     private position: number = 0;
     // Stack to track block nesting for indentation-based blocks
-    private blockStack: BlockNode[] = [];
+    // Each entry stores the block and the indentation level at which it lives
+    private blockStack: { block: BlockNode; indent: number }[] = [];
+    // Track the last block seen at each indentation level to connect `.next` chains correctly
+    private lastAtIndent: (BlockNode | null)[] = [];
     // Current indentation level
     private indentLevel: number = 0;
 
@@ -159,12 +162,16 @@ export class Parser {
 
         // Reset the block stack for this script
         this.blockStack = [];
+        this.lastAtIndent = [];
         this.indentLevel = 0;
 
         // Parse the first block (usually an event block)
         const firstBlock = this.parseBlock();
         if (firstBlock) {
             script.blocks.push(firstBlock);
+            // track the top-level block with indent 0
+            this.blockStack.push({ block: firstBlock, indent: 0 });
+            this.lastAtIndent[0] = firstBlock;
 
             // Parse subsequent blocks
             this.parseScriptBlocks(script);
@@ -186,107 +193,95 @@ export class Parser {
 
             // Check for indentation changes
             if (this.match(TokenType.INDENT)) {
+                // Increase indentation level and consume the INDENT token
                 this.indentLevel++;
                 this.advance();
 
-                // Parse the indented block
+                // If there is no parent block on the stack, nothing to attach to
                 if (!this.blockStack.length) {
-                    break; // No parent block to attach to
+                    break;
                 }
 
-                const parentBlock = this.blockStack[this.blockStack.length - 1];
+                const parentEntry = this.blockStack[this.blockStack.length - 1];
+                const parentBlock = parentEntry.block;
 
-                // For control blocks that can have nested blocks
-                if (["if", "repeat", "forever", "until", "while"].includes(parentBlock.name)) {
-                    // Create a sequence of blocks at this indentation level
-                    const firstNestedBlock = this.parseBlock();
-                    if (firstNestedBlock) {
-                        // Add the first nested block as an argument
-                        parentBlock.args.push(firstNestedBlock);
+                // For control blocks that can have nested block bodies, parse a sequence
+                const controlWithBody = ["if", "repeat", "forever", "until", "while"];
 
-                        // Parse subsequent blocks at this indentation level
-                        let currentBlock = firstNestedBlock;
+                // Parse the first nested block in this indented region
+                const firstNestedBlock = this.parseBlock();
+                if (!firstNestedBlock) {
+                    continue;
+                }
 
-                        // Track blocks at this indentation level
-                        while (!this.isAtEnd() && !this.match(TokenType.DEDENT)) {
-                            this.skipIrrelevant();
-
-                            if (this.isAtEnd() || this.match(TokenType.DEDENT)) {
-                                break;
-                            }
-
-                            if (this.isBlockStart()) {
-                                const nextBlock = this.parseBlock();
-                                if (nextBlock) {
-                                    // Connect blocks with 'next'
-                                    currentBlock.next = nextBlock;
-                                    currentBlock = nextBlock;
-                                }
-                            } else {
-                                this.advance();
-                            }
-                        }
-                    }
+                // Attach the nested sequence to the parent block
+                // For event blocks (e.g., 'when') attach as `next` so handlers execute sequentially
+                if (parentBlock.type === "event" || parentBlock.name === "when") {
+                    parentBlock.next = firstNestedBlock;
                 } else {
-                    // For other blocks, handle nested blocks normally
-                    const nestedBlock = this.parseBlock();
+                    // Common convention: args[0] is condition/count, body goes at next index
+                    parentBlock.args.push(firstNestedBlock);
+                }
 
-                    if (nestedBlock) {
-                        if (!parentBlock.next) {
-                            parentBlock.next = nestedBlock;
-                        } else {
-                            // Find the last block in the next chain
-                            let lastBlock = parentBlock.next;
-                            while (lastBlock.next) {
-                                lastBlock = lastBlock.next;
-                            }
-                            lastBlock.next = nestedBlock;
+                // Track the first block at this indent level and push onto the stack
+                this.lastAtIndent[this.indentLevel] = firstNestedBlock;
+                this.blockStack.push({ block: firstNestedBlock, indent: this.indentLevel });
+
+                // Parse additional sibling blocks at the same indentation level
+                let currentBlock = firstNestedBlock;
+                while (!this.isAtEnd() && !this.match(TokenType.DEDENT)) {
+                    this.skipIrrelevant();
+                    if (this.isAtEnd() || this.match(TokenType.DEDENT)) break;
+
+                    if (this.isBlockStart()) {
+                        const nextBlock = this.parseBlock();
+                        if (nextBlock) {
+                            currentBlock.next = nextBlock;
+                            currentBlock = nextBlock;
+                            // update the last block at this indent and push onto stack
+                            this.lastAtIndent[this.indentLevel] = nextBlock;
+                            this.blockStack.push({ block: nextBlock, indent: this.indentLevel });
                         }
-
-                        // Push this block to track indentation level
-                        this.blockStack.push(nestedBlock);
+                    } else {
+                        this.advance();
                     }
                 }
             } else if (this.match(TokenType.DEDENT)) {
-                this.indentLevel--;
+                // Consume DEDENT and reduce indent level
                 this.advance();
+                this.indentLevel = Math.max(0, this.indentLevel - 1);
 
-                // Pop the last block from the stack if we're at a deeper level
-                if (this.blockStack.length > 1) {
+                // Pop any blocks that belonged to deeper indentation levels
+                while (this.blockStack.length && this.blockStack[this.blockStack.length - 1].indent > this.indentLevel) {
                     this.blockStack.pop();
+                }
+                // Clear lastAtIndent entries deeper than current indent
+                for (let i = this.lastAtIndent.length - 1; i > this.indentLevel; i--) {
+                    this.lastAtIndent[i] = null;
                 }
 
                 // If we've reduced indentation below our starting level, we're done with this script
-                if (this.indentLevel < 0) {
+                if (this.indentLevel <= 0) {
                     this.indentLevel = 0;
-                    break;
+                    // keep the top-level block on the stack but exit if at base
+                    if (this.blockStack.length <= 1) break;
                 }
             } else if (this.isBlockStart()) {
                 // Parse a new block at the current indentation level
                 const block = this.parseBlock();
                 if (block) {
-                    if (this.blockStack.length > 0) {
-                        // Connect this block to the previous one at the same level
-                        const parentBlock = this.blockStack[this.blockStack.length - 1];
-                        if (!parentBlock.next) {
-                            parentBlock.next = block;
-                        } else {
-                            // Find the last block in the next chain
-                            let lastBlock = parentBlock.next;
-                            while (lastBlock.next) {
-                                lastBlock = lastBlock.next;
-                            }
-                            lastBlock.next = block;
-                        }
-
-                        // Replace the last block in the stack with this new one
-                        this.blockStack.pop();
-                        this.blockStack.push(block);
+                    // If there is an existing block at this indent, connect as `.next`
+                    const last = this.lastAtIndent[this.indentLevel];
+                    if (last) {
+                        last.next = block;
                     } else {
-                        // This is a top-level block in the script
+                        // This is a top-level block in the script for this indent
                         script.blocks.push(block);
-                        this.blockStack.push(block);
                     }
+
+                    // Track this block as the last at this indent and push onto the stack
+                    this.lastAtIndent[this.indentLevel] = block;
+                    this.blockStack.push({ block, indent: this.indentLevel });
                 }
             } else {
                 // Skip tokens that don't start a block
@@ -354,7 +349,23 @@ export class Parser {
         }
 
         // Get the block name (keyword)
-        const blockKeyword = this.consume(TokenType.KEYWORD, "Expected block keyword").value;
+        let blockKeyword = this.consume(TokenType.KEYWORD, "Expected block keyword").value;
+
+        // Normalize multi-word block keywords (e.g., 'turn right' -> 'turnRight', 'repeat until' -> 'repeatUntil')
+        if (blockKeyword === "turn") {
+            this.skipIrrelevant();
+            if (!this.isAtEnd() && this.match(TokenType.KEYWORD) && (this.current.value === "right" || this.current.value === "left")) {
+                const dir = this.advance().value;
+                blockKeyword = dir === "right" ? "turnRight" : "turnLeft";
+            }
+        } else if (blockKeyword === "repeat") {
+            // support 'repeat until' as a combined keyword
+            this.skipIrrelevant();
+            if (!this.isAtEnd() && this.match(TokenType.KEYWORD) && this.current.value === "until") {
+                this.advance();
+                blockKeyword = "repeatUntil";
+            }
+        }
 
         // Determine the block type based on the keyword
         const blockType: BlockType = this.determineBlockType(blockKeyword);
@@ -368,9 +379,6 @@ export class Parser {
             name: blockKeyword,
             args,
         };
-
-        // Add this block to the stack so nested blocks can reference it
-        this.blockStack.push(block);
 
         // Handle special case for if-else blocks
         if (blockKeyword === "if") {

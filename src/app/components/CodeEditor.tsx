@@ -33,6 +33,19 @@ export default function CodeEditor() {
         );
     }, []);
 
+    // Listen for messages from the preview iframe/new window
+    useEffect(() => {
+        const handler = (e: MessageEvent) => {
+            if (!e || !e.data) return;
+            if (e.data && e.data.type === 'scratch-log') {
+                setTerminalOutput((prev) => (prev ? prev + '\n' + e.data.message : e.data.message));
+            }
+        };
+
+        window.addEventListener('message', handler);
+        return () => window.removeEventListener('message', handler);
+    }, []);
+
     useEffect(() => {
         if (monacoInstance) {
             monacoInstance.languages.register({ id: "scratchSyntax" });
@@ -59,28 +72,34 @@ export default function CodeEditor() {
     };
 
     const runResult = async (jsCode: string) => {
-        const data = await eval(`((async () => {
-            const outputs = [];
-            const terminalPre = document.getElementById("terminal");
-            terminalPre.innerHTML = "";
-            const saveOutput = (...output) => {
-                for (let el of output){
-                    terminalPre.innerHTML += el + "\\n";
-                }
-                outputs.push(...output);
-            }
-            ${jsCode.replaceAll("console.log(", "saveOutput(")}
-            const returnOutputs = [];
-            for (let output of outputs){
-                returnOutputs.push((typeof(output) === "string") ? output : JSON.stringify(output))
-            }
-            return returnOutputs;
-        })()).then((data) => JSON.stringify(data)).catch((error) => {console.error(error)})`);
+        // Use Function constructor to avoid embedding arbitrary code inside a template literal
+        const terminalPre = document.getElementById("terminal");
+        if (terminalPre) terminalPre.innerHTML = "";
 
-        setTerminalOutput(JSON.parse(data).join("\n"));
+        const outputs: any[] = [];
+        const saveOutput = (...output: any[]) => {
+            for (let el of output) {
+                if (terminalPre) terminalPre.innerHTML += el + "\n";
+            }
+            outputs.push(...output);
+        };
+
+        // Replace console.log with saveOutput for capturing prints
+        const safeCode = jsCode.replaceAll("console.log(", "saveOutput(");
+
+        try {
+            const body = 'return (async () => { ' + safeCode + ' })()';
+            const runner = new Function('saveOutput', body);
+            await runner(saveOutput);
+        } catch (err) {
+            console.error(err);
+        }
+
+        const returnOutputs = outputs.map((o) => (typeof o === "string" ? o : JSON.stringify(o)));
+        setTerminalOutput(returnOutputs.join("\n"));
     };
 
-    const handleCompile = async (): Promise<string> => {
+    const handleCompile = async (): Promise<{js: string, html: string}> => {
         saveCode();
         setLoading(true);
         setCompiledJsCode(null);
@@ -88,7 +107,7 @@ export default function CodeEditor() {
         setCompiledResult(null);
         setHtmlContent(null);
 
-        let retValue = "";
+        let retValue = {js: "", html: ""};
 
         try {
             const response = await fetch("/api/compile", {
@@ -109,7 +128,7 @@ export default function CodeEditor() {
             setHtmlContent(data.html || null);
             console.log(data.js);
             console.log(data.html);
-            retValue = data.js;
+            retValue = data;
         } catch (error) {
             console.error("Error compiling:", error);
             setCompiledJsCode("Compilation failed.");
@@ -122,19 +141,33 @@ export default function CodeEditor() {
         return retValue;
     };
 
+    const runInNewPage = (html: string) => {
+        const blob = new Blob([html], { type: 'text/html' });
+        const url = URL.createObjectURL(blob);
+        const newWindow = window.open(url, "/running.html");
+        // if (newWindow) {
+        //     newWindow.document.open();
+        //     newWindow.document.write(html);
+        //     newWindow.document.close();
+        // } else {
+        //     window.alert("Please allow new window to be opened.");
+        // }
+    }
+
     const handleRun = async () => {
         saveCode();
         setRunning(true);
-        let code = compiledJsCode;
+        let code = {js: compiledJsCode, html: htmlContent};
         if (!compiled) {
             code = await handleCompile();
         }
-        if (!code) {
+        if (!code || !code.js || !code.html) {
             setRunning(false);
             return;
         }
         setShowHtml(true);
-        await runResult(code);
+        setTerminalOutput("");
+        runInNewPage(code.html);
         setRunning(false);
     };
 
