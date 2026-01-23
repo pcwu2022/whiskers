@@ -205,9 +205,6 @@ export class Parser {
                 const parentEntry = this.blockStack[this.blockStack.length - 1];
                 const parentBlock = parentEntry.block;
 
-                // For control blocks that can have nested block bodies, parse a sequence
-                const controlWithBody = ["if", "repeat", "forever", "until", "while"];
-
                 // Parse the first nested block in this indented region
                 const firstNestedBlock = this.parseBlock();
                 if (!firstNestedBlock) {

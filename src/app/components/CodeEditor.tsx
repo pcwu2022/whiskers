@@ -4,7 +4,6 @@ import React, { useState, useRef, useEffect } from "react";
 import Editor, { useMonaco } from "@monaco-editor/react";
 import * as monaco from "monaco-editor";
 import { initialCode, languageDef, languageSelector } from "@/lib/codeEditorConfig";
-// import { data } from "autoprefixer";
 
 type monacoType = typeof monaco;
 
@@ -14,10 +13,10 @@ export default function CodeEditor() {
     const [loading, setLoading] = useState(false);
     const [compiled, setCompiled] = useState(false);
     const [running, setRunning] = useState(false);
-    const [terminalOutput, setTerminalOutput] = useState("");
-    const [compiledResult, setCompiledResult] = useState<string | null>(null);
+    const [errorMessage, setErrorMessage] = useState<string | null>(null);
     const [htmlContent, setHtmlContent] = useState<string | null>(null);
-    const [showHtml, setShowHtml] = useState(false);
+    const [showPreview, setShowPreview] = useState(false);
+    const [showCode, setShowCode] = useState(false);
 
     const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
     const monacoInstance = useMonaco();
@@ -33,29 +32,12 @@ export default function CodeEditor() {
         );
     }, []);
 
-    // Listen for messages from the preview iframe/new window
-    useEffect(() => {
-        const handler = (e: MessageEvent) => {
-            if (!e || !e.data) return;
-            if (e.data && e.data.type === 'scratch-log') {
-                setTerminalOutput((prev) => (prev ? prev + '\n' + e.data.message : e.data.message));
-            }
-        };
-
-        window.addEventListener('message', handler);
-        return () => window.removeEventListener('message', handler);
-    }, []);
-
     useEffect(() => {
         if (monacoInstance) {
             monacoInstance.languages.register({ id: "scratchSyntax" });
             monacoInstance.languages.setMonarchTokensProvider("scratchSyntax", languageDef);
             monacoInstance.languages.registerCompletionItemProvider("scratchSyntax", languageSelector(monacoInstance));
-
-            // Register javascript for output highlighting
             monacoInstance.languages.register({ id: "javascript" });
-
-            // Register HTML for preview
             monacoInstance.languages.register({ id: "html" });
         }
     }, [monacoInstance]);
@@ -71,40 +53,11 @@ export default function CodeEditor() {
         localStorage.setItem("scratchCode", code);
     };
 
-    const runResult = async (jsCode: string) => {
-        // Use Function constructor to avoid embedding arbitrary code inside a template literal
-        const terminalPre = document.getElementById("terminal");
-        if (terminalPre) terminalPre.innerHTML = "";
-
-        const outputs: any[] = [];
-        const saveOutput = (...output: any[]) => {
-            for (let el of output) {
-                if (terminalPre) terminalPre.innerHTML += el + "\n";
-            }
-            outputs.push(...output);
-        };
-
-        // Replace console.log with saveOutput for capturing prints
-        const safeCode = jsCode.replaceAll("console.log(", "saveOutput(");
-
-        try {
-            const body = 'return (async () => { ' + safeCode + ' })()';
-            const runner = new Function('saveOutput', body);
-            await runner(saveOutput);
-        } catch (err) {
-            console.error(err);
-        }
-
-        const returnOutputs = outputs.map((o) => (typeof o === "string" ? o : JSON.stringify(o)));
-        setTerminalOutput(returnOutputs.join("\n"));
-    };
-
     const handleCompile = async (): Promise<{js: string, html: string}> => {
         saveCode();
         setLoading(true);
         setCompiledJsCode(null);
-        setTerminalOutput("");
-        setCompiledResult(null);
+        setErrorMessage(null);
         setHtmlContent(null);
 
         let retValue = {js: "", html: ""};
@@ -124,15 +77,12 @@ export default function CodeEditor() {
 
             const data = await response.json();
             setCompiledJsCode(data.js);
-            setCompiledResult(data.js || null);
             setHtmlContent(data.html || null);
-            console.log(data.js);
-            console.log(data.html);
             retValue = data;
         } catch (error) {
             console.error("Error compiling:", error);
             setCompiledJsCode("Compilation failed.");
-            setTerminalOutput(String(error));
+            setErrorMessage(String(error));
         } finally {
             setLoading(false);
             setCompiled(true);
@@ -141,146 +91,153 @@ export default function CodeEditor() {
         return retValue;
     };
 
-    const runInNewPage = (html: string) => {
-        const blob = new Blob([html], { type: 'text/html' });
-        const url = URL.createObjectURL(blob);
-        const newWindow = window.open(url, "/running.html");
-        // if (newWindow) {
-        //     newWindow.document.open();
-        //     newWindow.document.write(html);
-        //     newWindow.document.close();
-        // } else {
-        //     window.alert("Please allow new window to be opened.");
-        // }
-    }
-
     const handleRun = async () => {
         saveCode();
         setRunning(true);
-        let code = {js: compiledJsCode, html: htmlContent};
-        if (!compiled) {
-            code = await handleCompile();
-        }
-        if (!code || !code.js || !code.html) {
+        setErrorMessage(null);
+        
+        // Always recompile to ensure fresh code
+        const result = await handleCompile();
+        
+        if (!result || !result.js || !result.html) {
             setRunning(false);
             return;
         }
-        setShowHtml(true);
-        setTerminalOutput("");
-        runInNewPage(code.html);
+        setShowPreview(true);
         setRunning(false);
     };
 
+    const closePreview = () => {
+        setShowPreview(false);
+    };
+
     return (
-        <div className="Body-Main h-screen relative">
-            <div className="Body-Header bg-gray-800 p-4 flex justify-between items-center">
-                <h1 className="text-white font-bold">Scratch Compiler</h1>
-                <div>
-                    <span className="ml-4"></span>
+        <div className="flex flex-col h-screen bg-gray-900">
+            {/* Header */}
+            <div className="bg-gray-800 px-4 py-3 flex justify-between items-center border-b border-gray-700">
+                <h1 className="text-white font-bold text-lg">🐱 Scratch Compiler</h1>
+                <div className="flex gap-2">
                     <button
                         onClick={handleRun}
-                        disabled={running}
-                        className={`bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded ${
-                            running ? "cursor-not-allowed" : ""
+                        disabled={running || loading}
+                        className={`px-5 py-2 rounded font-medium text-sm transition-colors ${
+                            running || loading
+                                ? "bg-gray-600 text-gray-400 cursor-not-allowed" 
+                                : "bg-green-600 hover:bg-green-700 text-white"
                         }`}
                     >
-                        {running ? "Running..." : compiled ? "▶ Run" : "▶ Compile and Run"}
+                        {loading ? "⚙ Compiling..." : running ? "▶ Running..." : "▶ Run"}
                     </button>
-                    <span className="ml-4"></span>
-                    <button
-                        onClick={handleCompile}
-                        disabled={loading}
-                        className={`bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded ${
-                            loading ? "opacity-50 cursor-not-allowed" : ""
-                        }`}
-                    >
-                        {loading ? "⚙ Compiling..." : "⚙ Compile"}
-                    </button>
+                    {compiled && (
+                        <button
+                            onClick={() => setShowCode(!showCode)}
+                            className={`px-4 py-2 rounded font-medium text-sm transition-colors ${
+                                showCode 
+                                    ? "bg-purple-700 text-white" 
+                                    : "bg-purple-600 hover:bg-purple-700 text-white"
+                            }`}
+                        >
+                            {showCode ? "Hide JS" : "Show JS"}
+                        </button>
+                    )}
                 </div>
             </div>
 
-            <div className="Body-Interface relative h-3/4">
-                {/* Left panel - Code editor */}
-                <div
-                    className={`Code-Editor h-full ${showHtml && htmlContent ? "w-1/2 inline-block align-top " : "w-full "}`}
-                >
-                    <Editor
-                        width="100%"
-                        height="100%"
-                        language="scratchSyntax"
-                        theme="vs-dark"
-                        value={code}
-                        options={{
-                            selectOnLineNumbers: true,
-                            roundedSelection: false,
-                            readOnly: false,
-                            cursorStyle: "line",
-                            automaticLayout: true,
-                        }}
-                        onChange={(value) => {
-                            setCompiled(false);
-                            saveCode();
-                            setCode(value || "");
-                        }}
-                        onMount={handleEditorDidMount}
-                    />
+            {/* Main content area */}
+            <div className="flex-1 flex overflow-hidden">
+                {/* Code Editor Panel */}
+                <div className={`flex flex-col ${showPreview ? 'w-1/2' : 'flex-1'} transition-all`}>
+                    <div className="bg-gray-800 px-3 py-2 text-gray-400 text-sm border-b border-gray-700">
+                        📝 Scratch Code
+                    </div>
+                    <div className="flex-1">
+                        <Editor
+                            width="100%"
+                            height="100%"
+                            language="scratchSyntax"
+                            theme="vs-dark"
+                            value={code}
+                            options={{
+                                selectOnLineNumbers: true,
+                                roundedSelection: false,
+                                readOnly: false,
+                                cursorStyle: "line",
+                                automaticLayout: true,
+                                minimap: { enabled: false },
+                                fontSize: 14,
+                                padding: { top: 10 },
+                            }}
+                            onChange={(value) => {
+                                setCompiled(false);
+                                saveCode();
+                                setCode(value || "");
+                            }}
+                            onMount={handleEditorDidMount}
+                        />
+                    </div>
                 </div>
 
-                {/* Right panel - HTML Preview */}
-                {showHtml && htmlContent && (
-                    <div className="w-1/2 h-full inline-block align-top">
-                        {/* <div className="bg-gray-800 p-4">
-                            <h2 className="text-white font-bold">HTML Preview</h2>
-                        </div> */}
-                        <div className="w-full h-full">
-                            <div className="w-full h-full bg-white overflow-auto">
-                                <iframe
-                                    srcDoc={htmlContent}
-                                    className="w-full h-full border-0"
-                                    title="HTML Preview"
-                                    sandbox="allow-scripts"
-                                />
-                            </div>
-                            {/* <div className="bg-gray-900 p-4">
-                                <h2 className="text-white font-bold">HTML Source</h2>
-                                <div className="border p-2 rounded">
-                                    <Editor
-                                        width="100%"
-                                        height="300px"
-                                        language="html"
-                                        theme="vs-dark"
-                                        value={htmlContent}
-                                        options={{
-                                            readOnly: true,
-                                            automaticLayout: true,
-                                        }}
-                                    />
-                                </div>
-                            </div> */}
+                {/* Preview Panel */}
+                {showPreview && htmlContent && (
+                    <div className="w-1/2 flex flex-col border-l border-gray-700">
+                        <div className="bg-gray-800 px-3 py-2 flex justify-between items-center border-b border-gray-700">
+                            <span className="text-gray-400 text-sm">🎮 Preview</span>
+                            <button
+                                onClick={closePreview}
+                                className="text-gray-400 hover:text-white text-lg leading-none"
+                            >
+                                ×
+                            </button>
+                        </div>
+                        <div className="flex-1 bg-gray-100">
+                            <iframe
+                                srcDoc={htmlContent}
+                                className="w-full h-full border-0"
+                                title="Preview"
+                                sandbox="allow-scripts"
+                            />
                         </div>
                     </div>
                 )}
             </div>
 
-            <div className="bg-gray-800 p-4 max-h-1/4 overflow-auto">
-                <h2 className="text-white font-bold">Terminal Output</h2>
-                <pre id="terminal" className="text-gray-300 whitespace-pre-wrap">
-                    {terminalOutput}
-                </pre>
-            </div>
-            {compiledResult && (
-                <div className="bg-gray-900 p-4">
-                    <h2 className="text-white font-bold">Result</h2>
-                    <div className="border p-2 rounded">
+            {/* Error message bar */}
+            {errorMessage && (
+                <div className="bg-red-900 border-t border-red-700 px-4 py-2 flex justify-between items-center">
+                    <span className="text-red-200 text-sm">⚠ {errorMessage}</span>
+                    <button 
+                        onClick={() => setErrorMessage(null)}
+                        className="text-red-400 hover:text-red-200"
+                    >
+                        ×
+                    </button>
+                </div>
+            )}
+
+            {/* Generated JS Code Panel (collapsible) */}
+            {showCode && compiledJsCode && (
+                <div className="h-64 border-t border-gray-700 flex flex-col">
+                    <div className="bg-gray-800 px-3 py-2 flex justify-between items-center border-b border-gray-700">
+                        <span className="text-gray-400 text-sm">📄 Generated JavaScript</span>
+                        <button
+                            onClick={() => setShowCode(false)}
+                            className="text-gray-400 hover:text-white text-lg leading-none"
+                        >
+                            ×
+                        </button>
+                    </div>
+                    <div className="flex-1">
                         <Editor
                             width="100%"
-                            height="300px"
-                            language="javascript" // Highlight as javascript
+                            height="100%"
+                            language="javascript"
                             theme="vs-dark"
-                            value={compiledResult}
+                            value={compiledJsCode}
                             options={{
                                 readOnly: true,
                                 automaticLayout: true,
+                                minimap: { enabled: false },
+                                fontSize: 12,
                             }}
                         />
                     </div>
