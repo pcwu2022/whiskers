@@ -653,7 +653,7 @@ export default function CodeEditor() {
             {/* First Load Name Modal */}
             <ProjectNameModal
                 isOpen={showFirstLoadNameModal && isFirstLoad}
-                title="Welcome to Scratch Compiler!"
+                title="Welcome to CatScript Playground!"
                 message="Enter a name for your project:"
                 defaultValue="My Project"
                 onConfirm={handleFirstLoadNameConfirm}
@@ -661,9 +661,19 @@ export default function CodeEditor() {
             />
 
             {/* Header */}
-            <div className="bg-gray-800 px-4 py-3 flex justify-between items-center border-b border-gray-700">
+            <div className="bg-gray-800 px-4 py-2 flex justify-between items-center border-b border-gray-700">
                 <div className="flex items-center gap-4">
-                    <h1 className="text-white font-bold text-lg">🐱 Scratch Compiler</h1>
+                    <div className="flex items-center gap-2">
+                        <img 
+                            src="/logo.png" 
+                            alt="CatScript" 
+                            className="h-9 w-auto"
+                        />
+                        <div className="flex flex-col justify-center">
+                            <h1 className="text-white font-bold text-lg leading-tight">CatScript Playground</h1>
+                            <span className="text-gray-500 text-[10px] leading-tight">Program in Scratch like a pro</span>
+                        </div>
+                    </div>
                     <span className="text-gray-400 text-sm">|</span>
                     
                     {/* Editable Project Name */}
@@ -740,6 +750,26 @@ export default function CodeEditor() {
                 {/* Left sidebar - Toolbox with color-coded categories */}
                 {showToolbox && (
                     <div className="w-64 bg-gray-900 border-r border-gray-700 flex flex-col overflow-hidden">
+                        {/* Toolbox scrollbar styles */}
+                        <style>{`
+                            .toolbox-scroll::-webkit-scrollbar {
+                                width: 6px;
+                            }
+                            .toolbox-scroll::-webkit-scrollbar-track {
+                                background: transparent;
+                            }
+                            .toolbox-scroll::-webkit-scrollbar-thumb {
+                                background: #4b5563;
+                                border-radius: 3px;
+                            }
+                            .toolbox-scroll::-webkit-scrollbar-thumb:hover {
+                                background: #6b7280;
+                            }
+                            .toolbox-scroll {
+                                scrollbar-width: thin;
+                                scrollbar-color: #4b5563 transparent;
+                            }
+                        `}</style>
                         <div className="bg-gray-800 px-3 py-2 text-gray-300 text-sm border-b border-gray-700 font-medium flex items-center justify-between">
                             <span>Toolbox</span>
                             <button
@@ -749,7 +779,7 @@ export default function CodeEditor() {
                                 ×
                             </button>
                         </div>
-                        <div className="flex-1 overflow-y-auto">
+                        <div className="toolbox-scroll flex-1 overflow-y-auto">
                             {toolboxCategories.map((category) => (
                                 <div key={category.name} className="border-b border-gray-800">
                                     {/* Category Header */}
@@ -806,21 +836,13 @@ export default function CodeEditor() {
                         onRenameSprite={handleRenameSprite}
                         onDeleteSprite={handleDeleteSprite}
                         onDuplicateSprite={handleDuplicateSprite}
+                        showToolbox={showToolbox}
+                        onToggleToolbox={() => setShowToolbox(!showToolbox)}
                     />
                     
                     {/* Editor Label */}
-                    <div className="bg-gray-800 px-3 py-2 text-gray-400 text-sm border-b border-gray-700 flex justify-between items-center">
+                    <div className="bg-gray-800 px-3 py-2 text-gray-400 text-sm border-b border-gray-700">
                         <span>📝 {activeSprite?.name || "Scratch Code"}</span>
-                        <Tooltip content={showToolbox ? "Hide Toolbox" : "Show Toolbox"}>
-                            <button
-                                onClick={() => setShowToolbox(!showToolbox)}
-                                className={`text-xs px-2 py-1 rounded ${
-                                    showToolbox ? "bg-gray-600 text-white" : "text-gray-500 hover:text-gray-300"
-                                }`}
-                            >
-                                🧰
-                            </button>
-                        </Tooltip>
                     </div>
                     
                     {/* Monaco Editor */}

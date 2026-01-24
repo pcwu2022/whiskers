@@ -7,7 +7,7 @@ export function generateHTMLTemplate(jsCode: string): string {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Scratch Preview</title>
+    <title>CatScript Preview</title>
     <style>
         * {
             box-sizing: border-box;
@@ -47,35 +47,28 @@ export function generateHTMLTemplate(jsCode: string): string {
             align-items: center;
             justify-content: center;
             transition: all 0.15s;
+            background: transparent;
         }
         .control-btn:hover {
-            transform: scale(1.05);
+            transform: scale(1.1);
         }
         .control-btn:active {
             transform: scale(0.95);
         }
         
-        .flag-btn {
-            background-color: #4CAF50;
-        }
-        .flag-btn:hover {
-            background-color: #45a049;
-        }
-        
-        .stop-btn {
-            background-color: #e53935;
-        }
-        .stop-btn:hover {
-            background-color: #c62828;
+        .flag-btn img, .stop-btn img {
+            width: 32px;
+            height: 32px;
+            object-fit: contain;
         }
         
         .fullscreen-btn {
-            background-color: #5c6bc0;
-            font-size: 16px;
+            font-size: 18px;
             margin-left: auto;
+            color: #666;
         }
         .fullscreen-btn:hover {
-            background-color: #3f51b5;
+            color: #333;
         }
         
         #stage-wrapper {
@@ -229,15 +222,18 @@ export function generateHTMLTemplate(jsCode: string): string {
             display: none;
         }
         body.fullscreen .fullscreen-btn {
-            background-color: #e53935;
+            color: #e53935;
+        }
+        body.fullscreen .fullscreen-btn:hover {
+            color: #ff5252;
         }
     </style>
 </head>
 <body>
     <div class="stage-container">
         <div class="controls">
-            <button id="flag-btn" class="control-btn flag-btn" title="Run program">🚩</button>
-            <button id="stop-btn" class="control-btn stop-btn" title="Stop and Reset">🛑</button>
+            <button id="flag-btn" class="control-btn flag-btn" title="Run program"><img src="/flag.png" alt="Run"></button>
+            <button id="stop-btn" class="control-btn stop-btn" title="Stop and Reset"><img src="/stop.png" alt="Stop"></button>
             <button id="fullscreen-btn" class="control-btn fullscreen-btn" title="Toggle Fullscreen">⛶</button>
         </div>
         <div id="stage-wrapper">
@@ -246,7 +242,7 @@ export function generateHTMLTemplate(jsCode: string): string {
                     <!-- Sprites go here -->
                 </div>
                 <div id="stage-overlay">
-                    <div class="icon">🚩</div>
+                    <div class="icon"><img src="/flag.png" width="50" height="50" alt="Run"></div>
                     <div class="message">Click the green flag to run</div>
                 </div>
             </div>

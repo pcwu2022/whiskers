@@ -1476,8 +1476,8 @@ export const languageSelector = (monacoInstance: typeof monaco): languages.Compl
     };
 };
 
-export const initialCode = `// Welcome to Scratch Compiler! 🐱
-// Click the green "Run" button to see this code in action
+export const initialCode = `// Welcome to CatScript Playground! 🐱
+// Click the green flag to see this code in action
 
 when flagClicked
     say "Hello! I'm going to dance!"

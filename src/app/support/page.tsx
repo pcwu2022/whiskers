@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 export const metadata: Metadata = {
-    title: "Help & Support - Scratch Compiler",
+    title: "Help & Support - CatScript Playground",
     description: "Learn how Scratch Compiler saves and manages your projects",
 };
 

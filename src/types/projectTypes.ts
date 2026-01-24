@@ -47,8 +47,8 @@ export const BACKDROP_ID = "backdrop_stage";
 export const BACKDROP_NAME = "Stage";
 
 // Default initial code for new sprites - an engaging demo that moves and talks
-export const DEFAULT_SPRITE_CODE = `// Welcome to Scratch Compiler! 🐱
-// Click the green "Run" button to see this code in action
+export const DEFAULT_SPRITE_CODE = `// Welcome to CatScript Playground! 🐱
+// Click the green flag to see this code in action
 
 when flagClicked
     say "Hello! Watch me dance!"

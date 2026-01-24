@@ -1,12 +1,14 @@
-# Scratch Text Compiler
+# CatScript Playground 🐱
+
+*Program in Scratch like a pro*
 
 [https://scratch-compiler.vercel.app/](https://scratch-compiler.vercel.app/)
 
-A web-based compiler that transforms text-based Scratch-like syntax into executable JavaScript. Built with Next.js and Monaco Editor.
+A fun, text-based coding playground for kids who love Scratch! Write Scratch programs using simple text commands and see them come to life in the browser.
 
 ## 🎯 Overview
 
-This project provides a text-based alternative to Scratch's visual block programming. Write Scratch programs using a clean, readable syntax and compile them to JavaScript that runs in the browser.
+CatScript Playground is the perfect next step for kids who've mastered Scratch blocks and want to learn real coding. It uses the same familiar Scratch concepts (sprites, motion, looks, events) but with text-based syntax that feels like \"real\" programming.
 
 ### Features
 
@@ -366,14 +368,14 @@ myBlock "Hello" 50
 
 ### Complete Working Example
 
-This example demonstrates motion, speech, loops, and keyboard controls. It's the default code shown when you first open the compiler:
+This example demonstrates motion, speech, loops, and keyboard controls. It's the default code shown when you first open CatScript Playground:
 
 ```scratch
-// Welcome to Scratch Compiler! 🐱
-// Click the green "Run" button to see this code in action
+// Welcome to CatScript Playground! 🐱
+// Click the green flag to see this code in action
 
 when flagClicked
-    say "Hello! Watch me dance!"
+    say \"Hello! Watch me dance!\"
     wait 1
     repeat 4
         move 50
