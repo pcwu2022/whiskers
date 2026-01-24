@@ -273,19 +273,18 @@ Test files are located in `tests/`. Each test covers a major feature category:
 
 | Test File | Coverage |
 |-----------|----------|
-| `tests/testEvents.ts` | Event blocks (flag clicked, key pressed, broadcast) |
-| `tests/testMotion.ts` | Motion blocks (move, turn, glide, position) |
-| `tests/testLooks.ts` | Looks blocks (say, costumes, effects, layers) |
-| `tests/testControl.ts` | Control blocks (loops, conditionals, clones) |
-| `tests/testVariables.ts` | Variables and lists |
-| `tests/testOperators.ts` | Math, string, and logic operators |
-| `tests/testSensing.ts` | Sensing blocks (touch, mouse, keyboard) |
-| `tests/testCustomBlocks.ts` | Custom block definitions and calls |
-| `tests/testMultiSprite.ts` | Multi-sprite projects with backdrop |
+| `tests/test-events.ts` | Event blocks (flag clicked, key pressed, broadcast) |
+| `tests/test-motion.ts` | Motion blocks (move, turn, glide, position) |
+| `tests/test-looks.ts` | Looks blocks (say, costumes, effects, layers) |
+| `tests/test-control.ts` | Control blocks (loops, conditionals, clones) |
+| `tests/test-variables.ts` | Variables and lists |
+| `tests/test-operators.ts` | Math, string, and logic operators |
+| `tests/test-sensing.ts` | Sensing blocks (touch, mouse, keyboard) |
+| `tests/test-multisprite.ts` | Multi-sprite projects with backdrop |
 
 Run all tests:
 ```bash
-for f in tests/test*.ts; do echo "=== $f ==="; npx ts-node -r tsconfig-paths/register --project tsconfig.test.json "$f"; done
+npx ts-node --project tsconfig.json tests/run-all-tests.ts
 ```
 
 ## 📝 Syntax Reference

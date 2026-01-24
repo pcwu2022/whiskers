@@ -1,75 +1,88 @@
 # Text-Based Scratch Compiler Documentation
 
 ## Overview
-The Text-Based Scratch Compiler converts Scratch-like syntax written in text form into executable JavaScript code. It provides a way to write Scratch programs using text rather than the drag-and-drop visual interface, while maintaining Scratch's approachable syntax and semantics.
+
+The Text-Based Scratch Compiler converts Scratch-like syntax written in text form into executable JavaScript code with an HTML preview. It provides a way to write Scratch programs using text rather than the drag-and-drop visual interface, while maintaining Scratch's approachable syntax and semantics.
+
+## Architecture
+
+```
+Source Code → Lexer → Tokens → Parser → AST → CodeGenerator → JavaScript + HTML
+```
 
 ## Core Components
 
+### Files
+
+| File | Description |
+|------|-------------|
+| `compiler.ts` | Main compiler class that orchestrates the compilation pipeline |
+| `lexer.ts` | Tokenizes source code into tokens |
+| `parser.ts` | Converts tokens into an Abstract Syntax Tree (AST) |
+| `codeGenerator.ts` | Converts AST to JavaScript code |
+| `debugger.ts` | Debug logging utilities |
+
 ### ScratchTextCompiler
+
 Main compiler class that orchestrates the compilation process.
 
 **Methods:**
-- `compile(code: string): string` - Compiles text-based Scratch code to JavaScript
+- `compile(code: string): { js: string; html: string }` - Compiles single-sprite code
+- `compileMultiSprite(sprites: SpriteInput[]): { js: string; html: string; parsedSprites: unknown }` - Compiles multiple sprites
 
 ### Lexer
-Converts input text to tokens for parsing.
 
-**Constructor:**
-- `constructor(code: string)` - Initializes with source code
+Tokenizes source code into tokens for parsing.
 
-**Methods:**
-- `tokenize(): string[]` - Transforms input text into array of tokens
-- Various private helper methods for extracting strings, numbers, identifiers
+**Token Types:**
+- `KEYWORD` - Reserved words (when, if, say, move, etc.)
+- `IDENTIFIER` - Variable/sprite names
+- `STRING` - Quoted strings
+- `NUMBER` - Numeric literals
+- `OPERATOR` - Mathematical and comparison operators
+- `INDENT`/`DEDENT` - Indentation changes
+- `NEWLINE` - Line breaks
+- `EOF` - End of file
 
 ### Parser
+
 Converts tokens into an Abstract Syntax Tree (AST).
 
-**Constructor:**
-- `constructor(tokens: string[])` - Initializes with tokens from lexer
-
-**Methods:**
-- `parse(): Program` - Parses tokens into a Program structure
-- Various private helper methods for parsing blocks, scripts, variable declarations
+**Key Features:**
+- Multi-word keyword handling (`when I receive`, `when I start as a clone`)
+- Indentation-based block nesting
+- Variable and list declarations
+- Custom procedure definitions
 
 ### CodeGenerator
-Converts the AST to JavaScript code.
 
-**Constructor:**
-- `constructor(program: Program)` - Initializes with parsed program
+Converts AST to JavaScript code.
 
-**Methods:**
-- `generate(): string` - Generates JavaScript from the program
-- Various private block-specific code generation methods
+**Output:**
+- `js` - JavaScript code with Scratch runtime
+- `html` - Complete HTML page with stage, sprites, and controls
 
 ## Data Types
 
 ### BlockType
-Enum representing different categories of Scratch blocks:
 ```typescript
-type BlockType = 'event' | 'motion' | 'looks' | 'sound' | 'control' | 'sensing' | 'operators' | 'variables' | 'custom';
+type BlockType = 'event' | 'motion' | 'looks' | 'sound' | 'control' | 
+                 'sensing' | 'operators' | 'variables' | 'pen' | 'custom';
 ```
 
 ### BlockNode
-Represents a single Scratch block:
 ```typescript
 interface BlockNode {
   type: BlockType;
   name: string;
   args: (string | number | BlockNode)[];
   next?: BlockNode;
-}
-```
-
-### Script
-Collection of blocks that form a script:
-```typescript
-interface Script {
-  blocks: BlockNode[];
+  body?: BlockNode[];
+  elseBody?: BlockNode[];
 }
 ```
 
 ### Program
-Complete program with scripts, variables, and lists:
 ```typescript
 interface Program {
   scripts: Script[];
@@ -80,169 +93,240 @@ interface Program {
 
 ## Supported Syntax
 
-### Variables & Lists
+### Multi-Sprite Structure
 ```
-var variableName = initialValue
-list listName [item1, item2, item3]
+sprite SpriteName
+    // sprite scripts here
+
+sprite AnotherSprite
+    // another sprite's scripts
 ```
 
 ### Events
 ```
-when flagClicked
-when keyPressed Space
+when flag clicked
+when I receive "message"
+when key space pressed
+when this sprite clicked
+when I start as a clone
 ```
 
 ### Motion
 ```
-move steps
+move 10 steps
+turn right 15 degrees
+turn left 15 degrees
+go to x: 0 y: 0
+glide 1 secs to x: 100 y: 100
+point in direction 90
+point towards mouse-pointer
+set x to 0
+set y to 0
+change x by 10
+change y by 10
+if on edge, bounce
 ```
 
 ### Looks
 ```
-say "message"
-say "message" for seconds
+say "Hello!"
+say "Hello!" for 2 seconds
+think "Hmm..."
+think "Hmm..." for 2 seconds
+show
+hide
+switch costume to "costume1"
+next costume
+set size to 100%
+change size by 10
+set color effect to 25
+change color effect by 5
+clear graphic effects
+go to front layer
+go to back layer
+```
+
+### Sound
+```
+play sound "meow"
+play sound "meow" until done
+stop all sounds
+set volume to 100%
+change volume by -10
 ```
 
 ### Control
 ```
-wait seconds
-repeat count
-  blocks...
-if condition
-  blocks...
+wait 1 seconds
+repeat 10
+    // blocks
+forever
+    // blocks
+if <condition>
+    // blocks
+if <condition>
+    // blocks
+else
+    // blocks
+wait until <condition>
+repeat until <condition>
+    // blocks
+stop all
+stop this script
+create clone of myself
+delete this clone
 ```
 
-### Variables Operations
+### Sensing
 ```
-set variableName = value
-change variableName by value
+touching mouse-pointer?
+touching "Sprite2"?
+touching edge?
+ask "What's your name?" and wait
+key space pressed?
+mouse down?
+mouse x
+mouse y
+timer
+reset timer
+distance to mouse-pointer
 ```
 
-### Expressions
+### Operators
 ```
-(x + y * 10)
+(1 + 2)
+(5 - 3)
+(4 * 2)
+(10 / 2)
+(10 mod 3)
+(pick random 1 to 10)
+(1 < 2)
+(1 > 2)
+(1 = 1)
+<condition1> and <condition2>
+<condition1> or <condition2>
+not <condition>
+(join "hello" "world")
+(letter 1 of "hello")
+(length of "hello")
+(round 3.5)
+(abs -5)
+(floor 3.7)
+(ceiling 3.2)
+(sqrt 16)
+(sin 90)
+(cos 0)
 ```
 
-## Runtime Support
+### Variables
+```
+var score = 0
+set score to 10
+change score by 1
+```
 
-The compiler includes a runtime support object that simulates core Scratch functionality:
+### Lists
+```
+list myList [1, 2, 3]
+add "thing" to myList
+delete 1 of myList
+insert "thing" at 1 of myList
+replace item 1 of myList with "new"
+item 1 of myList
+length of myList
+myList contains "thing"?
+```
 
-- Sprite management
-- Stage dimensions
-- Movement
-- Text display
-- Basic animation
+### Broadcasting
+```
+broadcast "message"
+broadcast "message" and wait
+when I receive "message"
+```
 
-## Usage Example
+### Custom Blocks
+```
+define myBlock param1 param2
+    // blocks
 
+myBlock "arg1" "arg2"
+```
+
+### Pen (Extension)
+```
+pen down
+pen up
+erase all
+stamp
+set pen color to #FF0000
+set pen size to 3
+change pen size by 1
+```
+
+## Runtime Features
+
+The generated JavaScript includes a `scratchRuntime` object that provides:
+
+- **Sprite Management**: Multiple sprites with position, direction, size, effects
+- **Stage**: 480x360 coordinate system with visual rendering
+- **Motion**: Movement, rotation, gliding with edge bouncing
+- **Looks**: Speech bubbles, costumes, visual effects
+- **Sound**: Placeholder audio system
+- **Events**: Green flag, key press, sprite click, broadcast/receive
+- **Cloning**: Dynamic sprite cloning with clone-specific scripts
+- **Sensing**: Mouse tracking, keyboard input, collision detection
+- **Variables/Lists**: Global variable and list storage
+
+## Usage
+
+### API Endpoint
 ```typescript
-import { ScratchTextCompiler } from './scratch-text-compiler';
+POST /api/compile
+Content-Type: application/json
 
-const compiler = new ScratchTextCompiler();
-const scratchCode = `
-when flagClicked
-  say "Hello World"
-`;
-const jsCode = compiler.compile(scratchCode);
+// Single code (legacy)
+{ "code": "sprite Sprite1\n    when flag clicked\n        say \"hello\"" }
+
+// Multi-sprite
+{ 
+  "sprites": [
+    { "name": "Sprite1", "code": "when flag clicked\n    say \"hello\"" },
+    { "name": "Sprite2", "code": "when I receive \"msg\"\n    move 10 steps" }
+  ]
+}
 ```
 
-## Limitations
+### Programmatic
+```typescript
+import { compile, compileMultiSprite } from "@/lib/compiler";
 
-- Limited subset of Scratch functionality
-- No direct support for custom blocks
-- Basic expression parsing
-- No support for graphical elements, only console output
-- Simplified sprite system with basic movement
+// Single code
+const result = await compile(code);
 
-## Extension Points
+// Multi-sprite
+const result = await compileMultiSprite([
+  { name: "Sprite1", code: "..." },
+  { name: "Sprite2", code: "..." }
+]);
+```
 
-- Add support for additional Scratch blocks
-- Enhance expression parsing
-- Add support for multiple sprites
-- Implement graphics rendering
-- Add support for more Scratch events
-
-# Syntax List
-
-## Variable and List Operations
-
-| Syntax | Description |
-|--------|-------------|
-| `var name = value` | Declares a new variable with an initial value. |
-| `var name` | Declares a new variable with default value 0. |
-| `list name [item1, item2, ...]` | Creates a new list with initial values. |
-| `list name` | Creates a new empty list. |
-| `set name = value` | Sets a variable to a specific value. |
-| `change name value` | Increases a variable by the specified amount. |
-
-## Events
-
-| Syntax | Description |
-|--------|-------------|
-| `when flagClicked` | Executes the following blocks when the green flag is clicked. |
-| `when keyPressed KeyName` | Executes the following blocks when a specific key is pressed. |
-
-## Motion
-
-| Syntax | Description |
-|--------|-------------|
-| `move steps` | Moves the sprite forward by the specified number of steps in its current direction. |
-
-## Looks
-
-| Syntax | Description |
-|--------|-------------|
-| `say "message"` | Makes the sprite display a speech bubble with the specified message. |
-| `say "message" seconds` | Makes the sprite display a speech bubble for the specified duration in seconds. |
-
-## Control
-
-| Syntax | Description |
-|--------|-------------|
-| `wait seconds` | Pauses execution for the specified number of seconds. |
-| `repeat count` | Repeats the enclosed blocks a specific number of times. |
-| `if condition` | Executes the enclosed blocks only if the condition is true. |
-
-## Operators
-
-| Syntax | Description |
-|--------|-------------|
-| `(expression)` | Evaluates a mathematical or logical expression like `(x + y)` or `(score > 10)`. |
-| `+` | Addition operator used in expressions. |
-| `-` | Subtraction operator used in expressions. |
-| `*` | Multiplication operator used in expressions. |
-| `/` | Division operator used in expressions. |
-| `>` | Greater than comparison operator. |
-| `<` | Less than comparison operator. |
-| `=` | Equality comparison operator. |
-
-## Structure
-
-| Syntax | Description |
-|--------|-------------|
-| Indentation | Indicates block nesting, with each level of indentation representing blocks inside control structures. |
-| Sequential blocks | Blocks written one after another are executed in sequence. |
-
-## Examples
+## Example
 
 ```
-when flagClicked
-  say "Hello"
-  wait 1
-```
-This script displays "Hello" when the green flag is clicked, then waits for 1 second.
+sprite Cat
+    when flag clicked
+        say "Hello!" for 2 seconds
+        broadcast "start"
+    
+    when I receive "done"
+        say "Goodbye!"
 
+sprite Dog
+    when I receive "start"
+        repeat 4
+            move 50 steps
+            wait 0.5 seconds
+        broadcast "done"
 ```
-when keyPressed Space
-  if (score > 10)
-    say "Good job!"
-```
-This script displays "Good job!" when the space key is pressed, but only if the score is greater than 10.
 
-```
-when flagClicked
-  repeat 4
-    move 100
-    wait 0.5
-```
-This script makes the sprite move in four 100-step movements with half-second pauses between each movement.
+This creates two sprites that communicate via broadcasting. When the green flag is clicked, Cat says "Hello!" and broadcasts "start". Dog receives the message, moves 4 times, then broadcasts "done". Cat receives "done" and says "Goodbye!".
