@@ -92,14 +92,21 @@ export function createCostume(name: string): Costume {
     };
 }
 
+// Empty code for additional sprites
+export const EMPTY_SPRITE_CODE = `// Add your code here
+when flagClicked
+    // Your code goes here
+`;
+
 // Create a new sprite with default values
-export function createSprite(name: string, type: SpriteType = "sprite"): SpriteFile {
+export function createSprite(name: string, type: SpriteType = "sprite", emptyCode: boolean = false): SpriteFile {
     const now = Date.now();
     const isStage = type === "backdrop";
+    const spriteCode = isStage ? DEFAULT_BACKDROP_CODE : (emptyCode ? EMPTY_SPRITE_CODE : DEFAULT_SPRITE_CODE);
     return {
         id: isStage ? BACKDROP_ID : `sprite_${now}_${Math.random().toString(36).substr(2, 9)}`,
         name: isStage ? BACKDROP_NAME : name,
-        code: isStage ? DEFAULT_BACKDROP_CODE : DEFAULT_SPRITE_CODE,
+        code: spriteCode,
         type,
         isStage,
         costumes: [createCostume(isStage ? "backdrop1" : "costume1")],

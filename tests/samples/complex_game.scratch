@@ -1,0 +1,114 @@
+// Test: Complex Game Pattern
+// This combines nested loops, conditions, broadcasts, and multiple events
+
+var score = 0
+var health = 100
+var gameRunning = 0
+var enemyCount = 0
+list highScores = []
+
+when flagClicked
+    set [score] to 0
+    set [health] to 100
+    set [gameRunning] to 1
+    set [enemyCount] to 0
+    delete all of [highScores]
+    
+    say "Welcome to the game!"
+    wait 1
+    
+    broadcast "start_game"
+    
+    // Main game loop
+    forever
+        if (gameRunning) = 1 then
+            // Check win condition
+            if (score) > 100 then
+                broadcast "game_won"
+                set [gameRunning] to 0
+            
+            // Check lose condition
+            if (health) < 1 then
+                broadcast "game_lost"
+                set [gameRunning] to 0
+            
+            // Spawn enemies periodically
+            if (enemyCount) < 5 then
+                broadcast "spawn"
+                change [enemyCount] by 1
+        
+        wait 1
+
+when I receive "game_won"
+    say "You Won!"
+    add (score) to [highScores]
+    
+    // Victory animation
+    repeat 5
+        change [color] effect by 20
+        turn right 72
+        wait 0.1
+
+when I receive "game_lost"
+    say "Game Over!"
+    set [ghost] effect to 50
+    
+    // Defeat animation
+    repeat 10
+        change size by -5
+        wait 0.1
+
+when I receive "enemy_destroyed"
+    change [score] by 10
+    change [enemyCount] by -1
+
+when I receive "player_damaged"
+    change [health] by -10
+    
+    // Damage feedback
+    repeat 3
+        set [brightness] effect to 50
+        wait 0.1
+        clear graphic effects
+        wait 0.1
+
+when keyPressed r
+    // Restart game
+    if (gameRunning) = 0 then
+        broadcast "restart"
+        set [score] to 0
+        set [health] to 100
+        set [gameRunning] to 1
+        clear graphic effects
+        set size to 100 %
+        say "Restarting..."
+
+// Movement controls
+when keyPressed up
+    if (gameRunning) = 1 then
+        change y by 10
+        
+        if touching "edge" then
+            if on edge, bounce
+
+when keyPressed down
+    if (gameRunning) = 1 then
+        change y by -10
+
+when keyPressed left
+    if (gameRunning) = 1 then
+        change x by -10
+        point in direction -90
+
+when keyPressed right
+    if (gameRunning) = 1 then
+        change x by 10
+        point in direction 90
+
+// Attack
+when keyPressed space
+    if (gameRunning) = 1 then
+        say "Attack!"
+        broadcast "player_attack"
+        wait 0.2
+        say ""

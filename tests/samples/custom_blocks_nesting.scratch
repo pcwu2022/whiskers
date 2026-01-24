@@ -1,0 +1,82 @@
+// Test: Custom Blocks with Nesting
+// Tests custom procedures containing loops and conditions
+
+define drawSquare (size)
+    repeat 4
+        move (size)
+        turn right 90
+        wait 0.1
+
+define drawTriangle (size)
+    repeat 3
+        move (size)
+        turn right 120
+        wait 0.1
+
+define drawPolygon (sides) (size)
+    repeat (sides)
+        move (size)
+        turn right ((360) / (sides))
+        wait 0.05
+
+define drawSpiral (count) (step)
+    set [i] to 1
+    repeat (count)
+        move ((i) * (step))
+        turn right 90
+        change [i] by 1
+        wait 0.05
+
+define conditionalMove (distance)
+    if (distance) > 0 then
+        repeat (distance)
+            move 1
+            wait 0.01
+    else
+        say "Can't move negative distance"
+
+define nestedDraw (outerCount) (innerSize)
+    repeat (outerCount)
+        drawSquare (innerSize)
+        turn right ((360) / (outerCount))
+        wait 0.2
+
+when flagClicked
+    say "Custom blocks test"
+    wait 1
+    
+    // Draw multiple squares
+    drawSquare 50
+    move 100
+    drawSquare 30
+    
+    // Draw a triangle
+    go to x: -100 y: 0
+    drawTriangle 60
+    
+    // Draw different polygons
+    go to x: 100 y: 0
+    drawPolygon 5 40
+    
+    go to x: 0 y: 100
+    drawPolygon 6 30
+    
+    // Draw a spiral
+    go to x: 0 y: 0
+    point in direction 90
+    drawSpiral 20 5
+    
+    // Use nested custom block
+    go to x: 0 y: -100
+    nestedDraw 4 25
+    
+    say "Drawing complete!"
+
+when keyPressed s
+    drawSquare 40
+
+when keyPressed t
+    drawTriangle 40
+
+when keyPressed p
+    drawPolygon 8 30

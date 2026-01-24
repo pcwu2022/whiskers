@@ -1,0 +1,78 @@
+// Test: Broadcast Communication
+// This test verifies broadcast and receive between multiple sprites
+
+// === Sprite: GameController ===
+// This sprite manages game state and broadcasts events
+
+when flagClicked
+    say "Game starting..."
+    wait 1
+    broadcast "game_start"
+    wait 2
+    broadcast "spawn_enemy"
+    wait 1
+    broadcast "spawn_enemy"
+    wait 1
+    broadcast "spawn_enemy"
+    wait 3
+    broadcast "game_over"
+
+when I receive "player_hit"
+    say "Player was hit!"
+    broadcast "shake_screen"
+
+when I receive "enemy_destroyed"
+    say "Enemy destroyed!"
+    change [score] by 10
+    
+    if (score) > 50 then
+        broadcast "level_up"
+
+// === Sprite: Player ===
+// The player character
+
+when I receive "game_start"
+    show
+    go to x: 0 y: -100
+    say "Let's go!"
+    
+when I receive "game_over"
+    say "Game Over!"
+    wait 1
+    hide
+
+when I receive "level_up"
+    say "Level Up!"
+    set size to 120 %
+    wait 0.5
+    set size to 100 %
+
+when keyPressed left
+    change x by -10
+
+when keyPressed right
+    change x by 10
+
+// === Sprite: Enemy ===
+// Enemy sprites
+
+when I receive "spawn_enemy"
+    create clone of myself
+
+when I start as a clone
+    show
+    go to x: (pick random -200 to 200) y: 150
+    
+    repeat 30
+        change y by -5
+        
+        if touching "Player" then
+            broadcast "player_hit"
+            delete this clone
+        
+        wait 0.1
+    
+    delete this clone
+
+when I receive "game_over"
+    delete this clone

@@ -227,7 +227,7 @@ export default function CodeEditor() {
 
     const handleAddSprite = () => {
         if (!project) return;
-        const newSprite = createSprite(generateSpriteName(project.sprites));
+        const newSprite = createSprite(generateSpriteName(project.sprites), "sprite", true);
         setProject((prev) => {
             if (!prev) return prev;
             return {

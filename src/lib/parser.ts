@@ -226,9 +226,9 @@ export class Parser {
 
                 // Parse additional sibling blocks at the same indentation level
                 let currentBlock = firstNestedBlock;
-                while (!this.isAtEnd() && !this.match(TokenType.DEDENT)) {
+                while (!this.isAtEnd() && !this.match(TokenType.DEDENT) && !this.match(TokenType.INDENT)) {
                     this.skipIrrelevant();
-                    if (this.isAtEnd() || this.match(TokenType.DEDENT)) break;
+                    if (this.isAtEnd() || this.match(TokenType.DEDENT) || this.match(TokenType.INDENT)) break;
 
                     if (this.isBlockStart()) {
                         const nextBlock = this.parseBlock();
