@@ -387,7 +387,8 @@ export class Parser {
             if (!this.isAtEnd() && this.match(TokenType.KEYWORD) && this.current.value === "clone") {
                 this.advance(); // consume "clone"
                 this.skipIrrelevant();
-                if (!this.isAtEnd() && this.match(TokenType.KEYWORD) && this.current.value === "of") {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                if (!this.isAtEnd() && this.match(TokenType.KEYWORD) && (this.current.value as any) === "of") {
                     this.advance(); // consume "of"
                 }
                 blockKeyword = "createClone";
@@ -398,9 +399,43 @@ export class Parser {
             if (!this.isAtEnd() && this.match(TokenType.KEYWORD) && this.current.value === "this") {
                 this.advance(); // consume "this"
                 this.skipIrrelevant();
-                if (!this.isAtEnd() && this.match(TokenType.KEYWORD) && this.current.value === "clone") {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                if (!this.isAtEnd() && this.match(TokenType.KEYWORD) && (this.current.value as any) === "clone") {
                     this.advance(); // consume "clone"
                     blockKeyword = "deleteThisClone";
+                }
+            }
+        } else if (blockKeyword === "when") {
+            // Handle multi-word "when" keywords like "when I receive" and "when I start as a clone"
+            this.skipIrrelevant();
+            if (!this.isAtEnd() && this.match(TokenType.KEYWORD) && this.current.value === "I") {
+                this.advance(); // Consume 'I'
+                this.skipIrrelevant();
+                if (!this.isAtEnd() && this.match(TokenType.KEYWORD)) {
+                    const nextWord = this.current.value as string;
+                    if (nextWord === "receive") {
+                        this.advance(); // Consume 'receive'
+                        blockKeyword = "whenIReceive";
+                    } else if (nextWord === "start") {
+                        this.advance(); // Consume 'start'
+                        // Optionally consume "as a clone"
+                        this.skipIrrelevant();
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                        if (!this.isAtEnd() && this.match(TokenType.KEYWORD) && (this.current.value as any) === "as") {
+                            this.advance(); // Consume 'as'
+                            this.skipIrrelevant();
+                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                            if (!this.isAtEnd() && this.match(TokenType.KEYWORD) && (this.current.value as any) === "a") {
+                                this.advance(); // Consume 'a'
+                                this.skipIrrelevant();
+                                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                if (!this.isAtEnd() && this.match(TokenType.KEYWORD) && (this.current.value as any) === "clone") {
+                                    this.advance(); // Consume 'clone'
+                                }
+                            }
+                        }
+                        blockKeyword = "whenIStartAsClone";
+                    }
                 }
             }
         }

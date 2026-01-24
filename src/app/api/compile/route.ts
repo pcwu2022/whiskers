@@ -16,16 +16,22 @@ export async function POST(request: Request) {
         // Handle multi-sprite compilation (new format)
         if (body.sprites && Array.isArray(body.sprites)) {
             const sprites: SpriteInput[] = body.sprites;
-            const compilationResult = await compileMultiSprite(sprites);
+            const compilationResult = await compileMultiSprite(sprites, body.debug === true);
 
             if ("error" in compilationResult) {
                 return NextResponse.json({ error: compilationResult.error }, { status: 500 });
             }
 
-            return NextResponse.json({
+            const response: { js: string; html: string; debugInfo?: unknown } = {
                 js: compilationResult.js,
                 html: compilationResult.html,
-            });
+            };
+            
+            if (compilationResult.debugInfo) {
+                response.debugInfo = compilationResult.debugInfo;
+            }
+
+            return NextResponse.json(response);
         }
         
         // Handle legacy single-code compilation (backward compatibility)

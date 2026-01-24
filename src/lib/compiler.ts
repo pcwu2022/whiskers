@@ -68,7 +68,7 @@ export class ScratchTextCompiler {
     }
 
     // compileMultiSprite: Compile multiple sprites into a single program
-    compileMultiSprite(sprites: SpriteInput[]): { js: string; html: string; error?: string } {
+    compileMultiSprite(sprites: SpriteInput[]): { js: string; html: string; parsedSprites: unknown; error?: string } {
         try {
             const parsedSprites: { name: string; program: ReturnType<Parser["parse"]>; isStage?: boolean }[] = [];
 
@@ -94,12 +94,13 @@ export class ScratchTextCompiler {
 
             this.debugger.log("info", "Multi-sprite generator output", jsCode);
 
-            return jsCode;
+            return { ...jsCode, parsedSprites };
         } catch (error) {
             console.error("Multi-sprite compilation error:", error);
             return {
                 js: "",
                 html: "",
+                parsedSprites: [],
                 error: `// Compilation error: ${error instanceof Error ? error.message : String(error)}`,
             };
         }
@@ -125,10 +126,14 @@ export async function compile(code: string): Promise<{ js: string; html: string 
 }
 
 // compileMultiSprite: Compile multiple sprites
-export async function compileMultiSprite(sprites: SpriteInput[]): Promise<{ js: string; html: string } | { error: string }> {
+export async function compileMultiSprite(sprites: SpriteInput[], debug?: boolean): Promise<{ js: string; html: string; debugInfo?: unknown } | { error: string }> {
     try {
         const compiler = new ScratchTextCompiler();
-        const { js, html } = compiler.compileMultiSprite(sprites);
+        const { js, html, parsedSprites } = compiler.compileMultiSprite(sprites);
+        
+        if (debug) {
+            return { js, html, debugInfo: { parsedSprites } };
+        }
         return { js, html };
     } catch (error) {
         console.error("Error in compileMultiSprite function:", error);

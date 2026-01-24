@@ -164,6 +164,8 @@ export const BLOCK_TYPE_MAP: Record<string, BlockType> = {
     broadcast: "event",
     receive: "event",
     whenReceived: "event",
+    whenIReceive: "event",
+    whenIStartAsClone: "event",
 
     // Motion
     move: "motion",

@@ -8,6 +8,7 @@ import {
     advance,
     match,
     skipIrrelevant,
+    getCurrentToken,
 } from "./parserState";
 import { parseBlock, isBlockStart } from "./blockParser";
 
@@ -46,6 +47,16 @@ export function parseScriptBlocks(state: ParserState, script: Script): void {
         skipIrrelevant(state);
 
         if (isAtEnd(state)) break;
+
+        // If we're at indent level 0 and encounter a new "when" block, 
+        // this is a NEW script - stop parsing current script
+        if (state.indentLevel === 0 && match(state, TokenType.KEYWORD)) {
+            const keyword = getCurrentToken(state).value;
+            if (keyword === "when" || keyword === "define" || keyword === "var" || keyword === "list" || keyword === "variable") {
+                // Don't consume this token - let the main parser handle it as a new script
+                break;
+            }
+        }
 
         if (match(state, TokenType.INDENT)) {
             handleIndent(state);

@@ -55,6 +55,40 @@ export function parseBlock(state: ParserState): BlockNode | null {
             advance(state);
             blockKeyword = "repeatUntil";
         }
+    } else if (blockKeyword === "when") {
+        // Handle multi-word "when" keywords like "when I receive" and "when I start as a clone"
+        skipIrrelevant(state);
+        console.log("[DEBUG blockParser] when block, next token:", !isAtEnd(state) ? getCurrentToken(state) : "END");
+        if (!isAtEnd(state) && match(state, TokenType.KEYWORD) && getCurrentToken(state).value === "I") {
+            console.log("[DEBUG blockParser] Found 'I' after 'when'");
+            advance(state); // Consume 'I'
+            skipIrrelevant(state);
+            if (!isAtEnd(state) && match(state, TokenType.KEYWORD)) {
+                const nextWord = getCurrentToken(state).value;
+                console.log("[DEBUG blockParser] Next word after 'I':", nextWord);
+                if (nextWord === "receive") {
+                    advance(state); // Consume 'receive'
+                    blockKeyword = "whenIReceive";
+                    console.log("[DEBUG blockParser] Set blockKeyword to whenIReceive");
+                } else if (nextWord === "start") {
+                    advance(state); // Consume 'start'
+                    // Optionally consume "as a clone"
+                    skipIrrelevant(state);
+                    if (!isAtEnd(state) && match(state, TokenType.KEYWORD) && getCurrentToken(state).value === "as") {
+                        advance(state); // Consume 'as'
+                        skipIrrelevant(state);
+                        if (!isAtEnd(state) && match(state, TokenType.KEYWORD) && getCurrentToken(state).value === "a") {
+                            advance(state); // Consume 'a'
+                            skipIrrelevant(state);
+                            if (!isAtEnd(state) && match(state, TokenType.KEYWORD) && getCurrentToken(state).value === "clone") {
+                                advance(state); // Consume 'clone'
+                            }
+                        }
+                    }
+                    blockKeyword = "whenIStartAsClone";
+                }
+            }
+        }
     }
 
     // Determine the block type based on the keyword

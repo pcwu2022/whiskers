@@ -35,6 +35,7 @@ export class Lexer {
         "loudness",
         "video",
         "motion",
+        "I",  // For "when I receive" and "when I start as a clone"
         
         // Control keywords
         "forever",
@@ -56,6 +57,7 @@ export class Lexer {
         "myself",
         "start",
         "as",
+        "a",  // For "when I start as a clone"
         
         // Motion keywords
         "move",

@@ -71,6 +71,8 @@ export const blockTypeMap: Record<string, BlockType> = {
     broadcast: "event",
     receive: "event",
     whenReceived: "event",
+    whenIReceive: "event",
+    whenIStartAsClone: "event",
     broadcastAndWait: "event",
     
     // Motion

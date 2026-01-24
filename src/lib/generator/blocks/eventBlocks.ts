@@ -30,6 +30,21 @@ export function generateEventBlock(state: GeneratorState, block: BlockNode): voi
         state.indent--;
         write(state, `});\n\n`);
     } else if (
+        // Handle "when I receive" - new normalized format
+        block.name === "whenIReceive"
+    ) {
+        const message = formatArg(state, block.args[0]);
+        write(state, `// When I receive ${message}\n`);
+        write(state, `scratchRuntime.onBroadcast(${message}, async function() {\n`);
+        state.indent++;
+
+        if (block.next) {
+            generateBlockCode(state, block.next);
+        }
+
+        state.indent--;
+        write(state, `});\n\n`);
+    } else if (
         // Handle "when I receive" - parsed as when + ["I", "receive", "message"]
         block.name === "when" && 
         block.args.length >= 3 && 
@@ -68,6 +83,20 @@ export function generateEventBlock(state: GeneratorState, block: BlockNode): voi
         const message = formatArg(state, block.args[0]);
         write(state, `// When I receive ${message}\n`);
         write(state, `scratchRuntime.onBroadcast(${message}, async function() {\n`);
+        state.indent++;
+
+        if (block.next) {
+            generateBlockCode(state, block.next);
+        }
+
+        state.indent--;
+        write(state, `});\n\n`);
+    } else if (
+        // Handle "when I start as a clone" - new normalized format
+        block.name === "whenIStartAsClone"
+    ) {
+        write(state, `// When I start as a clone\n`);
+        write(state, `scratchRuntime.onEvent("cloneStart_" + CURRENT_SPRITE, async function() {\n`);
         state.indent++;
 
         if (block.next) {

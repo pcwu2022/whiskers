@@ -212,7 +212,9 @@ export class CodeGenerator {
      * Generates code for event blocks (when flag clicked, when key pressed, etc.)
      */
     private generateEventBlock(block: BlockNode): void {
-        if (block.name === "when" && block.args[0] === "flagClicked") {
+        // Handle "when flag clicked" - could be args=["flagClicked"] or args=["flag", "clicked"]
+        if (block.name === "when" && (block.args[0] === "flagClicked" || 
+            (block.args[0] === "flag" && block.args[1] === "clicked"))) {
             this.write(`// When green flag clicked\n`);
             this.write(`scratchRuntime.onGreenFlag(async function() {\n`);
             this.indent++;
@@ -237,7 +239,7 @@ export class CodeGenerator {
 
             this.indent--;
             this.write(`});\n\n`);
-        } else if (block.name === "whenReceived") {
+        } else if (block.name === "whenReceived" || block.name === "whenIReceive") {
             const message = this.formatArg(block.args[0]);
             this.write(`// When I receive ${message}\n`);
             this.write(`scratchRuntime.onBroadcast(${message}, async function() {\n`);
@@ -253,11 +255,19 @@ export class CodeGenerator {
         } else if (block.name === "broadcast") {
             const message = this.formatArg(block.args[0]);
             this.write(`scratchRuntime.broadcast(${message});\n`);
+            // Continue with next block after broadcast
+            if (block.next) {
+                this.generateBlockCode(block.next);
+            }
         } else if (block.name === "broadcastAndWait") {
             const message = this.formatArg(block.args[0]);
             this.write(`// Broadcast and wait (simplified implementation)\n`);
             this.write(`scratchRuntime.broadcast(${message});\n`);
             this.write(`await new Promise(resolve => setTimeout(resolve, 100));\n`);
+            // Continue with next block after broadcast and wait
+            if (block.next) {
+                this.generateBlockCode(block.next);
+            }
         }
 
         // Note: Do not process block.next here - event handler bodies are generated above
@@ -1603,6 +1613,7 @@ export class MultiSpriteCodeGenerator {
             eventHandled = true;
         } else if (
             // Handle multiple patterns for "when I start as a clone"
+            block.name === "whenIStartAsClone" ||
             (block.name === "when" && String(block.args[0]) === "clone" && String(block.args[1]) === "starts") ||
             (block.name === "when" && String(block.args[0]) === "I" && String(block.args[1]) === "start" && String(block.args[2]) === "as") ||
             (block.name === "when" && String(block.args[0]) === "cloneStarted") ||
@@ -1617,13 +1628,17 @@ export class MultiSpriteCodeGenerator {
             eventHandled = true;
         } else if (
             // Handle multiple patterns for "when I receive"
+            block.name === "whenIReceive" ||
             block.name === "whenReceived" ||
             (block.name === "when" && block.args[0] === "receive") ||
             (block.name === "when" && String(block.args[0]) === "I" && String(block.args[1]) === "receive")
         ) {
             // Find the message argument - it could be at different positions depending on parsing
             let message: string;
-            if (block.name === "when" && String(block.args[0]) === "I" && String(block.args[1]) === "receive") {
+            if (block.name === "whenIReceive") {
+                // New format: whenIReceive + [message]
+                message = this.formatArg(block.args[0]);
+            } else if (block.name === "when" && String(block.args[0]) === "I" && String(block.args[1]) === "receive") {
                 message = this.formatArg(block.args[2]);
             } else if (block.name === "when" && block.args[0] === "receive") {
                 message = this.formatArg(block.args[1]);
