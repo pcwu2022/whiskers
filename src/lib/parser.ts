@@ -381,6 +381,28 @@ export class Parser {
                 this.advance();
                 blockKeyword = "repeatUntil";
             }
+        } else if (blockKeyword === "create") {
+            // Handle "create clone of myself" or "create clone of <sprite>"
+            this.skipIrrelevant();
+            if (!this.isAtEnd() && this.match(TokenType.KEYWORD) && this.current.value === "clone") {
+                this.advance(); // consume "clone"
+                this.skipIrrelevant();
+                if (!this.isAtEnd() && this.match(TokenType.KEYWORD) && this.current.value === "of") {
+                    this.advance(); // consume "of"
+                }
+                blockKeyword = "createClone";
+            }
+        } else if (blockKeyword === "delete") {
+            // Handle "delete this clone"
+            this.skipIrrelevant();
+            if (!this.isAtEnd() && this.match(TokenType.KEYWORD) && this.current.value === "this") {
+                this.advance(); // consume "this"
+                this.skipIrrelevant();
+                if (!this.isAtEnd() && this.match(TokenType.KEYWORD) && this.current.value === "clone") {
+                    this.advance(); // consume "clone"
+                    blockKeyword = "deleteThisClone";
+                }
+            }
         }
 
         // Determine the block type based on the keyword

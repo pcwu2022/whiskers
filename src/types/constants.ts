@@ -13,6 +13,12 @@ export const SCRATCH_KEYWORDS = new Set([
     "broadcast",
     "receive",
     "event",
+    "I",              // for "when I receive" / "when I start as a clone"
+    "start",          // for "when I start as a clone"
+    "as",             // for "when I start as a clone"
+    "a",              // for "when I start as a clone"
+    "clone",          // for clone events
+    "myself",         // for "create clone of myself"
 
     // Control keywords
     "forever",
@@ -28,6 +34,9 @@ export const SCRATCH_KEYWORDS = new Set([
     "all",
     "this",
     "script",
+    "create",         // for "create clone"
+    "delete",         // for "delete this clone"
+    "of",             // for "create clone of"
 
     // Motion keywords
     "move",
@@ -201,6 +210,11 @@ export const BLOCK_TYPE_MAP: Record<string, BlockType> = {
     else: "control",
     until: "control",
     while: "control",
+    create: "control",
+    createClone: "control",
+    delete: "control",
+    deleteThisClone: "control",
+    clone: "control",
 
     // Sensing
     ask: "sensing",

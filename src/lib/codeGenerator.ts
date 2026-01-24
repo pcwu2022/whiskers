@@ -1601,7 +1601,13 @@ export class MultiSpriteCodeGenerator {
             }
             this.output += `${spaces}});\n\n`;
             eventHandled = true;
-        } else if (block.name === "when" && String(block.args[0]) === "clone" && String(block.args[1]) === "starts") {
+        } else if (
+            // Handle multiple patterns for "when I start as a clone"
+            (block.name === "when" && String(block.args[0]) === "clone" && String(block.args[1]) === "starts") ||
+            (block.name === "when" && String(block.args[0]) === "I" && String(block.args[1]) === "start" && String(block.args[2]) === "as") ||
+            (block.name === "when" && String(block.args[0]) === "cloneStarted") ||
+            block.name === "whenCloneStarted"
+        ) {
             this.output += `${spaces}// When I start as a clone\n`;
             this.output += `${spaces}scratchRuntime.onEvent("cloneStart_${spriteName}", async function() {\n`;
             if (block.next) {
@@ -1609,8 +1615,21 @@ export class MultiSpriteCodeGenerator {
             }
             this.output += `${spaces}});\n\n`;
             eventHandled = true;
-        } else if (block.name === "whenReceived" || (block.name === "when" && block.args[0] === "receive")) {
-            const message = this.formatArg(block.args.length > 1 ? block.args[1] : block.args[0]);
+        } else if (
+            // Handle multiple patterns for "when I receive"
+            block.name === "whenReceived" ||
+            (block.name === "when" && block.args[0] === "receive") ||
+            (block.name === "when" && String(block.args[0]) === "I" && String(block.args[1]) === "receive")
+        ) {
+            // Find the message argument - it could be at different positions depending on parsing
+            let message: string;
+            if (block.name === "when" && String(block.args[0]) === "I" && String(block.args[1]) === "receive") {
+                message = this.formatArg(block.args[2]);
+            } else if (block.name === "when" && block.args[0] === "receive") {
+                message = this.formatArg(block.args[1]);
+            } else {
+                message = this.formatArg(block.args[0]);
+            }
             this.output += `${spaces}// When I receive ${message}\n`;
             this.output += `${spaces}scratchRuntime.onBroadcast(${message}, async function() {\n`;
             this.output += `${spaces}    scratchRuntime.currentSprite = "${spriteName}";\n`;
@@ -1976,10 +1995,12 @@ export class MultiSpriteCodeGenerator {
                 }
                 break;
             case "createClone":
-            case "create":
+            case "create": {
                 const cloneTarget = block.args[0] === "myself" ? `"${spriteName}"` : this.formatArg(block.args[0]);
                 this.output += `${spaces}scratchRuntime.createClone(${cloneTarget});\n`;
                 break;
+            }
+            case "deleteThisClone":
             case "deleteClone":
             case "delete":
                 if (!isStage) {

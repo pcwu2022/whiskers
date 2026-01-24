@@ -3,7 +3,7 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import Editor, { useMonaco } from "@monaco-editor/react";
 import * as monaco from "monaco-editor";
-import { languageDef, languageSelector } from "@/lib/codeEditorConfig";
+import { languageDef, languageSelector, registerScratchTheme, toolboxCategories, ToolboxCategory, ToolboxCommand } from "@/lib/codeEditorConfig";
 import FileTabs from "./FileTabs";
 import ProjectToolbar from "./ProjectToolbar";
 import { Notification, useNotifications, Tooltip } from "./ui";
@@ -125,8 +125,9 @@ export default function CodeEditor() {
     const [isFullscreen, setIsFullscreen] = useState(false);
     const previewIframeRef = useRef<HTMLIFrameElement>(null);
 
-    // UI state for future toolbox (reserved)
-    const [showToolbox, setShowToolbox] = useState(false);
+    // UI state for toolbox sidebar
+    const [showToolbox, setShowToolbox] = useState(true); // Default open on page load
+    const [expandedCategory, setExpandedCategory] = useState<string | null>("Events"); // Default expanded
     
     // Project name editing state
     const [isEditingName, setIsEditingName] = useState(false);
@@ -269,14 +270,28 @@ export default function CodeEditor() {
         };
     }, [isFullscreen]); // Include isFullscreen to get latest value
 
-    // Setup Monaco language
+    // Setup Monaco language and theme before mount
+    const handleEditorWillMount = (monacoRef: monacoType) => {
+        // Register language
+        monacoRef.languages.register({ id: "scratchSyntax" });
+        monacoRef.languages.setMonarchTokensProvider("scratchSyntax", languageDef);
+        monacoRef.languages.registerCompletionItemProvider("scratchSyntax", languageSelector(monacoRef));
+        
+        // Register the custom Scratch theme with official colors
+        registerScratchTheme(monacoRef);
+    };
+
+    // Setup Monaco language (backup for when monacoInstance becomes available)
     useEffect(() => {
         if (monacoInstance) {
+            // Re-register to ensure everything is set up
             monacoInstance.languages.register({ id: "scratchSyntax" });
             monacoInstance.languages.setMonarchTokensProvider("scratchSyntax", languageDef);
             monacoInstance.languages.registerCompletionItemProvider("scratchSyntax", languageSelector(monacoInstance));
             monacoInstance.languages.register({ id: "javascript" });
             monacoInstance.languages.register({ id: "html" });
+            // Register the custom Scratch theme with official colors
+            registerScratchTheme(monacoInstance);
         }
     }, [monacoInstance]);
 
@@ -293,12 +308,83 @@ export default function CodeEditor() {
     const currentCode = activeSprite?.code || DEFAULT_SPRITE_CODE;
 
     // Handle editor mount
-    const handleEditorDidMount = (editor: monaco.editor.IStandaloneCodeEditor, monaco: monacoType) => {
+    const handleEditorDidMount = (editor: monaco.editor.IStandaloneCodeEditor, monacoRef: monacoType) => {
         editorRef.current = editor;
         if (monacoInstance) {
-            monaco.editor.setModelLanguage(editor.getModel()!, "scratchSyntax");
+            monacoRef.editor.setModelLanguage(editor.getModel()!, "scratchSyntax");
         }
     };
+
+    // Insert code from toolbox into editor with smart indentation
+    const insertToolboxCommand = useCallback((command: ToolboxCommand) => {
+        const editor = editorRef.current;
+        if (!editor) return;
+
+        const position = editor.getPosition();
+        if (!position) return;
+
+        const model = editor.getModel();
+        if (!model) return;
+
+        // Get the current line content to check indentation
+        const currentLineContent = model.getLineContent(position.lineNumber);
+        const currentIndent = currentLineContent.match(/^(\s*)/)?.[1] || "";
+        
+        // Prepare the code to insert
+        let codeToInsert = command.code;
+        
+        // If the command needs indent (like when/repeat/forever), add newline with indent
+        if (command.needsIndent) {
+            codeToInsert = command.code + "\n" + currentIndent + "    ";
+        }
+        
+        // If we're inserting at the beginning of an empty line, use current indent
+        const isEmptyLine = currentLineContent.trim() === "";
+        
+        // Build the full text to insert
+        let fullInsert = "";
+        if (isEmptyLine) {
+            // Replace the line entirely
+            fullInsert = currentIndent + codeToInsert;
+        } else {
+            // Insert at cursor with newline
+            fullInsert = "\n" + currentIndent + codeToInsert;
+        }
+        
+        // Calculate the range to replace
+        const range = isEmptyLine
+            ? {
+                startLineNumber: position.lineNumber,
+                startColumn: 1,
+                endLineNumber: position.lineNumber,
+                endColumn: currentLineContent.length + 1,
+            }
+            : {
+                startLineNumber: position.lineNumber,
+                startColumn: position.column,
+                endLineNumber: position.lineNumber,
+                endColumn: position.column,
+            };
+
+        // Execute the edit
+        editor.executeEdits("toolbox-insert", [
+            {
+                range: range,
+                text: fullInsert,
+                forceMoveMarkers: true,
+            },
+        ]);
+
+        // Move cursor to end of inserted code
+        const newLines = fullInsert.split("\n");
+        const lastLineLength = newLines[newLines.length - 1].length;
+        const newPosition = {
+            lineNumber: position.lineNumber + newLines.length - (isEmptyLine ? 1 : 0),
+            column: lastLineLength + 1,
+        };
+        editor.setPosition(newPosition);
+        editor.focus();
+    }, []);
 
     // Update code for active sprite
     const updateCode = useCallback((newCode: string) => {
@@ -651,15 +737,60 @@ export default function CodeEditor() {
 
             {/* Main content area */}
             <div className="flex-1 flex overflow-hidden">
-                {/* Left sidebar - Reserved for future Toolbox */}
+                {/* Left sidebar - Toolbox with color-coded categories */}
                 {showToolbox && (
-                    <div className="w-64 bg-gray-850 border-r border-gray-700 flex flex-col">
-                        <div className="bg-gray-800 px-3 py-2 text-gray-400 text-sm border-b border-gray-700">
-                            🧰 Toolbox
+                    <div className="w-64 bg-gray-900 border-r border-gray-700 flex flex-col overflow-hidden">
+                        <div className="bg-gray-800 px-3 py-2 text-gray-300 text-sm border-b border-gray-700 font-medium flex items-center justify-between">
+                            <span>Toolbox</span>
+                            <button
+                                onClick={() => setShowToolbox(false)}
+                                className="text-gray-500 hover:text-gray-300 text-lg leading-none"
+                            >
+                                ×
+                            </button>
                         </div>
-                        <div className="flex-1 p-2 text-gray-500 text-sm">
-                            {/* Future: Draggable block hints will go here */}
-                            <p className="text-center py-4">Coming soon...</p>
+                        <div className="flex-1 overflow-y-auto">
+                            {toolboxCategories.map((category) => (
+                                <div key={category.name} className="border-b border-gray-800">
+                                    {/* Category Header */}
+                                    <button
+                                        onClick={() => setExpandedCategory(
+                                            expandedCategory === category.name ? null : category.name
+                                        )}
+                                        className="w-full px-3 py-2 flex items-center justify-between hover:bg-gray-800 transition-colors"
+                                        style={{ borderLeft: `4px solid ${category.color}` }}
+                                    >
+                                        <span className="text-sm font-medium" style={{ color: category.color }}>
+                                            {category.name}
+                                        </span>
+                                        <span className="text-gray-500 text-xs">
+                                            {expandedCategory === category.name ? "▼" : "▶"}
+                                        </span>
+                                    </button>
+                                    
+                                    {/* Category Commands */}
+                                    {expandedCategory === category.name && (
+                                        <div className="bg-gray-850 py-1">
+                                            {category.commands.map((command, idx) => (
+                                                <button
+                                                    key={idx}
+                                                    onClick={() => insertToolboxCommand(command)}
+                                                    className="w-full px-4 py-1.5 text-left text-xs hover:bg-gray-700 transition-colors flex items-center gap-2 group"
+                                                    title={command.description}
+                                                >
+                                                    <span
+                                                        className="w-2 h-2 rounded-full flex-shrink-0"
+                                                        style={{ backgroundColor: category.color }}
+                                                    />
+                                                    <span className="text-gray-300 group-hover:text-white truncate">
+                                                        {command.label}
+                                                    </span>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
                         </div>
                     </div>
                 )}
@@ -680,7 +811,7 @@ export default function CodeEditor() {
                     {/* Editor Label */}
                     <div className="bg-gray-800 px-3 py-2 text-gray-400 text-sm border-b border-gray-700 flex justify-between items-center">
                         <span>📝 {activeSprite?.name || "Scratch Code"}</span>
-                        <Tooltip content="Toggle Toolbox (Coming Soon)">
+                        <Tooltip content={showToolbox ? "Hide Toolbox" : "Show Toolbox"}>
                             <button
                                 onClick={() => setShowToolbox(!showToolbox)}
                                 className={`text-xs px-2 py-1 rounded ${
@@ -698,7 +829,7 @@ export default function CodeEditor() {
                             width="100%"
                             height="100%"
                             language="scratchSyntax"
-                            theme="vs-dark"
+                            theme="scratch-dark"
                             value={currentCode}
                             options={{
                                 selectOnLineNumbers: true,
@@ -711,6 +842,7 @@ export default function CodeEditor() {
                                 padding: { top: 10 },
                             }}
                             onChange={(value) => updateCode(value || "")}
+                            beforeMount={handleEditorWillMount}
                             onMount={handleEditorDidMount}
                         />
                     </div>
@@ -782,7 +914,7 @@ export default function CodeEditor() {
                             width="100%"
                             height="100%"
                             language="javascript"
-                            theme="vs-dark"
+                            theme="scratch-dark"
                             value={compiledJsCode}
                             options={{
                                 readOnly: true,
