@@ -86,46 +86,148 @@ export const languageDef: languages.IMonarchLanguage = {
             // Variable references in brackets [varName] - Orange
             [/\[[^\]]+\]/, "keyword.scratch.variables"],
 
-            // Events - Yellow (#FFBF00) - must check multi-word patterns first
+            // ===== EVENTS - Yellow (#FFBF00) =====
+            // Multi-word event blocks (must be before single keywords)
+            [/\bwhen\s+green\s+flag\s+clicked\b/, "keyword.scratch.event"],
             [/\bwhen\s+flagClicked\b/, "keyword.scratch.event"],
-            [/\bwhen\s+keyPressed\b/, "keyword.scratch.event"],
-            [/\bwhen\s+spriteClicked\b/, "keyword.scratch.event"],
-            [/\bwhen\s+cloneStarted\b/, "keyword.scratch.event"],
+            [/\bwhen\s+I\s+receive\b/, "keyword.scratch.event"],
             [/\bwhen\s+receive\b/, "keyword.scratch.event"],
+            [/\bwhen\s+this\s+sprite\s+clicked\b/, "keyword.scratch.event"],
+            [/\bwhen\s+spriteClicked\b/, "keyword.scratch.event"],
+            [/\bwhen\s+I\s+start\s+as\s+a\s+clone\b/, "keyword.scratch.event"],
+            [/\bwhen\s+cloneStarted\b/, "keyword.scratch.event"],
+            [/\bwhen\s+keyPressed\b/, "keyword.scratch.event"],
+            [/\bwhen\s+key\s+pressed\b/, "keyword.scratch.event"],
+            [/\bwhen\s+backdrop\s+switches\s+to\b/, "keyword.scratch.event"],
             [/\bwhen\s+backdropSwitchesTo\b/, "keyword.scratch.event"],
+            [/\bwhen\s+loudness\s*>\b/, "keyword.scratch.event"],
             [/\bwhen\s+loudnessGreaterThan\b/, "keyword.scratch.event"],
+            [/\bwhen\s+timer\s*>\b/, "keyword.scratch.event"],
             [/\bwhen\s+timerGreaterThan\b/, "keyword.scratch.event"],
-            [/\b(when|broadcast|broadcastAndWait)\b/, "keyword.scratch.event"],
+            [/\bbroadcast\s+and\s+wait\b/, "keyword.scratch.event"],
+            [/\bbroadcastAndWait\b/, "keyword.scratch.event"],
+            [/\bbroadcast\b/, "keyword.scratch.event"],
 
-            // Pen extension - Teal (#0FBD8C) - before motion to avoid conflicts
-            [/\b(penDown|penUp|setPenColor|changePenColor|setPenSize|changePenSize|setPenShade|changePenShade|stamp|erase)\b/, "keyword.scratch.pen"],
+            // ===== PEN - Teal (#0FBD8C) =====
+            [/\bpen\s+down\b/, "keyword.scratch.pen"],
+            [/\bpen\s+up\b/, "keyword.scratch.pen"],
+            [/\bset\s+pen\s+color\s+to\b/, "keyword.scratch.pen"],
+            [/\bchange\s+pen\s+color\s+by\b/, "keyword.scratch.pen"],
+            [/\bset\s+pen\s+size\s+to\b/, "keyword.scratch.pen"],
+            [/\bchange\s+pen\s+size\s+by\b/, "keyword.scratch.pen"],
+            [/\bset\s+pen\s+shade\s+to\b/, "keyword.scratch.pen"],
+            [/\bchange\s+pen\s+shade\s+by\b/, "keyword.scratch.pen"],
+            [/\b(penDown|penUp|setPenColor|changePenColor|setPenSize|changePenSize|setPenShade|changePenShade|stamp|erase|clear)\b/, "keyword.scratch.pen"],
 
-            // Motion - Blue (#4C97FF)
-            [/\b(move|turn|goTo|glideTo|glide|secs|pointInDirection|pointTowards|changeX|setX|changeY|setY|bounceOnEdge|setRotationStyle|xPosition|yPosition|direction)\b/, "keyword.scratch.motion"],
+            // ===== MOTION - Blue (#4C97FF) =====
+            [/\bmove\s+\S+\s+steps?\b/, "keyword.scratch.motion"],
+            [/\bturn\s+right\b/, "keyword.scratch.motion"],
+            [/\bturn\s+left\b/, "keyword.scratch.motion"],
+            [/\bgo\s+to\s+x:\b/, "keyword.scratch.motion"],
+            [/\bgo\s+to\b/, "keyword.scratch.motion"],
+            [/\bglide\s+\S+\s+secs?\s+to\s+x:\b/, "keyword.scratch.motion"],
+            [/\bglide\s+\S+\s+secs?\s+to\b/, "keyword.scratch.motion"],
+            [/\bpoint\s+in\s+direction\b/, "keyword.scratch.motion"],
+            [/\bpoint\s+towards\b/, "keyword.scratch.motion"],
+            [/\bchange\s+x\s+by\b/, "keyword.scratch.motion"],
+            [/\bset\s+x\s+to\b/, "keyword.scratch.motion"],
+            [/\bchange\s+y\s+by\b/, "keyword.scratch.motion"],
+            [/\bset\s+y\s+to\b/, "keyword.scratch.motion"],
+            [/\bif\s+on\s+edge,?\s*bounce\b/, "keyword.scratch.motion"],
+            [/\bset\s+rotation\s+style\b/, "keyword.scratch.motion"],
+            [/\bx\s+position\b/, "keyword.scratch.motion"],
+            [/\by\s+position\b/, "keyword.scratch.motion"],
+            [/\b(move|turn|goTo|glideTo|glide|pointInDirection|pointTowards|changeX|setX|changeY|setY|bounceOnEdge|setRotationStyle|xPosition|yPosition|direction)\b/, "keyword.scratch.motion"],
 
-            // Looks - Purple (#9966FF)
+            // ===== LOOKS - Purple (#9966FF) =====
+            [/\bsay\s+\S+\s+for\b/, "keyword.scratch.looks"],
+            [/\bthink\s+\S+\s+for\b/, "keyword.scratch.looks"],
+            [/\bswitch\s+costume\s+to\b/, "keyword.scratch.looks"],
+            [/\bnext\s+costume\b/, "keyword.scratch.looks"],
+            [/\bswitch\s+backdrop\s+to\b/, "keyword.scratch.looks"],
+            [/\bnext\s+backdrop\b/, "keyword.scratch.looks"],
+            [/\bchange\s+size\s+by\b/, "keyword.scratch.looks"],
+            [/\bset\s+size\s+to\b/, "keyword.scratch.looks"],
+            [/\bchange\s+\S+\s+effect\s+by\b/, "keyword.scratch.looks"],
+            [/\bset\s+\S+\s+effect\s+to\b/, "keyword.scratch.looks"],
+            [/\bclear\s+graphic\s+effects\b/, "keyword.scratch.looks"],
+            [/\bgo\s+to\s+front\s+layer\b/, "keyword.scratch.looks"],
+            [/\bgo\s+to\s+back\s+layer\b/, "keyword.scratch.looks"],
+            [/\bgo\s+forward\s+\S+\s+layers?\b/, "keyword.scratch.looks"],
+            [/\bgo\s+backward\s+\S+\s+layers?\b/, "keyword.scratch.looks"],
+            [/\bcostume\s+number\b/, "keyword.scratch.looks"],
+            [/\bcostume\s+name\b/, "keyword.scratch.looks"],
+            [/\bbackdrop\s+number\b/, "keyword.scratch.looks"],
+            [/\bbackdrop\s+name\b/, "keyword.scratch.looks"],
             [/\b(say|think|switchCostume|nextCostume|switchBackdrop|nextBackdrop|changeSizeBy|setSizeTo|setSize|changeEffectBy|setEffectTo|clearEffects|clearGraphicEffects|show|hide|goToFront|goToBack|goForward|goBackward|costumeNumber|costumeName|backdropNumber|backdropName|size)\b/, "keyword.scratch.looks"],
 
-            // Sound - Magenta (#CF63CF)
+            // ===== SOUND - Magenta (#CF63CF) =====
+            [/\bplay\s+sound\s+\S+\s+until\s+done\b/, "keyword.scratch.sound"],
+            [/\bplay\s+sound\b/, "keyword.scratch.sound"],
+            [/\bstart\s+sound\b/, "keyword.scratch.sound"],
+            [/\bstop\s+all\s+sounds\b/, "keyword.scratch.sound"],
+            [/\bchange\s+volume\s+by\b/, "keyword.scratch.sound"],
+            [/\bset\s+volume\s+to\b/, "keyword.scratch.sound"],
             [/\b(playSound|playSoundUntilDone|startSound|stopAllSounds|changeVolumeBy|setVolumeTo|changePitchBy|setPitchTo|volume)\b/, "keyword.scratch.sound"],
 
-            // Sensing - Sky Blue (#5CB1D6)
+            // ===== SENSING - Sky Blue (#5CB1D6) =====
+            [/\btouching\s+color\b/, "keyword.scratch.sensing"],
+            [/\bcolor\s+\S+\s+is\s+touching\b/, "keyword.scratch.sensing"],
+            [/\bdistance\s+to\b/, "keyword.scratch.sensing"],
+            [/\bask\s+\S+\s+and\s+wait\b/, "keyword.scratch.sensing"],
+            [/\bask\s+and\s+wait\b/, "keyword.scratch.sensing"],
+            [/\bkey\s+\S+\s+pressed\??\b/, "keyword.scratch.sensing"],
+            [/\bmouse\s+down\??\b/, "keyword.scratch.sensing"],
+            [/\bmouse\s+x\b/, "keyword.scratch.sensing"],
+            [/\bmouse\s+y\b/, "keyword.scratch.sensing"],
+            [/\bset\s+drag\s+mode\b/, "keyword.scratch.sensing"],
+            [/\breset\s+timer\b/, "keyword.scratch.sensing"],
+            [/\bdays\s+since\s+2000\b/, "keyword.scratch.sensing"],
             [/\b(touching|touchingColor|colorIsTouching|distanceTo|askAndWait|ask|answer|keyPressed|keyDown|mouseDown|mouseX|mouseY|setDragMode|draggable|loudness|timer|resetTimer|current|daysSince2000|username)\b/, "keyword.scratch.sensing"],
 
-            // Control - Light Orange (#FFAB19)
+            // ===== CONTROL - Light Orange (#FFAB19) =====
+            [/\bwait\s+until\b/, "keyword.scratch.control"],
+            [/\brepeat\s+until\b/, "keyword.scratch.control"],
+            [/\bif\s+\S+\s+then\b/, "keyword.scratch.control"],
+            [/\bstop\s+all\b/, "keyword.scratch.control"],
+            [/\bstop\s+this\s+script\b/, "keyword.scratch.control"],
+            [/\bstop\s+other\s+scripts\s+in\s+sprite\b/, "keyword.scratch.control"],
+            [/\bcreate\s+clone\s+of\b/, "keyword.scratch.control"],
+            [/\bdelete\s+this\s+clone\b/, "keyword.scratch.control"],
             [/\b(wait|repeat|forever|if|else|then|waitUntil|repeatUntil|stop|createClone|deleteThisClone|clone|myself|create)\b/, "keyword.scratch.control"],
 
-            // Variables and Lists - Orange (#FF8C1A)
-            [/\b(var|list|set|change|showVariable|hideVariable|add|delete|deleteAll|insert|replace|item|itemOf|itemNumberOf|lengthOf|contains|showList|hideList)\b/, "keyword.scratch.variables"],
+            // ===== VARIABLES AND LISTS - Orange (#FF8C1A) =====
+            [/\bset\s+\[/, "keyword.scratch.variables"],
+            [/\bchange\s+\[/, "keyword.scratch.variables"],
+            [/\bshow\s+variable\b/, "keyword.scratch.variables"],
+            [/\bhide\s+variable\b/, "keyword.scratch.variables"],
+            [/\badd\s+\S+\s+to\b/, "keyword.scratch.variables"],
+            [/\bdelete\s+\S+\s+of\b/, "keyword.scratch.variables"],
+            [/\bdelete\s+all\s+of\b/, "keyword.scratch.variables"],
+            [/\binsert\s+\S+\s+at\b/, "keyword.scratch.variables"],
+            [/\breplace\s+item\s+\S+\s+of\b/, "keyword.scratch.variables"],
+            [/\bitem\s+\S+\s+of\b/, "keyword.scratch.variables"],
+            [/\bitem\s+#\s+of\b/, "keyword.scratch.variables"],
+            [/\blength\s+of\s+\[/, "keyword.scratch.variables"],
+            [/\bcontains\b/, "keyword.scratch.variables"],
+            [/\bshow\s+list\b/, "keyword.scratch.variables"],
+            [/\bhide\s+list\b/, "keyword.scratch.variables"],
+            [/\b(var|list|set|change|showVariable|hideVariable|add|delete|deleteAll|insert|replace|item|itemOf|itemNumberOf|lengthOf|showList|hideList)\b/, "keyword.scratch.variables"],
 
-            // Operators - Green (#59C059)
-            [/\b(and|or|not|join|letterOf|letter|random|pick|between|to|of|round|abs|floor|ceiling|sqrt|sin|cos|tan|asin|acos|atan|ln|log|ePowerOf|tenPowerOf|mod|length)\b/, "keyword.scratch.operators"],
+            // ===== OPERATORS - Green (#59C059) =====
+            [/\bpick\s+random\s+\S+\s+to\b/, "keyword.scratch.operators"],
+            [/\bpick\s+random\b/, "keyword.scratch.operators"],
+            [/\bletter\s+\S+\s+of\b/, "keyword.scratch.operators"],
+            [/\blength\s+of\b/, "keyword.scratch.operators"],
+            [/\b(and|or|not|join|letterOf|letter|random|pick|between|round|abs|floor|ceiling|sqrt|sin|cos|tan|asin|acos|atan|ln|log|ePowerOf|tenPowerOf|mod)\b/, "keyword.scratch.operators"],
 
-            // Custom blocks / My Blocks - Pink (#FF6680)
-            [/\b(define|call|run|without|screen|refresh)\b/, "keyword.scratch.custom"],
+            // ===== CUSTOM BLOCKS - Pink (#FF6680) =====
+            [/\bdefine\b/, "keyword.scratch.custom"],
+            [/\brun\s+without\s+screen\s+refresh\b/, "keyword.scratch.custom"],
+            [/\b(call|run|without|screen|refresh)\b/, "keyword.scratch.custom"],
 
             // Boolean/special values and targets
-            [/\b(true|false|left|right|up|down|space|any|all|this|script|other|scripts|edge|mouse|position|front|back|forward|backward|layers|layer|seconds)\b/, "constant.scratch"],
+            [/\b(true|false|left|right|up|down|space|any|all|this|script|other|scripts|edge|mouse|position|front|back|forward|backward|layers|layer|seconds|secs|steps|degrees)\b/, "constant.scratch"],
 
             // Effects
             [/\b(color|fisheye|whirl|pixelate|mosaic|brightness|ghost)\b/, "constant.scratch.effect"],
@@ -139,7 +241,8 @@ export const languageDef: languages.IMonarchLanguage = {
             [/[+\-*\/%]/, "operators.scratch"],
             [/[<>=!]=?/, "operators.scratch"],
 
-            // Numbers
+            // Numbers with optional % suffix (treat as single number token)
+            [/-?\d+(\.\d+)?\s*%/, "number"],
             [/-?\d+(\.\d+)?/, "number"],
 
             // Parentheses and brackets
