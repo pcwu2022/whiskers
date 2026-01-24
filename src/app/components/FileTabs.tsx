@@ -5,6 +5,7 @@
 
 import React, { useState, useRef, useEffect } from "react";
 import { SpriteFile, canDeleteSprite, BACKDROP_ID } from "@/types/projectTypes";
+import { Tooltip } from "./ui";
 
 interface FileTabsProps {
     sprites: SpriteFile[];
@@ -196,13 +197,14 @@ export default function FileTabs({
             </div>
 
             {/* Add Sprite Button */}
-            <button
-                onClick={onAddSprite}
-                className="flex-shrink-0 px-3 py-2 text-gray-400 hover:text-green-400 hover:bg-gray-700 transition-colors"
-                title="Add new sprite"
-            >
-                <span className="text-lg">+</span>
-            </button>
+            <Tooltip content="Add new sprite">
+                <button
+                    onClick={onAddSprite}
+                    className="flex-shrink-0 px-3 py-2 text-gray-400 hover:text-green-400 hover:bg-gray-700 transition-colors"
+                >
+                    <span className="text-lg">+</span>
+                </button>
+            </Tooltip>
             </div>
 
             {/* Context Menu */}

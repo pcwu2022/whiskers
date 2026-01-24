@@ -6,6 +6,7 @@ import * as monaco from "monaco-editor";
 import { languageDef, languageSelector } from "@/lib/codeEditorConfig";
 import FileTabs from "./FileTabs";
 import ProjectToolbar from "./ProjectToolbar";
+import { Notification, useNotifications, Tooltip } from "./ui";
 import {
     ScratchProject,
     SpriteFile,
@@ -26,6 +27,84 @@ function generateSpriteName(sprites: SpriteFile[]): string {
         num++;
     }
     return `Sprite${num}`;
+}
+
+// Project Name Modal Component
+function ProjectNameModal({
+    isOpen,
+    title,
+    message,
+    defaultValue,
+    onConfirm,
+    onCancel,
+}: {
+    isOpen: boolean;
+    title: string;
+    message?: string;
+    defaultValue: string;
+    onConfirm: (value: string) => void;
+    onCancel: () => void;
+}) {
+    const [value, setValue] = useState(defaultValue);
+    const inputRef = useRef<HTMLInputElement>(null);
+
+    useEffect(() => {
+        if (isOpen) {
+            setValue(defaultValue);
+            setTimeout(() => {
+                inputRef.current?.focus();
+                inputRef.current?.select();
+            }, 100);
+        }
+    }, [isOpen, defaultValue]);
+
+    if (!isOpen) return null;
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (value.trim()) {
+            onConfirm(value.trim());
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100]">
+            <div className="bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4 shadow-xl border border-gray-600">
+                <h2 className="text-xl font-bold text-white mb-2">{title}</h2>
+                {message && <p className="text-gray-300 mb-4">{message}</p>}
+                
+                <form onSubmit={handleSubmit}>
+                    <input
+                        ref={inputRef}
+                        type="text"
+                        value={value}
+                        onChange={(e) => setValue(e.target.value)}
+                        placeholder="Enter project name"
+                        className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 mb-4"
+                    />
+                    
+                    <div className="flex gap-3 justify-end">
+                        {onCancel && (
+                            <button
+                                type="button"
+                                onClick={onCancel}
+                                className="px-4 py-2 text-sm bg-gray-700 text-gray-200 rounded hover:bg-gray-600 transition-colors"
+                            >
+                                Cancel
+                            </button>
+                        )}
+                        <button
+                            type="submit"
+                            disabled={!value.trim()}
+                            className="px-4 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            OK
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    );
 }
 
 export default function CodeEditor() {
@@ -49,8 +128,17 @@ export default function CodeEditor() {
     // UI state for future toolbox (reserved)
     const [showToolbox, setShowToolbox] = useState(false);
     
-    // Save notification state
-    const [showSaveNotification, setShowSaveNotification] = useState(false);
+    // Project name editing state
+    const [isEditingName, setIsEditingName] = useState(false);
+    const [editingName, setEditingName] = useState("");
+    const nameInputRef = useRef<HTMLInputElement>(null);
+    
+    // First load name prompt
+    const [showFirstLoadNameModal, setShowFirstLoadNameModal] = useState(false);
+    const [isFirstLoad, setIsFirstLoad] = useState(false);
+
+    // Notifications
+    const { notifications, dismissNotification, notify } = useNotifications();
 
     const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
     const handleRunRef = useRef<() => void>(() => {});
@@ -86,10 +174,17 @@ export default function CodeEditor() {
                     setProject(newProject);
                     // Clean up legacy storage
                     localStorage.removeItem(LEGACY_CODE_KEY);
+                    
+                    // This is a fresh start - prompt for project name
+                    setIsFirstLoad(true);
+                    setShowFirstLoadNameModal(true);
                 }
             } catch (error) {
                 console.error("Error loading project:", error);
-                setProject(createProject("My Project"));
+                const newProject = createProject("My Project");
+                setProject(newProject);
+                setIsFirstLoad(true);
+                setShowFirstLoadNameModal(true);
             }
             setIsLoaded(true);
         };
@@ -132,17 +227,13 @@ export default function CodeEditor() {
             if ((e.ctrlKey || e.metaKey) && e.key === 's') {
                 e.preventDefault();
                 // Project is already auto-saved, just show notification
-                setShowSaveNotification(true);
-                // Hide notification after 2 seconds
-                setTimeout(() => {
-                    setShowSaveNotification(false);
-                }, 2000);
+                notify.success("Project auto-saved to browser storage");
             }
         };
 
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, []);
+    }, [notify]);
 
     // Listen for messages from the preview iframe
     useEffect(() => {
@@ -188,6 +279,14 @@ export default function CodeEditor() {
             monacoInstance.languages.register({ id: "html" });
         }
     }, [monacoInstance]);
+
+    // Focus name input when editing starts
+    useEffect(() => {
+        if (isEditingName && nameInputRef.current) {
+            nameInputRef.current.focus();
+            nameInputRef.current.select();
+        }
+    }, [isEditingName]);
 
     // Get active sprite
     const activeSprite = project?.sprites.find((s) => s.id === project.activeSprite);
@@ -306,6 +405,83 @@ export default function CodeEditor() {
         });
     };
 
+    // New project handler
+    const handleNewProject = (newProject: ScratchProject) => {
+        setProject(newProject);
+        setCompiled(false);
+        setCompiledJsCode(null);
+        setHtmlContent(null);
+        setErrorMessage(null);
+    };
+
+    // Project name change handler
+    const handleProjectNameChange = (newName: string) => {
+        setProject((prev) => {
+            if (!prev) return prev;
+            return {
+                ...prev,
+                name: newName,
+                updatedAt: Date.now(),
+            };
+        });
+    };
+
+    // Start editing project name
+    const startEditingName = () => {
+        if (project) {
+            setEditingName(project.name);
+            setIsEditingName(true);
+        }
+    };
+
+    // Finish editing project name
+    const finishEditingName = () => {
+        if (editingName.trim()) {
+            handleProjectNameChange(editingName.trim());
+        }
+        setIsEditingName(false);
+    };
+
+    // Handle name input key press
+    const handleNameKeyDown = (e: React.KeyboardEvent) => {
+        if (e.key === 'Enter') {
+            finishEditingName();
+        } else if (e.key === 'Escape') {
+            setIsEditingName(false);
+        }
+    };
+
+    // Handle first load name confirmation
+    const handleFirstLoadNameConfirm = (name: string) => {
+        handleProjectNameChange(name);
+        setShowFirstLoadNameModal(false);
+        setIsFirstLoad(false);
+        notify.info(`Welcome to "${name}"!`);
+    };
+
+    // Handle first load name cancel (use default)
+    const handleFirstLoadNameCancel = () => {
+        setShowFirstLoadNameModal(false);
+        setIsFirstLoad(false);
+    };
+
+    // Notification handler for ProjectToolbar
+    const handleNotify = (message: string, type: "success" | "error" | "info" | "warning") => {
+        switch (type) {
+            case "success":
+                notify.success(message);
+                break;
+            case "error":
+                notify.error(message);
+                break;
+            case "warning":
+                notify.warning(message);
+                break;
+            default:
+                notify.info(message);
+        }
+    };
+
     // Compile all sprites
     const handleCompile = async (): Promise<{ js: string; html: string }> => {
         if (!project) return { js: "", html: "" };
@@ -381,57 +557,95 @@ export default function CodeEditor() {
 
     return (
         <div className="flex flex-col h-screen bg-gray-900">
+            {/* Notifications */}
+            <Notification 
+                notifications={notifications} 
+                onDismiss={dismissNotification}
+                duration={3000}
+            />
+
+            {/* First Load Name Modal */}
+            <ProjectNameModal
+                isOpen={showFirstLoadNameModal && isFirstLoad}
+                title="Welcome to Scratch Compiler!"
+                message="Enter a name for your project:"
+                defaultValue="My Project"
+                onConfirm={handleFirstLoadNameConfirm}
+                onCancel={handleFirstLoadNameCancel}
+            />
+
             {/* Header */}
             <div className="bg-gray-800 px-4 py-3 flex justify-between items-center border-b border-gray-700">
                 <div className="flex items-center gap-4">
                     <h1 className="text-white font-bold text-lg">🐱 Scratch Compiler</h1>
                     <span className="text-gray-400 text-sm">|</span>
-                    <span className="text-gray-300 text-sm">{project.name}</span>
-                    {/* GitHub Logo Link */}
-                    <a
-                        href="https://github.com/pcwu2022/scratch_compiler"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center"
-                        title="View on GitHub"
-                        style={{ lineHeight: 0 }}
-                    >
-                        <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            width="22" height="22"
-                            viewBox="0 0 24 24"
-                            fill="currentColor"
-                            className="text-gray-400 hover:text-gray-200 transition-colors"
-                            style={{ minWidth: 18, minHeight: 18, maxWidth: 22, maxHeight: 22 }}
-                        >
-                            <path d="M12 2C6.477 2 2 6.484 2 12.021c0 4.428 2.865 8.184 6.839 9.504.5.092.682-.217.682-.483 0-.237-.009-.868-.014-1.703-2.782.605-3.369-1.342-3.369-1.342-.454-1.156-1.11-1.464-1.11-1.464-.908-.62.069-.608.069-.608 1.004.07 1.532 1.032 1.532 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.339-2.221-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.025A9.564 9.564 0 0 1 12 6.844c.85.004 1.705.115 2.504.337 1.909-1.295 2.748-1.025 2.748-1.025.546 1.378.202 2.397.1 2.65.64.7 1.028 1.595 1.028 2.688 0 3.847-2.337 4.695-4.566 4.944.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.749 0 .268.18.579.688.481C19.138 20.2 22 16.447 22 12.021 22 6.484 17.523 2 12 2z"/>
-                        </svg>
-                    </a>
-                    {/* Save notification */}
-                    {showSaveNotification && (
-                        <span className="text-green-400 text-sm animate-pulse transition-opacity">
-                            ✓ Saved to your local computer
-                        </span>
+                    
+                    {/* Editable Project Name */}
+                    {isEditingName ? (
+                        <input
+                            ref={nameInputRef}
+                            type="text"
+                            value={editingName}
+                            onChange={(e) => setEditingName(e.target.value)}
+                            onBlur={finishEditingName}
+                            onKeyDown={handleNameKeyDown}
+                            className="bg-gray-700 text-white text-sm px-2 py-1 rounded border border-gray-600 focus:outline-none focus:border-blue-500"
+                            style={{ minWidth: '120px' }}
+                        />
+                    ) : (
+                        <Tooltip content="Click to rename project">
+                            <button
+                                onClick={startEditingName}
+                                className="text-gray-300 text-sm hover:text-white hover:bg-gray-700 px-2 py-1 rounded transition-colors"
+                            >
+                                {project.name}
+                            </button>
+                        </Tooltip>
                     )}
+                    
+                    {/* GitHub Logo Link */}
+                    <Tooltip content="View on GitHub">
+                        <a
+                            href="https://github.com/pcwu2022/scratch_compiler"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center"
+                            style={{ lineHeight: 0 }}
+                        >
+                            <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                width="22" height="22"
+                                viewBox="0 0 24 24"
+                                fill="currentColor"
+                                className="text-gray-400 hover:text-gray-200 transition-colors"
+                                style={{ minWidth: 18, minHeight: 18, maxWidth: 22, maxHeight: 22 }}
+                            >
+                                <path d="M12 2C6.477 2 2 6.484 2 12.021c0 4.428 2.865 8.184 6.839 9.504.5.092.682-.217.682-.483 0-.237-.009-.868-.014-1.703-2.782.605-3.369-1.342-3.369-1.342-.454-1.156-1.11-1.464-1.11-1.464-.908-.62.069-.608.069-.608 1.004.07 1.532 1.032 1.532 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.339-2.221-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.025A9.564 9.564 0 0 1 12 6.844c.85.004 1.705.115 2.504.337 1.909-1.295 2.748-1.025 2.748-1.025.546 1.378.202 2.397.1 2.65.64.7 1.028 1.595 1.028 2.688 0 3.847-2.337 4.695-4.566 4.944.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.749 0 .268.18.579.688.481C19.138 20.2 22 16.447 22 12.021 22 6.484 17.523 2 12 2z"/>
+                            </svg>
+                        </a>
+                    </Tooltip>
                 </div>
                 <div className="flex items-center gap-3">
                     <ProjectToolbar
                         project={project}
                         onImportProject={handleImportProject}
                         onImportSprite={handleImportSprite}
+                        onNewProject={handleNewProject}
+                        onProjectNameChange={handleProjectNameChange}
+                        onNotify={handleNotify}
                     />
-                    {
+                    <Tooltip content={showCode ? "Hide generated JavaScript" : "Show generated JavaScript"}>
                         <button
-                        onClick={() => compiled ? setShowCode(!showCode) : (() => {})()}
-                        className={`px-4 py-1.5 rounded font-medium text-sm transition-colors ${
-                            showCode
-                            ? "bg-purple-800 text-white"
-                            : "bg-purple-900 hover:bg-purple-800 text-white"
-                        }`}
+                            onClick={() => compiled ? setShowCode(!showCode) : (() => {})()}
+                            className={`px-4 py-1.5 rounded font-medium text-sm transition-colors ${
+                                showCode
+                                ? "bg-purple-800 text-white"
+                                : "bg-purple-900 hover:bg-purple-800 text-white"
+                            }`}
                         >
                             {showCode ? "Hide Output" : "Show Output"}
                         </button>
-                    }
+                    </Tooltip>
                 </div>
             </div>
 
@@ -466,15 +680,16 @@ export default function CodeEditor() {
                     {/* Editor Label */}
                     <div className="bg-gray-800 px-3 py-2 text-gray-400 text-sm border-b border-gray-700 flex justify-between items-center">
                         <span>📝 {activeSprite?.name || "Scratch Code"}</span>
-                        <button
-                            onClick={() => setShowToolbox(!showToolbox)}
-                            className={`text-xs px-2 py-1 rounded ${
-                                showToolbox ? "bg-gray-600 text-white" : "text-gray-500 hover:text-gray-300"
-                            }`}
-                            title="Toggle Toolbox (Coming Soon)"
-                        >
-                            🧰
-                        </button>
+                        <Tooltip content="Toggle Toolbox (Coming Soon)">
+                            <button
+                                onClick={() => setShowToolbox(!showToolbox)}
+                                className={`text-xs px-2 py-1 rounded ${
+                                    showToolbox ? "bg-gray-600 text-white" : "text-gray-500 hover:text-gray-300"
+                                }`}
+                            >
+                                🧰
+                            </button>
+                        </Tooltip>
                     </div>
                     
                     {/* Monaco Editor */}
