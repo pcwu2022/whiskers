@@ -74,15 +74,16 @@ let failed = 0;
 for (const test of testCases) {
     const result = compiler.compileMultiSprite(test.sprites);
     const allFound = test.expectContains.every(str => result.js.includes(str));
+    const hasError = result.errors && result.errors.some(e => e.severity === "error");
     
-    if (allFound && !result.error) {
+    if (allFound && !hasError) {
         console.log(`✅ PASS: ${test.name}`);
         passed++;
     } else {
         console.log(`❌ FAIL: ${test.name}`);
         console.log(`   Expected to contain: ${test.expectContains.join(", ")}`);
         console.log(`   Output: ${result.js.substring(0, 400)}...`);
-        if (result.error) console.log(`   Error: ${result.error}`);
+        if (hasError) console.log(`   Errors: ${result.errors.map(e => e.message).join(", ")}`);
         failed++;
     }
 }

@@ -15,6 +15,46 @@ type BlockType =
     | "procedure"
     | "pen";
 
+// Compiler Error Types
+export type ErrorSeverity = "error" | "warning" | "info";
+
+export interface CompilerError {
+    message: string;
+    line: number;
+    column: number;
+    endLine?: number;
+    endColumn?: number;
+    severity: ErrorSeverity;
+    code: string;  // Error code like "E001", "E002", etc.
+    suggestion?: string;  // Helpful suggestion to fix the error
+}
+
+// Error codes
+export const ErrorCodes = {
+    // Lexer errors (E0xx)
+    INVALID_BRACKET: "E001",
+    INVALID_ANGLE_BRACKET: "E002", 
+    INVALID_CURLY_BRACKET: "E003",
+    EMPTY_PARENTHESES: "E004",
+    UNTERMINATED_STRING: "E005",
+    INCONSISTENT_INDENT: "E006",
+    
+    // Parser errors (E1xx)
+    UNDECLARED_VARIABLE: "E101",
+    RESERVED_KEYWORD: "E102",
+    MISSING_VALUE: "E103",
+    UNEXPECTED_TOKEN: "E104",
+    MISSING_END: "E105",
+    INVALID_SYNTAX: "E106",
+    
+    // Type errors (E2xx)
+    TYPE_MISMATCH: "E201",
+    NUMBER_REQUIRED: "E202",
+    STRING_REQUIRED: "E203",
+    BOOLEAN_REQUIRED: "E204",
+    INVALID_BOOLEAN_OPERATION: "E205",
+};
+
 // Lexer Types
 export enum TokenType {
     IDENTIFIER = "IDENTIFIER",
@@ -68,6 +108,9 @@ export type { BlockType, BlockNode, Script, Program };
 export const blockTypeMap: Record<string, BlockType> = {
     // Events
     when: "event",
+    whenFlagClicked: "event",
+    whenSpriteClicked: "event",
+    whenKeyPressed: "event",
     broadcast: "event",
     receive: "event",
     whenReceived: "event",
@@ -84,6 +127,9 @@ export const blockTypeMap: Record<string, BlockType> = {
     goto: "motion",
     goTo: "motion",
     goToXY: "motion",
+    goToRandom: "motion",
+    goToMouse: "motion",
+    goToSprite: "motion",
     glide: "motion",
     glideTo: "motion",
     glideToXY: "motion",
@@ -117,10 +163,17 @@ export const blockTypeMap: Record<string, BlockType> = {
     changeEffect: "looks",
     setEffect: "looks",
     clearEffects: "looks",
+    clearGraphicEffects: "looks",
     changeSize: "looks",
     setSize: "looks",
+    goToFront: "looks",
+    goToFrontLayer: "looks",
+    goToBack: "looks",
+    goToBackLayer: "looks",
     goToLayer: "looks",
     goLayers: "looks",
+    goBackLayers: "looks",
+    goForwardLayers: "looks",
     costumeNumber: "looks",
     costumeName: "looks",
     backdropNumber: "looks",
@@ -137,6 +190,17 @@ export const blockTypeMap: Record<string, BlockType> = {
     changeVolume: "sound",
     setVolume: "sound",
     volume: "sound",
+    
+    // Pen
+    penDown: "pen",
+    penUp: "pen",
+    setPenColor: "pen",
+    changePenColor: "pen",
+    setPenSize: "pen",
+    changePenSize: "pen",
+    stamp: "pen",
+    erase: "pen",
+    eraseAll: "pen",
     
     // Control
     wait: "control",
@@ -228,18 +292,6 @@ export const blockTypeMap: Record<string, BlockType> = {
     pickRandom: "operators",
     length: "operators",
     contains: "operators",
-    
-    // Pen
-    pen: "pen",
-    penDown: "pen",
-    penUp: "pen",
-    setPenColor: "pen",
-    changePenColor: "pen",
-    setPenSize: "pen",
-    changePenSize: "pen",
-    stamp: "pen",
-    erase: "pen",
-    eraseAll: "pen",
     
     // Custom blocks
     define: "custom",

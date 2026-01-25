@@ -212,9 +212,11 @@ export class CodeGenerator {
      * Generates code for event blocks (when flag clicked, when key pressed, etc.)
      */
     private generateEventBlock(block: BlockNode): void {
-        // Handle "when flag clicked" - could be args=["flagClicked"] or args=["flag", "clicked"]
-        if (block.name === "when" && (block.args[0] === "flagClicked" || 
-            (block.args[0] === "flag" && block.args[1] === "clicked"))) {
+        // Handle "when green flag clicked" - new syntax: whenFlagClicked, old syntax: when + args
+        if (block.name === "whenFlagClicked" || 
+            (block.name === "when" && (block.args[0] === "flagClicked" || 
+            (block.args[0] === "flag" && block.args[1] === "clicked") ||
+            (block.args[0] === "green" && block.args[1] === "flag")))) {
             this.write(`// When green flag clicked\n`);
             this.write(`scratchRuntime.onGreenFlag(async function() {\n`);
             this.indent++;
@@ -226,8 +228,27 @@ export class CodeGenerator {
 
             this.indent--;
             this.write(`});\n\n`);
-        } else if (block.name === "when" && typeof block.args[0] === "string" && block.args[0].includes("keyPressed")) {
-            const key = (block.args[0] as string).replace("keyPressed", "").toLowerCase();
+        } else if (block.name === "whenSpriteClicked" ||
+            (block.name === "when" && (block.args[0] === "spriteClicked" || 
+            (block.args[0] === "this" && block.args[1] === "sprite")))) {
+            this.write(`// When this sprite clicked\n`);
+            this.write(`scratchRuntime.onSpriteClicked(async function() {\n`);
+            this.indent++;
+
+            if (block.next) {
+                this.generateBlockCode(block.next);
+            }
+
+            this.indent--;
+            this.write(`});\n\n`);
+        } else if (block.name === "whenKeyPressed" ||
+            (block.name === "when" && typeof block.args[0] === "string" && block.args[0].includes("keyPressed"))) {
+            let key: string;
+            if (block.name === "whenKeyPressed") {
+                key = this.formatArg(block.args[0]).replace(/"/g, "").toLowerCase();
+            } else {
+                key = (block.args[0] as string).replace("keyPressed", "").toLowerCase();
+            }
             this.write(`// When ${key} key pressed\n`);
             this.write(`scratchRuntime.onEvent("keyPressed_${key}", async function() {\n`);
             this.indent++;
@@ -296,40 +317,59 @@ export class CodeGenerator {
                 const direction = this.formatArg(block.args[0]);
                 this.write(`${sprite}.pointInDirection(${direction});\n`);
                 break;
-            case "goTo":
-                if (block.args[0] === "random") {
-                    this.write(`// Go to random position\n`);
-                    this.write(
-                        `const randomX = Math.floor(Math.random() * scratchRuntime.stage.width) - (scratchRuntime.stage.width / 2);\n`
-                    );
-                    this.write(
-                        `const randomY = Math.floor(Math.random() * scratchRuntime.stage.height) - (scratchRuntime.stage.height / 2);\n`
-                    );
-                    this.write(`${sprite}.goTo(randomX, randomY);\n`);
-                } else if (typeof block.args[0] === "string" && block.args[0].startsWith("sprite:")) {
-                    const targetSprite = block.args[0].replace("sprite:", "");
-                    this.write(`${sprite}.goToSprite("${targetSprite}");\n`);
+            case "pointTowards":
+                const target = this.formatArg(block.args[0]);
+                if (block.args[0] === "mouse-pointer" || target === '"mouse-pointer"') {
+                    this.write(`${sprite}.pointTowards(scratchRuntime.mouseX, scratchRuntime.mouseY);\n`);
                 } else {
-                    const x = this.formatArg(block.args[0]);
-                    const y = this.formatArg(block.args[1]);
-                    this.write(`${sprite}.goTo(${x}, ${y});\n`);
+                    this.write(`${sprite}.pointTowardsSprite(${target});\n`);
+                }
+                break;
+            case "goTo":
+            case "goToXY":
+                {
+                    const gotoX = this.formatArg(block.args[0]);
+                    const gotoY = this.formatArg(block.args[1]);
+                    this.write(`${sprite}.goTo(${gotoX}, ${gotoY});\n`);
+                }
+                break;
+            case "goToRandom":
+                this.write(`// Go to random position\n`);
+                this.write(
+                    `${sprite}.goTo(Math.floor(Math.random() * scratchRuntime.stage.width) - (scratchRuntime.stage.width / 2), Math.floor(Math.random() * scratchRuntime.stage.height) - (scratchRuntime.stage.height / 2));\n`
+                );
+                break;
+            case "goToMouse":
+                this.write(`${sprite}.goTo(scratchRuntime.mouseX, scratchRuntime.mouseY);\n`);
+                break;
+            case "goToSprite":
+                {
+                    const targetSprite = this.formatArg(block.args[0]);
+                    this.write(`${sprite}.goToSprite(${targetSprite});\n`);
                 }
                 break;
             case "setX":
-                const x = this.formatArg(block.args[0]);
-                this.write(`${sprite}.goTo(${x}, ${sprite}.y);\n`);
+                const setXVal = this.formatArg(block.args[0]);
+                this.write(`${sprite}.setX(${setXVal});\n`);
                 break;
             case "setY":
-                const y = this.formatArg(block.args[0]);
-                this.write(`${sprite}.goTo(${sprite}.x, ${y});\n`);
+                const setYVal = this.formatArg(block.args[0]);
+                this.write(`${sprite}.setY(${setYVal});\n`);
                 break;
             case "changeX":
-                const changeX = this.formatArg(block.args[0]);
-                this.write(`${sprite}.goTo(${sprite}.x + ${changeX}, ${sprite}.y);\n`);
+                const changeXVal = this.formatArg(block.args[0]);
+                this.write(`${sprite}.changeX(${changeXVal});\n`);
                 break;
             case "changeY":
-                const changeY = this.formatArg(block.args[0]);
-                this.write(`${sprite}.goTo(${sprite}.x, ${sprite}.y + ${changeY});\n`);
+                const changeYVal = this.formatArg(block.args[0]);
+                this.write(`${sprite}.changeY(${changeYVal});\n`);
+                break;
+            case "setRotationStyle":
+                const rotStyle = this.formatArg(block.args[0]);
+                this.write(`${sprite}.setRotationStyle(${rotStyle});\n`);
+                break;
+            case "ifOnEdgeBounce":
+                this.write(`${sprite}.ifOnEdgeBounce();\n`);
                 break;
             case "glide":
                 const seconds = this.formatArg(block.args[0]);
@@ -423,6 +463,34 @@ export class CodeGenerator {
                 const costume = this.formatArg(block.args[0]);
                 this.write(`// Switch costume (simplified implementation)\n`);
                 this.write(`console.log(\`Switching costume to \${${costume}}\`);\n`);
+                break;
+            case "goToFrontLayer":
+            case "goToFront":
+                this.write(`${sprite}.goToFrontLayer();\n`);
+                break;
+            case "goToBackLayer":
+            case "goToBack":
+                this.write(`${sprite}.goToBackLayer();\n`);
+                break;
+            case "goForwardLayers":
+                this.write(`${sprite}.goForwardLayers(${this.formatArg(block.args[0])});\n`);
+                break;
+            case "goBackwardLayers":
+            case "goBackLayers":
+                this.write(`${sprite}.goBackLayers(${this.formatArg(block.args[0])});\n`);
+                break;
+            case "changeEffect":
+                this.write(`${sprite}.changeEffect("${block.args[0]}", ${this.formatArg(block.args[1])});\n`);
+                break;
+            case "setEffect":
+                this.write(`${sprite}.setEffect("${block.args[0]}", ${this.formatArg(block.args[1])});\n`);
+                break;
+            case "clearEffects":
+            case "clearGraphicEffects":
+                this.write(`${sprite}.clearEffects();\n`);
+                break;
+            case "nextCostume":
+                this.write(`${sprite}.nextCostume();\n`);
                 break;
             default:
                 this.write(`// Unsupported looks block: ${block.name}\n`);
@@ -869,8 +937,28 @@ export class CodeGenerator {
                 const substring = this.formatArg(block.args[1]);
                 return `String(${containsString}).includes(String(${substring}))`;
             case "expression":
-                const expression = this.formatArg(block.args[0]);
-                return `(${expression})`;
+                // Expression blocks have args like [value, operator, value, operator, value, ...]
+                // Or just [value] for simple expressions
+                if (block.args.length === 1) {
+                    return `(${this.formatArg(block.args[0])})`;
+                }
+                // Build the expression from all args
+                let expr = "";
+                for (let i = 0; i < block.args.length; i++) {
+                    const arg = block.args[i];
+                    if (typeof arg === "string" && ["+", "-", "*", "/", "%", "mod", ">", "<", "=", "==", "===", "and", "or", "&&", "||"].includes(arg)) {
+                        // It's an operator
+                        let op = arg;
+                        if (op === "mod") op = "%";
+                        if (op === "and") op = "&&";
+                        if (op === "or") op = "||";
+                        if (op === "=") op = "==";
+                        expr += ` ${op} `;
+                    } else {
+                        expr += this.formatArg(arg);
+                    }
+                }
+                return `(${expr})`;
             default:
                 return `/* Unsupported operator: ${block.name} */`;
         }
@@ -882,17 +970,33 @@ export class CodeGenerator {
     private generateVariablesBlock(block: BlockNode): void {
         switch (block.name) {
             case "set":
+            case "setVariable": {
+                // For setVariable, args are: [varName, "to", expression]
+                // For set, args are: [varName, expression]
                 const varName = block.args[0];
-                const varValue = this.formatArg(block.args[1]);
-                this.write(`scratchRuntime.variables["${varName}"] = ${varValue};\n`);
+                // Find the actual value (skip "to" keyword if present)
+                let varValue: unknown = block.args[1];
+                if (varValue === "to" && block.args.length > 2) {
+                    varValue = block.args[2];
+                }
+                this.write(`scratchRuntime.variables["${varName}"] = ${this.formatArg(varValue)};\n`);
                 break;
+            }
             case "change":
+            case "changeVariable": {
+                // For changeVariable, args are: [varName, "by", expression]
+                // For change, args are: [varName, expression]
                 const changeVarName = block.args[0];
-                const changeValue = this.formatArg(block.args[1]);
+                // Find the actual value (skip "by" keyword if present)
+                let changeValue: unknown = block.args[1];
+                if (changeValue === "by" && block.args.length > 2) {
+                    changeValue = block.args[2];
+                }
                 this.write(
-                    `scratchRuntime.variables["${changeVarName}"] = Number(scratchRuntime.variables["${changeVarName}"]) + Number(${changeValue});\n`
+                    `scratchRuntime.variables["${changeVarName}"] = Number(scratchRuntime.variables["${changeVarName}"]) + Number(${this.formatArg(changeValue)});\n`
                 );
                 break;
+            }
             case "showVariable":
                 const showVarName = block.args[0];
                 this.write(`// Show variable in the UI\n`);
@@ -1559,7 +1663,9 @@ export class MultiSpriteCodeGenerator {
         // Mark that we handled the event to prevent block.next from being generated twice
         let eventHandled = false;
         
-        if (block.name === "when" && block.args[0] === "flagClicked") {
+        if (block.name === "whenFlagClicked" || 
+            (block.name === "when" && block.args[0] === "flagClicked") ||
+            (block.name === "when" && block.args[0] === "green" && block.args[1] === "flag")) {
             this.output += `${spaces}// When green flag clicked\n`;
             this.output += `${spaces}scratchRuntime.onGreenFlag(async function() {\n`;
             this.output += `${spaces}    scratchRuntime.currentSprite = "${spriteName}";\n`;
@@ -1568,11 +1674,14 @@ export class MultiSpriteCodeGenerator {
             }
             this.output += `${spaces}});\n\n`;
             eventHandled = true;
-        } else if (block.name === "when" && (String(block.args[0]) === "keyPressed" || String(block.args[0]).includes("keyPressed"))) {
+        } else if (block.name === "whenKeyPressed" ||
+            (block.name === "when" && (String(block.args[0]) === "keyPressed" || String(block.args[0]).includes("keyPressed")))) {
             // Handle "when keyPressed space" where args are ["keyPressed", "space"]
             // or "when keyPressed_space" where args are ["keyPressed_space"]
             let key = "";
-            if (block.args.length > 1 && typeof block.args[1] === "string") {
+            if (block.name === "whenKeyPressed") {
+                key = String(block.args[0]).replace(/"/g, "").toLowerCase();
+            } else if (block.args.length > 1 && typeof block.args[1] === "string") {
                 key = String(block.args[1]).toLowerCase();
             } else {
                 key = String(block.args[0]).replace("keyPressed", "").replace("_", "").toLowerCase();
@@ -1592,7 +1701,10 @@ export class MultiSpriteCodeGenerator {
             }
             this.output += `${spaces}});\n\n`;
             eventHandled = true;
-        } else if (block.name === "when" && String(block.args[0]) === "thisSprite" && String(block.args[1]) === "clicked") {
+        } else if (block.name === "whenSpriteClicked" ||
+            (block.name === "when" && String(block.args[0]) === "thisSprite" && String(block.args[1]) === "clicked") ||
+            (block.name === "when" && String(block.args[0]) === "this" && String(block.args[1]) === "sprite") ||
+            (block.name === "when" && block.args[0] === "spriteClicked")) {
             this.output += `${spaces}// When this sprite clicked\n`;
             this.output += `${spaces}scratchRuntime.onEvent("spriteClicked_${spriteName}", async function() {\n`;
             this.output += `${spaces}    scratchRuntime.currentSprite = "${spriteName}";\n`;
@@ -1744,6 +1856,16 @@ export class MultiSpriteCodeGenerator {
             case "changeY":
                 this.output += `${spaces}${spriteRef}.changeY(${this.formatArg(block.args[0])});\n`;
                 break;
+            case "point":
+                // Handle "point in direction <value>" parsed as point with args ["in", "direction", value]
+                if (block.args[0] === "in" && block.args[1] === "direction") {
+                    this.output += `${spaces}${spriteRef}.pointInDirection(${this.formatArg(block.args[2])});\n`;
+                } else if (block.args[0] === "towards") {
+                    this.output += `${spaces}${spriteRef}.pointTowards(${this.formatArg(block.args[1])});\n`;
+                } else {
+                    this.output += `${spaces}${spriteRef}.pointInDirection(${this.formatArg(block.args[0])});\n`;
+                }
+                break;
             case "pointInDirection":
                 this.output += `${spaces}${spriteRef}.pointInDirection(${this.formatArg(block.args[0])});\n`;
                 break;
@@ -1817,14 +1939,126 @@ export class MultiSpriteCodeGenerator {
                 break;
             case "changeEffect":
             case "change":
-                if (!isStage && block.args.length >= 2) {
-                    this.output += `${spaces}${spriteRef}.changeEffect(${this.formatArg(block.args[0])}, ${this.formatArg(block.args[1])});\n`;
+                if (block.args.length >= 2) {
+                    // Check if this is a variable change, motion change, or effect change
+                    // Effect names are: color, fisheye, whirl, pixelate, mosaic, brightness, ghost
+                    const effectNames = ["color", "fisheye", "whirl", "pixelate", "mosaic", "brightness", "ghost"];
+                    
+                    // Try to find effect name - could be in args[0] or as a keyword before "effect"
+                    let effectName = "";
+                    let valueArg: unknown = null;
+                    
+                    // Check if "effect" keyword is in args - indicates pattern like "[color] effect by 20"
+                    const effectIndex = block.args.findIndex(a => a === "effect");
+                    if (effectIndex >= 0) {
+                        // Look for effect name before "effect" keyword or in the list block
+                        for (let i = effectIndex - 1; i >= 0; i--) {
+                            const arg = block.args[i];
+                            const argName = this.extractName(arg);
+                            if (effectNames.includes(argName.toLowerCase())) {
+                                effectName = argName;
+                                break;
+                            }
+                        }
+                        // Value is after "effect", skip "by" keyword
+                        const byIndex = block.args.findIndex(a => a === "by");
+                        if (byIndex >= 0 && byIndex + 1 < block.args.length) {
+                            valueArg = block.args[byIndex + 1];
+                        } else if (effectIndex + 1 < block.args.length) {
+                            valueArg = block.args[effectIndex + 1];
+                        }
+                    }
+                    
+                    // Fallback to original logic if effect pattern not found
+                    if (!effectName) {
+                        const firstArg = block.args[0];
+                        effectName = this.extractName(firstArg);
+                        valueArg = this.extractValueArg(block.args, 1);
+                    }
+                    
+                    if (effectName.toLowerCase() === "x") {
+                        // This is change x by
+                        if (!isStage) {
+                            this.output += `${spaces}${spriteRef}.changeX(${this.formatArg(valueArg)});\n`;
+                        }
+                    } else if (effectName.toLowerCase() === "y") {
+                        // This is change y by
+                        if (!isStage) {
+                            this.output += `${spaces}${spriteRef}.changeY(${this.formatArg(valueArg)});\n`;
+                        }
+                    } else if (effectName.toLowerCase() === "size") {
+                        // This is change size by
+                        if (!isStage) {
+                            this.output += `${spaces}${spriteRef}.changeSize(${this.formatArg(valueArg)});\n`;
+                        }
+                    } else if (effectNames.includes(effectName.toLowerCase())) {
+                        // This is an effect change
+                        if (!isStage) {
+                            this.output += `${spaces}${spriteRef}.changeEffect("${effectName}", ${this.formatArg(valueArg)});\n`;
+                        }
+                    } else {
+                        // This is a variable change
+                        this.output += `${spaces}scratchRuntime.variables["${effectName}"] = Number(scratchRuntime.variables["${effectName}"]) + Number(${this.formatArg(valueArg)});\n`;
+                    }
                 }
                 break;
             case "setEffect":
             case "set":
-                if (!isStage && block.args.length >= 2) {
-                    this.output += `${spaces}${spriteRef}.setEffect(${this.formatArg(block.args[0])}, ${this.formatArg(block.args[1])});\n`;
+                if (block.args.length >= 2) {
+                    // Check if this is a variable set, size set, or effect set
+                    const effectNames = ["color", "fisheye", "whirl", "pixelate", "mosaic", "brightness", "ghost"];
+                    
+                    // Try to find effect name - could be in args[0] or as a keyword before "effect"
+                    let effectName = "";
+                    let valueArg: unknown = null;
+                    
+                    // Check if "effect" keyword is in args
+                    const effectIndex = block.args.findIndex(a => a === "effect");
+                    if (effectIndex >= 0) {
+                        // Look for effect name before "effect" keyword
+                        for (let i = effectIndex - 1; i >= 0; i--) {
+                            const arg = block.args[i];
+                            const argName = this.extractName(arg);
+                            if (effectNames.includes(argName.toLowerCase())) {
+                                effectName = argName;
+                                break;
+                            }
+                        }
+                        // Value is after "effect", skip "to" keyword
+                        const toIndex = block.args.findIndex(a => a === "to");
+                        if (toIndex >= 0 && toIndex + 1 < block.args.length) {
+                            valueArg = block.args[toIndex + 1];
+                        } else if (effectIndex + 1 < block.args.length) {
+                            valueArg = block.args[effectIndex + 1];
+                        }
+                    }
+                    
+                    // Fallback to original logic
+                    if (!effectName) {
+                        const firstArg = block.args[0];
+                        effectName = this.extractName(firstArg);
+                        valueArg = this.extractValueArg(block.args, 1);
+                    }
+                    
+                    if (effectNames.includes(effectName.toLowerCase())) {
+                        // This is an effect set
+                        if (!isStage) {
+                            this.output += `${spaces}${spriteRef}.setEffect("${effectName}", ${this.formatArg(valueArg)});\n`;
+                        }
+                    } else if (effectName.toLowerCase() === "size") {
+                        // This is set size - find the value (skip "to" and "%")
+                        const toIdx = block.args.findIndex(a => a === "to");
+                        let sizeValue = valueArg;
+                        if (toIdx >= 0 && toIdx + 1 < block.args.length) {
+                            sizeValue = block.args[toIdx + 1];
+                        }
+                        if (!isStage) {
+                            this.output += `${spaces}${spriteRef}.setSize(${this.formatArg(sizeValue)});\n`;
+                        }
+                    } else {
+                        // This is a variable set
+                        this.output += `${spaces}scratchRuntime.variables["${effectName}"] = ${this.formatArg(valueArg)};\n`;
+                    }
                 }
                 break;
             case "clearEffects":
@@ -1859,8 +2093,9 @@ export class MultiSpriteCodeGenerator {
                 }
                 break;
             case "goBackwardLayers":
+            case "goBackLayers":
                 if (!isStage) {
-                    this.output += `${spaces}${spriteRef}.goBackwardLayers(${this.formatArg(block.args[0])});\n`;
+                    this.output += `${spaces}${spriteRef}.goBackLayers(${this.formatArg(block.args[0])});\n`;
                 }
                 break;
             default:
@@ -1948,9 +2183,23 @@ export class MultiSpriteCodeGenerator {
                 break;
             }
             case "if": {
-                this.output += `${spaces}if (${this.formatCondition(block.args[0])}) {\n`;
-                if (block.args.length > 1 && typeof block.args[1] === "object") {
-                    this.generateBlock(block.args[1] as BlockNode, indent + 1, spriteName, isStage);
+                // Check for special case: "if on edge, bounce" which gets parsed as if with args ["on", "edge", "bounce"] or similar
+                if (block.args[0] === "on" && block.args[1] === "edge" && (block.args[2] === "bounce" || block.args.includes("bounce"))) {
+                    if (!isStage) {
+                        const spriteRef = `scratchRuntime.sprites["${spriteName}"]`;
+                        this.output += `${spaces}${spriteRef}.ifOnEdgeBounce();\n`;
+                    }
+                    break;
+                }
+                
+                // Build condition from args - handle both simple conditions and comparison expressions
+                // Args might be: [{cond}] or [{expr}, "=", value, "then", {body}] or [{expr}, ">", value, "then", {body}]
+                const condition = this.buildConditionFromArgs(block.args);
+                const bodyBlock = this.findBodyBlockFromArgs(block.args);
+                
+                this.output += `${spaces}if (${condition}) {\n`;
+                if (bodyBlock) {
+                    this.generateBlock(bodyBlock, indent + 1, spriteName, isStage);
                 } else if (block.body && block.body.length > 0) {
                     for (const child of block.body) {
                         this.generateBlock(child, indent + 1, spriteName, isStage);
@@ -1964,7 +2213,7 @@ export class MultiSpriteCodeGenerator {
                 break;
             }
             case "ifElse":
-                this.output += `${spaces}if (${this.formatCondition(block.args[0])}) {\n`;
+                this.output += `${spaces}if (${this.buildConditionFromArgs(block.args)}) {\n`;
                 if (block.body) {
                     for (const child of block.body) {
                         this.generateBlock(child, indent + 1, spriteName, isStage);
@@ -1979,12 +2228,12 @@ export class MultiSpriteCodeGenerator {
                 this.output += `${spaces}}\n`;
                 break;
             case "waitUntil":
-                this.output += `${spaces}while (!(${this.formatCondition(block.args[0])})) {\n`;
+                this.output += `${spaces}while (!(${this.buildConditionFromArgs(block.args)})) {\n`;
                 this.output += `${spaces}    await scratchRuntime.wait(0.05);\n`;
                 this.output += `${spaces}}\n`;
                 break;
             case "repeatUntil": {
-                this.output += `${spaces}while (!(${this.formatCondition(block.args[0])})) {\n`;
+                this.output += `${spaces}while (!(${this.buildConditionFromArgs(block.args)})) {\n`;
                 if (block.args.length > 1 && typeof block.args[1] === "object") {
                     this.generateBlock(block.args[1] as BlockNode, indent + 1, spriteName, isStage);
                 } else if (block.body && block.body.length > 0) {
@@ -2017,9 +2266,25 @@ export class MultiSpriteCodeGenerator {
             }
             case "deleteThisClone":
             case "deleteClone":
-            case "delete":
                 if (!isStage) {
                     this.output += `${spaces}scratchRuntime.deleteClone(CURRENT_SPRITE); return;\n`;
+                }
+                break;
+            case "delete":
+                // Check if this is "delete all of [list]" vs "delete this clone"
+                if (block.args[0] === "all" && block.args[1] === "of") {
+                    // This is "delete all of [list]" - handle as list operation
+                    const listName = this.extractName(block.args[2]);
+                    this.output += `${spaces}scratchRuntime.lists["${listName}"] = [];\n`;
+                } else if (block.args[0] === "this" || block.args[0] === "clone") {
+                    // This is "delete this clone"
+                    if (!isStage) {
+                        this.output += `${spaces}scratchRuntime.deleteClone(CURRENT_SPRITE); return;\n`;
+                    }
+                } else {
+                    // "delete <index> of [list]" - list deletion by index
+                    const listName = this.extractName(block.args[2] || block.args[1]);
+                    this.output += `${spaces}scratchRuntime.deleteOfList("${listName}", ${this.formatArg(block.args[0])});\n`;
                 }
                 break;
             default:
@@ -2058,18 +2323,91 @@ export class MultiSpriteCodeGenerator {
         }
     }
 
+    /**
+     * Extract variable/list name from an argument that might be a string or a block object
+     * Handles both "varName" and {type: "operators", name: "list", args: ["varName"]}
+     */
+    private extractName(arg: unknown): string {
+        if (typeof arg === "string") {
+            return arg;
+        }
+        if (typeof arg === "object" && arg !== null && "args" in arg) {
+            const block = arg as BlockNode;
+            // Handle bracket notation parsed as list block: {type: "operators", name: "list", args: ["varName"]}
+            if (block.name === "list" && block.args && block.args.length > 0) {
+                return String(block.args[0]);
+            }
+            // Handle expression block: {type: "operators", name: "expression", args: ["varName"]}
+            if (block.name === "expression" && block.args && block.args.length > 0) {
+                return String(block.args[0]);
+            }
+        }
+        return String(arg);
+    }
+
+    /**
+     * Find the actual value in a "set [var] to VALUE" or "change [var] by VALUE" statement
+     * The args might be: [{varBlock}, "to", value] or [{varBlock}, value] 
+     */
+    private extractValueArg(args: (string | number | BlockNode)[], startIndex: number = 1): unknown {
+        // Skip keywords like "to", "by"
+        for (let i = startIndex; i < args.length; i++) {
+            const arg = args[i];
+            if (typeof arg === "string" && (arg === "to" || arg === "by")) {
+                continue;
+            }
+            return arg;
+        }
+        return args[startIndex];
+    }
+
     private generateVariableBlock(block: BlockNode, indent: number): void {
         const spaces = "    ".repeat(indent);
-        const varName = String(block.args[0]);
+        
+        // Check if this is actually an effect block: "set [effect] effect to value"
+        // Args pattern: [{list: ["ghost"]}, "effect", "to", 50]
+        const effectNames = ["color", "fisheye", "whirl", "pixelate", "mosaic", "brightness", "ghost"];
+        const firstArgName = this.extractName(block.args[0]);
+        const hasEffectKeyword = block.args.includes("effect");
+        
+        if ((block.name === "set" || block.name === "change") && hasEffectKeyword && effectNames.includes(firstArgName)) {
+            // This is an effect block, not a variable block
+            // Find the value (after "to" or "by")
+            const toIndex = block.args.findIndex(a => a === "to");
+            const byIndex = block.args.findIndex(a => a === "by");
+            const valueIndex = toIndex >= 0 ? toIndex + 1 : (byIndex >= 0 ? byIndex + 1 : block.args.length - 1);
+            const value = block.args[valueIndex];
+            
+            if (block.name === "set") {
+                this.output += `${spaces}scratchRuntime.currentSpriteObj?.setEffect("${firstArgName}", ${this.formatArg(value)});\n`;
+            } else {
+                this.output += `${spaces}scratchRuntime.currentSpriteObj?.changeEffect("${firstArgName}", ${this.formatArg(value)});\n`;
+            }
+            return;
+        }
+        
+        // Check for "set size to X %" pattern
+        // Args pattern: [{list: ["size"]}, "to", 100, "%"]
+        if (block.name === "set" && firstArgName === "size") {
+            const toIndex = block.args.findIndex(a => a === "to");
+            if (toIndex >= 0 && toIndex + 1 < block.args.length) {
+                const value = block.args[toIndex + 1];
+                this.output += `${spaces}scratchRuntime.currentSpriteObj?.setSize(${this.formatArg(value)});\n`;
+                return;
+            }
+        }
+        
+        const varName = firstArgName;
+        const valueArg = this.extractValueArg(block.args, 1);
         
         switch (block.name) {
             case "set":
             case "setVariable":
-                this.output += `${spaces}scratchRuntime.variables["${varName}"] = ${this.formatArg(block.args[1])};\n`;
+                this.output += `${spaces}scratchRuntime.variables["${varName}"] = ${this.formatArg(valueArg)};\n`;
                 break;
             case "change":
             case "changeVariable":
-                this.output += `${spaces}scratchRuntime.variables["${varName}"] = Number(scratchRuntime.variables["${varName}"]) + Number(${this.formatArg(block.args[1])});\n`;
+                this.output += `${spaces}scratchRuntime.variables["${varName}"] = Number(scratchRuntime.variables["${varName}"]) + Number(${this.formatArg(valueArg)});\n`;
                 break;
             case "showVariable":
                 this.output += `${spaces}// Show variable: ${varName}\n`;
@@ -2084,33 +2422,55 @@ export class MultiSpriteCodeGenerator {
 
     private generateListBlock(block: BlockNode, indent: number): void {
         const spaces = "    ".repeat(indent);
-        const listName = String(block.args[0]);
         
         switch (block.name) {
             case "add":
-            case "addToList":
-                this.output += `${spaces}scratchRuntime.addToList("${listName}", ${this.formatArg(block.args[1])});\n`;
+            case "addToList": {
+                // Handle "add (value) to [list]" - parsed as: args[0]=value, args[1]="to", args[2]=list
+                // Or "add item to [list]" - args[0]=item, args[1]="to", args[2]=list
+                let listName: string;
+                let value: unknown;
+                
+                // Find the list name (look for block with name "list" or check for "to" keyword)
+                const toIndex = block.args.findIndex(a => a === "to");
+                if (toIndex >= 0 && toIndex + 1 < block.args.length) {
+                    // List is after "to"
+                    listName = this.extractName(block.args[toIndex + 1]);
+                    value = block.args[0]; // Value is before "to"
+                } else {
+                    // Fallback to first two args
+                    listName = this.extractName(block.args[0]);
+                    value = block.args[1];
+                }
+                
+                this.output += `${spaces}scratchRuntime.addToList("${listName}", ${this.formatArg(value)});\n`;
                 break;
+            }
             case "delete":
-            case "deleteOfList":
-                this.output += `${spaces}scratchRuntime.deleteOfList("${listName}", ${this.formatArg(block.args[1])});\n`;
+            case "deleteOfList": {
+                const listName = this.extractName(block.args[0]);
+                const valueArg = this.extractValueArg(block.args, 1);
+                this.output += `${spaces}scratchRuntime.deleteOfList("${listName}", ${this.formatArg(valueArg)});\n`;
                 break;
-            case "deleteAllOfList":
+            }
+            case "deleteAllOfList": {
+                const listName = this.extractName(block.args[0]);
                 this.output += `${spaces}scratchRuntime.lists["${listName}"] = [];\n`;
                 break;
+            }
             case "insert":
             case "insertAtList":
-                this.output += `${spaces}scratchRuntime.insertAtList("${listName}", ${this.formatArg(block.args[1])}, ${this.formatArg(block.args[2])});\n`;
+                this.output += `${spaces}scratchRuntime.insertAtList("${this.extractName(block.args[0])}", ${this.formatArg(block.args[1])}, ${this.formatArg(block.args[2])});\n`;
                 break;
             case "replace":
             case "replaceItemOfList":
-                this.output += `${spaces}scratchRuntime.replaceItemOfList("${listName}", ${this.formatArg(block.args[1])}, ${this.formatArg(block.args[2])});\n`;
+                this.output += `${spaces}scratchRuntime.replaceItemOfList("${this.extractName(block.args[0])}", ${this.formatArg(block.args[1])}, ${this.formatArg(block.args[2])});\n`;
                 break;
             case "showList":
-                this.output += `${spaces}// Show list: ${listName}\n`;
+                this.output += `${spaces}// Show list: ${this.extractName(block.args[0])}\n`;
                 break;
             case "hideList":
-                this.output += `${spaces}// Hide list: ${listName}\n`;
+                this.output += `${spaces}// Hide list: ${this.extractName(block.args[0])}\n`;
                 break;
             default:
                 this.output += `${spaces}// List block: ${block.name}\n`;
@@ -2119,6 +2479,15 @@ export class MultiSpriteCodeGenerator {
 
     private generateProcedureBlock(block: BlockNode, indent: number, spriteName: string, isStage: boolean): void {
         const spaces = "    ".repeat(indent);
+        const spriteRef = isStage ? `null` : `scratchRuntime.sprites["${spriteName}"]`;
+        
+        // Handle "clear graphic effects" which may be parsed as custom block
+        if (block.name === "clear" && block.args.includes("graphic") && block.args.includes("effects")) {
+            if (!isStage) {
+                this.output += `${spaces}${spriteRef}.clearEffects();\n`;
+            }
+            return;
+        }
         
         if (block.name === "define") {
             const procName = String(block.args[0]);
@@ -2295,6 +2664,16 @@ export class MultiSpriteCodeGenerator {
             case "tenPow":
             case "10^":
                 return `Math.pow(10, Number(${this.formatArg(block.args[0])}))`;
+            case "expression":
+                // Expression block wraps a variable name - (variableName) syntax
+                // The arg is the variable name as a string
+                if (typeof block.args[0] === "string") {
+                    return `scratchRuntime.variables["${block.args[0]}"]`;
+                }
+                return `(${this.formatArg(block.args[0])})`;
+            case "list":
+                // List name block, just return the name for use elsewhere
+                return String(block.args[0]);
         }
         return "null";
     }
@@ -2389,5 +2768,107 @@ export class MultiSpriteCodeGenerator {
             return String(condition);
         }
         return String(condition);
+    }
+
+    /**
+     * Build a complete condition from args array
+     * Handles patterns like: [{expr}, "=", value, "then", {body}] or [{expr}, ">", value, "then", {body}]
+     * Also handles simple conditions like: [{cond}]
+     */
+    private buildConditionFromArgs(args: (string | number | BlockNode)[]): string {
+        if (args.length === 0) {
+            return "true";
+        }
+
+        // Find the comparison operator index
+        let opIndex = -1;
+        let op = "";
+        for (let i = 0; i < args.length; i++) {
+            const arg = args[i];
+            if (typeof arg === "string" && ["=", ">", "<", ">=", "<=", "!="].includes(arg)) {
+                opIndex = i;
+                op = arg;
+                break;
+            }
+        }
+
+        if (opIndex > 0 && opIndex < args.length - 1) {
+            // Found a comparison operator - build the comparison expression
+            const leftArg = args[opIndex - 1] || args[0];
+            // Find the right argument (skip "then" keyword if present)
+            let rightArg = args[opIndex + 1];
+            if (rightArg === "then" && args.length > opIndex + 2) {
+                rightArg = args[opIndex + 2];
+            }
+            
+            // Skip if rightArg is a body block
+            if (typeof rightArg === "object" && rightArg !== null && "type" in rightArg) {
+                const rightBlock = rightArg as BlockNode;
+                if (rightBlock.type !== "operators" && rightBlock.name !== "expression" && rightBlock.name !== "list") {
+                    // rightArg is a body block, use the value before "then"
+                    rightArg = args[opIndex + 1];
+                    if (rightArg === "then") {
+                        rightArg = 0; // fallback
+                    }
+                }
+            }
+
+            const left = this.formatConditionArg(leftArg);
+            const right = this.formatArg(rightArg);
+            
+            // Map operator to JS
+            const jsOp = op === "=" ? "==" : op;
+            return `(${left} ${jsOp} ${right})`;
+        }
+
+        // No comparison operator - just format the first argument as a condition
+        return this.formatCondition(args[0]);
+    }
+
+    /**
+     * Format an argument for use in a condition expression
+     * Handles expression blocks and variable references
+     */
+    private formatConditionArg(arg: unknown): string {
+        if (typeof arg === "object" && arg !== null && "type" in arg) {
+            const block = arg as BlockNode;
+            if (block.name === "expression" && block.args && block.args.length > 0) {
+                // This is a variable reference like (varName)
+                const varName = String(block.args[0]);
+                return `scratchRuntime.variables["${varName}"]`;
+            }
+            return this.formatExpression(block);
+        }
+        return this.formatArg(arg);
+    }
+
+    /**
+     * Find the body block from args array
+     * The body is usually after "then" keyword or is the last BlockNode that isn't a condition
+     */
+    private findBodyBlockFromArgs(args: (string | number | BlockNode)[]): BlockNode | null {
+        // Look for block after "then" keyword
+        for (let i = 0; i < args.length; i++) {
+            if (args[i] === "then" && i + 1 < args.length) {
+                const nextArg = args[i + 1];
+                if (typeof nextArg === "object" && nextArg !== null && "type" in nextArg) {
+                    return nextArg as BlockNode;
+                }
+            }
+        }
+        
+        // Look for the last BlockNode that could be a body (not an expression/condition)
+        for (let i = args.length - 1; i >= 0; i--) {
+            const arg = args[i];
+            if (typeof arg === "object" && arg !== null && "type" in arg) {
+                const block = arg as BlockNode;
+                // Skip condition-related blocks
+                if (block.name !== "expression" && block.name !== "list" && block.type !== "operators") {
+                    return block;
+                }
+            }
+        }
+        
+        return null;
     }
 }

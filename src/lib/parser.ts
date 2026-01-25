@@ -3,7 +3,8 @@
 // an Abstract Syntax Tree (AST). The AST represents the structure of the program,
 // making it easier to analyze and execute.
 
-import { Program, BlockNode, Script, BlockType, Token, TokenType, blockTypeMap } from "@/types/compilerTypes";
+import { Program, BlockNode, Script, BlockType, Token, TokenType, blockTypeMap, CompilerError, ErrorCodes } from "@/types/compilerTypes";
+import { Lexer } from "./lexer";
 // import { SimpleDebugger } from "./debugger";
 
 // const d: SimpleDebugger = new SimpleDebugger();
@@ -20,10 +21,35 @@ export class Parser {
     private lastAtIndent: (BlockNode | null)[] = [];
     // Current indentation level
     private indentLevel: number = 0;
+    // Collection of errors found during parsing
+    private errors: CompilerError[] = [];
+    // Declared variables (for undeclared variable checking)
+    private declaredVariables: Set<string> = new Set();
+    // Declared lists
+    private declaredLists: Set<string> = new Set();
 
     // Constructor: Initializes the Parser with the token array.
     constructor(tokens: Token[]) {
         this.tokens = tokens;
+    }
+
+    // Get collected errors
+    getErrors(): CompilerError[] {
+        return this.errors;
+    }
+
+    // Add an error
+    private addError(code: string, message: string, token?: Token, suggestion?: string): void {
+        const line = token?.line || this.current?.line || 1;
+        const column = token?.column || this.current?.column || 1;
+        this.errors.push({
+            code,
+            message,
+            line,
+            column,
+            severity: "error",
+            suggestion,
+        });
     }
 
     // Get the current token
@@ -82,6 +108,47 @@ export class Parser {
             variables: new Map(),
             lists: new Map(),
         };
+
+        // Reset declared variables and lists
+        this.declaredVariables.clear();
+        this.declaredLists.clear();
+        
+        // Add built-in variables (sensing reporters, etc.)
+        const builtInVariables = [
+            "x", "y", "direction", "size", "volume", "timer", "answer",
+            "mouse x", "mouse y", "loudness", "username",
+            "costume number", "costume name", "backdrop number", "backdrop name"
+        ];
+        builtInVariables.forEach(v => this.declaredVariables.add(v));
+
+        // Skip any initial newlines or comments
+        this.skipIrrelevant();
+
+        // First pass: collect all variable and list declarations
+        const savedPosition = this.position;
+        while (!this.isAtEnd()) {
+            this.skipIrrelevant();
+            if (this.isAtEnd()) break;
+
+            if (this.match(TokenType.KEYWORD)) {
+                const keyword = this.current.value;
+                if (keyword === "var" || keyword === "variable") {
+                    this.advance(); // Skip 'var'
+                    if (this.match(TokenType.IDENTIFIER)) {
+                        this.declaredVariables.add(this.current.value);
+                    }
+                } else if (keyword === "list") {
+                    this.advance(); // Skip 'list'
+                    if (this.match(TokenType.IDENTIFIER)) {
+                        this.declaredLists.add(this.current.value);
+                    }
+                }
+            }
+            this.advance();
+        }
+        
+        // Reset position for actual parsing
+        this.position = savedPosition;
 
         // Skip any initial newlines or comments
         this.skipIrrelevant();
@@ -374,6 +441,241 @@ export class Parser {
                 const dir = this.advance().value;
                 blockKeyword = dir === "right" ? "turnRight" : "turnLeft";
             }
+        } else if (blockKeyword === "go") {
+            // Handle "go to x: y:", "go to random position", "go to mouse-pointer", "go to front/back layer"
+            // Also handle "go back N layers" and "go forward N layers"
+            this.skipIrrelevant();
+            if (!this.isAtEnd() && this.match(TokenType.KEYWORD)) {
+                const firstWord = this.current.value as string;
+                
+                if (firstWord === "to") {
+                    this.advance(); // Consume 'to'
+                    this.skipIrrelevant();
+                    
+                    // Check what follows "go to"
+                    if (!this.isAtEnd()) {
+                        if (this.match(TokenType.KEYWORD)) {
+                            const nextWord = this.current.value as string;
+                            if (nextWord === "x" || nextWord === "x:") {
+                                blockKeyword = "goToXY";
+                            } else if (nextWord === "random") {
+                                this.advance(); // Consume 'random'
+                                this.skipIrrelevant();
+                                if (!this.isAtEnd() && this.match(TokenType.KEYWORD) && this.current.value === "position") {
+                                    this.advance(); // Consume 'position'
+                                }
+                                blockKeyword = "goToRandom";
+                            } else if (nextWord === "mouse-pointer") {
+                                this.advance(); // Consume 'mouse-pointer'
+                                blockKeyword = "goToMouse";
+                            } else if (nextWord === "front") {
+                                this.advance(); // Consume 'front'
+                                this.skipIrrelevant();
+                                if (!this.isAtEnd() && this.match(TokenType.KEYWORD) && this.current.value === "layer") {
+                                    this.advance(); // Consume 'layer'
+                                }
+                                blockKeyword = "goToFront";
+                            } else if (nextWord === "back") {
+                                this.advance(); // Consume 'back'
+                                this.skipIrrelevant();
+                                if (!this.isAtEnd() && this.match(TokenType.KEYWORD) && this.current.value === "layer") {
+                                    this.advance(); // Consume 'layer'
+                                }
+                                blockKeyword = "goToBack";
+                            } else {
+                                // go to "SpriteName"
+                                blockKeyword = "goToSprite";
+                            }
+                        } else if (this.match(TokenType.STRING)) {
+                            // go to "SpriteName"
+                            blockKeyword = "goToSprite";
+                        } else {
+                            blockKeyword = "goToXY";
+                        }
+                    }
+                } else if (firstWord === "back") {
+                    // "go back N layers" - looks block
+                    this.advance(); // Consume 'back'
+                    blockKeyword = "goBackLayers";
+                    // The number will be parsed as an argument
+                } else if (firstWord === "forward") {
+                    // "go forward N layers" - looks block
+                    this.advance(); // Consume 'forward'
+                    blockKeyword = "goForwardLayers";
+                    // The number will be parsed as an argument
+                }
+            }
+        } else if (blockKeyword === "glide") {
+            // Handle "glide N secs to x: y:" or "glide N secs to random position" etc
+            blockKeyword = "glide";
+        } else if (blockKeyword === "point") {
+            // Handle "point in direction N" or "point towards X"
+            this.skipIrrelevant();;
+            if (!this.isAtEnd() && this.match(TokenType.KEYWORD)) {
+                const nextWord = this.current.value as string;
+                if (nextWord === "in") {
+                    this.advance(); // Consume 'in'
+                    this.skipIrrelevant();
+                    if (!this.isAtEnd() && this.match(TokenType.KEYWORD) && this.current.value === "direction") {
+                        this.advance(); // Consume 'direction'
+                    }
+                    blockKeyword = "pointInDirection";
+                } else if (nextWord === "towards") {
+                    this.advance(); // Consume 'towards'
+                    blockKeyword = "pointTowards";
+                }
+            }
+        } else if (blockKeyword === "set") {
+            // Handle "set x to", "set y to", "set size to", "set rotation style", "set pen color/size"
+            this.skipIrrelevant();
+            if (!this.isAtEnd() && this.match(TokenType.KEYWORD)) {
+                const nextWord = this.current.value as string;
+                if (nextWord === "x") {
+                    this.advance(); // Consume 'x'
+                    this.skipIrrelevant();
+                    if (!this.isAtEnd() && this.match(TokenType.KEYWORD) && this.current.value === "to") {
+                        this.advance(); // Consume 'to'
+                    }
+                    blockKeyword = "setX";
+                } else if (nextWord === "y") {
+                    this.advance(); // Consume 'y'
+                    this.skipIrrelevant();
+                    if (!this.isAtEnd() && this.match(TokenType.KEYWORD) && this.current.value === "to") {
+                        this.advance(); // Consume 'to'
+                    }
+                    blockKeyword = "setY";
+                } else if (nextWord === "size") {
+                    this.advance(); // Consume 'size'
+                    this.skipIrrelevant();
+                    if (!this.isAtEnd() && this.match(TokenType.KEYWORD) && this.current.value === "to") {
+                        this.advance(); // Consume 'to'
+                    }
+                    blockKeyword = "setSize";
+                } else if (nextWord === "rotation") {
+                    this.advance(); // Consume 'rotation'
+                    this.skipIrrelevant();
+                    if (!this.isAtEnd() && this.match(TokenType.KEYWORD) && this.current.value === "style") {
+                        this.advance(); // Consume 'style'
+                    }
+                    blockKeyword = "setRotationStyle";
+                } else if (nextWord === "pen") {
+                    this.advance(); // Consume 'pen'
+                    this.skipIrrelevant();
+                    if (!this.isAtEnd() && this.match(TokenType.KEYWORD)) {
+                        const penProp = this.current.value as string;
+                        if (penProp === "color") {
+                            this.advance();
+                            this.skipIrrelevant();
+                            if (!this.isAtEnd() && this.match(TokenType.KEYWORD) && this.current.value === "to") {
+                                this.advance();
+                            }
+                            blockKeyword = "setPenColor";
+                        } else if (penProp === "size") {
+                            this.advance();
+                            this.skipIrrelevant();
+                            if (!this.isAtEnd() && this.match(TokenType.KEYWORD) && this.current.value === "to") {
+                                this.advance();
+                            }
+                            blockKeyword = "setPenSize";
+                        }
+                    }
+                } else if (nextWord === "volume") {
+                    this.advance(); // Consume 'volume'
+                    this.skipIrrelevant();
+                    if (!this.isAtEnd() && this.match(TokenType.KEYWORD) && this.current.value === "to") {
+                        this.advance(); // Consume 'to'
+                    }
+                    blockKeyword = "setVolume";
+                } else {
+                    // set variable to value - check for effect names
+                    const effectNames = ["color", "fisheye", "whirl", "pixelate", "mosaic", "brightness", "ghost"];
+                    if (effectNames.includes(nextWord)) {
+                        this.advance(); // Consume effect name
+                        this.skipIrrelevant();
+                        if (!this.isAtEnd() && this.match(TokenType.KEYWORD) && this.current.value === "effect") {
+                            this.advance(); // Consume 'effect'
+                            this.skipIrrelevant();
+                            if (!this.isAtEnd() && this.match(TokenType.KEYWORD) && this.current.value === "to") {
+                                this.advance(); // Consume 'to'
+                            }
+                        }
+                        blockKeyword = "setEffect";
+                    } else {
+                        // set variable to value
+                        blockKeyword = "setVariable";
+                    }
+                }
+            } else if (!this.isAtEnd() && this.match(TokenType.IDENTIFIER)) {
+                // set <variableName> to <value> - the variable name is an IDENTIFIER
+                blockKeyword = "setVariable";
+            }
+        } else if (blockKeyword === "change") {
+            // Handle "change x by", "change y by", "change size by", "change effect by", "change pen size by", "change volume by"
+            this.skipIrrelevant();
+            if (!this.isAtEnd() && this.match(TokenType.KEYWORD)) {
+                const nextWord = this.current.value as string;
+                if (nextWord === "x") {
+                    this.advance();
+                    this.skipIrrelevant();
+                    if (!this.isAtEnd() && this.match(TokenType.KEYWORD) && this.current.value === "by") {
+                        this.advance();
+                    }
+                    blockKeyword = "changeX";
+                } else if (nextWord === "y") {
+                    this.advance();
+                    this.skipIrrelevant();
+                    if (!this.isAtEnd() && this.match(TokenType.KEYWORD) && this.current.value === "by") {
+                        this.advance();
+                    }
+                    blockKeyword = "changeY";
+                } else if (nextWord === "size") {
+                    this.advance();
+                    this.skipIrrelevant();
+                    if (!this.isAtEnd() && this.match(TokenType.KEYWORD) && this.current.value === "by") {
+                        this.advance();
+                    }
+                    blockKeyword = "changeSize";
+                } else if (nextWord === "pen") {
+                    this.advance();
+                    this.skipIrrelevant();
+                    if (!this.isAtEnd() && this.match(TokenType.KEYWORD)) {
+                        const penProp = this.current.value as string;
+                        if (penProp === "size") {
+                            this.advance();
+                            this.skipIrrelevant();
+                            if (!this.isAtEnd() && this.match(TokenType.KEYWORD) && this.current.value === "by") {
+                                this.advance();
+                            }
+                            blockKeyword = "changePenSize";
+                        }
+                    }
+                } else if (nextWord === "volume") {
+                    this.advance();
+                    this.skipIrrelevant();
+                    if (!this.isAtEnd() && this.match(TokenType.KEYWORD) && this.current.value === "by") {
+                        this.advance();
+                    }
+                    blockKeyword = "changeVolume";
+                } else {
+                    // Check for effects
+                    const effectNames = ["color", "fisheye", "whirl", "pixelate", "mosaic", "brightness", "ghost"];
+                    if (effectNames.includes(nextWord)) {
+                        this.advance();
+                        this.skipIrrelevant();
+                        if (!this.isAtEnd() && this.match(TokenType.KEYWORD) && this.current.value === "effect") {
+                            this.advance();
+                            this.skipIrrelevant();
+                            if (!this.isAtEnd() && this.match(TokenType.KEYWORD) && this.current.value === "by") {
+                                this.advance();
+                            }
+                        }
+                        blockKeyword = "changeEffect";
+                    } else {
+                        // change variable by
+                        blockKeyword = "changeVariable";
+                    }
+                }
+            }
         } else if (blockKeyword === "repeat") {
             // support 'repeat until' as a combined keyword
             this.skipIrrelevant();
@@ -406,45 +708,140 @@ export class Parser {
                 }
             }
         } else if (blockKeyword === "when") {
-            // Handle multi-word "when" keywords like "when I receive" and "when I start as a clone"
+            // Handle multi-word "when" keywords
             this.skipIrrelevant();
-            if (!this.isAtEnd() && this.match(TokenType.KEYWORD) && this.current.value === "I") {
-                this.advance(); // Consume 'I'
-                this.skipIrrelevant();
-                if (!this.isAtEnd() && this.match(TokenType.KEYWORD)) {
-                    const nextWord = this.current.value as string;
-                    if (nextWord === "receive") {
-                        this.advance(); // Consume 'receive'
-                        blockKeyword = "whenIReceive";
-                    } else if (nextWord === "start") {
-                        this.advance(); // Consume 'start'
-                        // Optionally consume "as a clone"
+            if (!this.isAtEnd() && this.match(TokenType.KEYWORD)) {
+                const nextWord = this.current.value as string;
+                
+                if (nextWord === "green") {
+                    // "when green flag clicked"
+                    this.advance(); // Consume 'green'
+                    this.skipIrrelevant();
+                    if (!this.isAtEnd() && this.match(TokenType.KEYWORD) && this.current.value === "flag") {
+                        this.advance(); // Consume 'flag'
                         this.skipIrrelevant();
-                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                        if (!this.isAtEnd() && this.match(TokenType.KEYWORD) && (this.current.value as any) === "as") {
-                            this.advance(); // Consume 'as'
+                        if (!this.isAtEnd() && this.match(TokenType.KEYWORD) && this.current.value === "clicked") {
+                            this.advance(); // Consume 'clicked'
+                        }
+                    }
+                    blockKeyword = "whenFlagClicked";
+                } else if (nextWord === "this") {
+                    // "when this sprite clicked"
+                    this.advance(); // Consume 'this'
+                    this.skipIrrelevant();
+                    if (!this.isAtEnd() && this.match(TokenType.KEYWORD) && this.current.value === "sprite") {
+                        this.advance(); // Consume 'sprite'
+                        this.skipIrrelevant();
+                        if (!this.isAtEnd() && this.match(TokenType.KEYWORD) && this.current.value === "clicked") {
+                            this.advance(); // Consume 'clicked'
+                        }
+                    }
+                    blockKeyword = "whenSpriteClicked";
+                } else if (nextWord === "I") {
+                    this.advance(); // Consume 'I'
+                    this.skipIrrelevant();
+                    if (!this.isAtEnd() && this.match(TokenType.KEYWORD)) {
+                        const word = this.current.value as string;
+                        if (word === "receive") {
+                            this.advance(); // Consume 'receive'
+                            blockKeyword = "whenIReceive";
+                        } else if (word === "start") {
+                            this.advance(); // Consume 'start'
+                            // Optionally consume "as a clone"
                             this.skipIrrelevant();
-                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                            if (!this.isAtEnd() && this.match(TokenType.KEYWORD) && (this.current.value as any) === "a") {
-                                this.advance(); // Consume 'a'
+                            if (!this.isAtEnd() && this.match(TokenType.KEYWORD) && (this.current.value as string) === "as") {
+                                this.advance(); // Consume 'as'
                                 this.skipIrrelevant();
-                                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                                if (!this.isAtEnd() && this.match(TokenType.KEYWORD) && (this.current.value as any) === "clone") {
-                                    this.advance(); // Consume 'clone'
+                                if (!this.isAtEnd() && this.match(TokenType.KEYWORD) && (this.current.value as string) === "a") {
+                                    this.advance(); // Consume 'a'
+                                    this.skipIrrelevant();
+                                    if (!this.isAtEnd() && this.match(TokenType.KEYWORD) && (this.current.value as string) === "clone") {
+                                        this.advance(); // Consume 'clone'
+                                    }
                                 }
                             }
+                            blockKeyword = "whenIStartAsClone";
                         }
-                        blockKeyword = "whenIStartAsClone";
+                    }
+                } else if (nextWord === "flagClicked") {
+                    // Support old syntax "when flagClicked" 
+                    this.advance();
+                    blockKeyword = "whenFlagClicked";
+                } else if (nextWord === "spriteClicked") {
+                    // Support old syntax "when spriteClicked"
+                    this.advance();
+                    blockKeyword = "whenSpriteClicked";
+                } else if (nextWord === "cloneStarted") {
+                    // Support old syntax "when cloneStarted"
+                    this.advance();
+                    blockKeyword = "whenIStartAsClone";
+                } else if (nextWord === "receive") {
+                    // Support old syntax "when receive"
+                    this.advance();
+                    blockKeyword = "whenIReceive";
+                } else {
+                    // Check for "when X key pressed" pattern
+                    // nextWord could be the key name (space, up arrow, a, etc.)
+                    const keyName = nextWord;
+                    this.advance(); // Consume the key name
+                    this.skipIrrelevant();
+                    
+                    if (!this.isAtEnd() && this.match(TokenType.KEYWORD) && this.current.value === "key") {
+                        this.advance(); // Consume 'key'
+                        this.skipIrrelevant();
+                        if (!this.isAtEnd() && this.match(TokenType.KEYWORD) && this.current.value === "pressed") {
+                            this.advance(); // Consume 'pressed'
+                            blockKeyword = "whenKeyPressed";
+                            // Store the key name by encoding it temporarily
+                            blockKeyword = `whenKeyPressed:${keyName}`;
+                        }
+                    }
+                }
+            } else if (!this.isAtEnd() && this.match(TokenType.IDENTIFIER)) {
+                // Handle "when <identifier> key pressed" (e.g., "when a key pressed")
+                const keyName = this.current.value as string;
+                this.advance(); // Consume the key name
+                this.skipIrrelevant();
+                
+                if (!this.isAtEnd() && this.match(TokenType.KEYWORD) && this.current.value === "key") {
+                    this.advance(); // Consume 'key'
+                    this.skipIrrelevant();
+                    if (!this.isAtEnd() && this.match(TokenType.KEYWORD) && this.current.value === "pressed") {
+                        this.advance(); // Consume 'pressed'
+                        blockKeyword = `whenKeyPressed:${keyName}`;
                     }
                 }
             }
         }
 
         // Determine the block type based on the keyword
+        // Handle special encoded block keywords like "whenKeyPressed:space"
+        let keyPressedKey: string | null = null;
+        if (blockKeyword.startsWith("whenKeyPressed:")) {
+            keyPressedKey = blockKeyword.split(":")[1];
+            blockKeyword = "whenKeyPressed";
+        }
+        
         const blockType: BlockType = this.determineBlockType(blockKeyword);
 
-        // Parse block arguments
-        const args: (string | number | BlockNode)[] = this.parseBlockArguments();
+        // Parse block arguments (with special handling for certain blocks)
+        let args: (string | number | BlockNode)[];
+        
+        if (keyPressedKey !== null) {
+            // Key was already captured during "when X key pressed" parsing
+            args = [keyPressedKey];
+        } else if (blockKeyword === "goToXY") {
+            // Parse "x: N y: N" format
+            args = this.parseGoToXYArguments();
+        } else if (blockKeyword === "glide") {
+            // Parse "N secs to x: N y: N" format
+            args = this.parseGlideArguments();
+        } else if (blockKeyword === "goBackLayers" || blockKeyword === "goForwardLayers") {
+            // Parse "N layers" - just get the number, skip "layers"
+            args = this.parseLayersArguments();
+        } else {
+            args = this.parseBlockArguments();
+        }
 
         // Create the block node
         const block: BlockNode = {
@@ -471,6 +868,161 @@ export class Parser {
         }
 
         return block;
+    }
+
+    // Parse "x: N y: N" arguments for goToXY block
+    private parseGoToXYArguments(): (string | number | BlockNode)[] {
+        const args: (string | number | BlockNode)[] = [];
+        
+        this.skipIrrelevant();
+        
+        // Expect "x:" or "x" followed by number, then "y:" or "y" followed by number
+        // Pattern: x: 100 y: 50  OR  x 100 y 50
+        
+        // Skip 'x' or 'x:' if present
+        if (!this.isAtEnd() && this.match(TokenType.KEYWORD) && (this.current.value === "x" || this.current.value === "x:")) {
+            this.advance();
+            this.skipIrrelevant();
+        }
+        
+        // Skip ':' if present
+        if (!this.isAtEnd() && this.match(TokenType.COLON)) {
+            this.advance();
+            this.skipIrrelevant();
+        }
+        
+        // Get x value
+        if (!this.isAtEnd() && this.match(TokenType.NUMBER)) {
+            args.push(parseFloat(this.advance().value));
+        } else if (!this.isAtEnd() && this.match(TokenType.IDENTIFIER)) {
+            args.push(this.advance().value);
+        } else {
+            args.push(0); // default
+        }
+        
+        this.skipIrrelevant();
+        
+        // Skip 'y' or 'y:' if present
+        if (!this.isAtEnd() && this.match(TokenType.KEYWORD) && (this.current.value === "y" || this.current.value === "y:")) {
+            this.advance();
+            this.skipIrrelevant();
+        }
+        
+        // Skip ':' if present
+        if (!this.isAtEnd() && this.match(TokenType.COLON)) {
+            this.advance();
+            this.skipIrrelevant();
+        }
+        
+        // Get y value
+        if (!this.isAtEnd() && this.match(TokenType.NUMBER)) {
+            args.push(parseFloat(this.advance().value));
+        } else if (!this.isAtEnd() && this.match(TokenType.IDENTIFIER)) {
+            args.push(this.advance().value);
+        } else {
+            args.push(0); // default
+        }
+        
+        return args;
+    }
+    
+    // Parse "N secs to x: N y: N" arguments for glide block
+    private parseGlideArguments(): (string | number | BlockNode)[] {
+        const args: (string | number | BlockNode)[] = [];
+        
+        this.skipIrrelevant();
+        
+        // Get duration (number of seconds)
+        if (!this.isAtEnd() && this.match(TokenType.NUMBER)) {
+            args.push(parseFloat(this.advance().value));
+        } else {
+            args.push(1); // default 1 second
+        }
+        
+        this.skipIrrelevant();
+        
+        // Skip 'secs' or 'seconds' if present
+        if (!this.isAtEnd() && this.match(TokenType.KEYWORD) && 
+            (this.current.value === "secs" || this.current.value === "seconds" || this.current.value === "sec")) {
+            this.advance();
+            this.skipIrrelevant();
+        }
+        
+        // Skip 'to' if present
+        if (!this.isAtEnd() && this.match(TokenType.KEYWORD) && this.current.value === "to") {
+            this.advance();
+            this.skipIrrelevant();
+        }
+        
+        // Skip 'x' or 'x:' if present
+        if (!this.isAtEnd() && this.match(TokenType.KEYWORD) && (this.current.value === "x" || this.current.value === "x:")) {
+            this.advance();
+            this.skipIrrelevant();
+        }
+        
+        // Skip ':' if present
+        if (!this.isAtEnd() && this.match(TokenType.COLON)) {
+            this.advance();
+            this.skipIrrelevant();
+        }
+        
+        // Get x value
+        if (!this.isAtEnd() && this.match(TokenType.NUMBER)) {
+            args.push(parseFloat(this.advance().value));
+        } else if (!this.isAtEnd() && this.match(TokenType.IDENTIFIER)) {
+            args.push(this.advance().value);
+        } else {
+            args.push(0);
+        }
+        
+        this.skipIrrelevant();
+        
+        // Skip 'y' or 'y:' if present
+        if (!this.isAtEnd() && this.match(TokenType.KEYWORD) && (this.current.value === "y" || this.current.value === "y:")) {
+            this.advance();
+            this.skipIrrelevant();
+        }
+        
+        // Skip ':' if present
+        if (!this.isAtEnd() && this.match(TokenType.COLON)) {
+            this.advance();
+            this.skipIrrelevant();
+        }
+        
+        // Get y value
+        if (!this.isAtEnd() && this.match(TokenType.NUMBER)) {
+            args.push(parseFloat(this.advance().value));
+        } else if (!this.isAtEnd() && this.match(TokenType.IDENTIFIER)) {
+            args.push(this.advance().value);
+        } else {
+            args.push(0);
+        }
+        
+        return args;
+    }
+    
+    // Parse "N layers" arguments for go back/forward layers blocks
+    private parseLayersArguments(): (string | number | BlockNode)[] {
+        const args: (string | number | BlockNode)[] = [];
+        
+        this.skipIrrelevant();
+        
+        // Get number of layers
+        if (!this.isAtEnd() && this.match(TokenType.NUMBER)) {
+            args.push(parseFloat(this.advance().value));
+        } else {
+            args.push(1); // default 1 layer
+        }
+        
+        this.skipIrrelevant();
+        
+        // Skip 'layers' or 'layer' if present
+        if (!this.isAtEnd() && this.match(TokenType.KEYWORD) && 
+            (this.current.value === "layers" || this.current.value === "layer")) {
+            this.advance();
+        }
+        
+        return args;
     }
 
     // determineBlockType: Determine the type of block based on its keyword
@@ -506,24 +1058,51 @@ export class Parser {
                 // Number argument
                 args.push(parseFloat(this.advance().value));
             } else if (this.match(TokenType.IDENTIFIER)) {
-                // Variable or identifier
-                args.push(this.advance().value);
+                // Check if this identifier is a declared variable or list
+                const token = this.current;
+                const identifierName = this.advance().value;
+                
+                // Check if it's a known variable or list
+                if (!this.declaredVariables.has(identifierName) && 
+                    !this.declaredLists.has(identifierName) &&
+                    !Lexer.RESERVED_KEYWORDS.has(identifierName)) {
+                    // Unknown identifier - could be undeclared variable
+                    this.addError(
+                        ErrorCodes.UNDECLARED_VARIABLE,
+                        `'${identifierName}' is not declared. Did you forget to declare it?`,
+                        token,
+                        `Add 'var ${identifierName} = 0' or 'list ${identifierName} = []' at the top of your code.`
+                    );
+                }
+                args.push(identifierName);
             } else if (this.match(TokenType.PARENTHESIS_OPEN)) {
                 // Nested expression in parentheses
                 args.push(this.parseExpression());
             } else if (this.match(TokenType.BRACKET_OPEN)) {
-                // List value in brackets
-                const listValues = this.parseListLiteral();
-                args.push({
-                    type: "operators",
-                    name: "list",
-                    args: listValues,
-                });
+                // Brackets are not allowed in block arguments (only for list init)
+                const bracketToken = this.current;
+                this.addError(
+                    ErrorCodes.INVALID_BRACKET,
+                    "Square brackets are not allowed here.",
+                    bracketToken,
+                    "Use variable names directly without brackets."
+                );
+                // Skip the bracketed content
+                this.advance(); // Skip '['
+                while (!this.isAtEnd() && !this.match(TokenType.BRACKET_CLOSE)) {
+                    this.advance();
+                }
+                if (this.match(TokenType.BRACKET_CLOSE)) {
+                    this.advance(); // Skip ']'
+                }
             } else if (this.match(TokenType.KEYWORD)) {
                 // Keyword argument
                 args.push(this.advance().value);
             } else if (this.match(TokenType.OPERATOR)) {
                 // Operator
+                args.push(this.advance().value);
+            } else if (this.match(TokenType.COLON)) {
+                // Colon (for x: y: syntax)
                 args.push(this.advance().value);
             } else {
                 // Skip other tokens
@@ -569,6 +1148,7 @@ export class Parser {
     }
 
     // parseListLiteral: Parse a list literal [value1, value2, ...]
+    // Also handles [varName] and [effectName] in Scratch syntax
     private parseListLiteral(): (string | number)[] {
         this.consume(TokenType.BRACKET_OPEN, "Expected '['");
 
@@ -588,6 +1168,9 @@ export class Parser {
                 values.push(parseFloat(this.advance().value));
             } else if (this.match(TokenType.IDENTIFIER)) {
                 values.push(this.advance().value);
+            } else if (this.match(TokenType.KEYWORD)) {
+                // Keywords inside brackets should be treated as values (e.g., [color], [ghost])
+                values.push(this.advance().value);
             } else {
                 // Skip other tokens
                 this.advance();
@@ -602,10 +1185,37 @@ export class Parser {
     // parseVariableDeclaration: Parses a variable declaration.
     private parseVariableDeclaration(program: Program): void {
         // Skip 'var' or 'variable' keyword
-        this.advance();
+        const varKeywordToken = this.advance();
 
         // Expect a variable name (identifier)
-        const variableName = this.consume(TokenType.IDENTIFIER, "Expected variable name").value;
+        if (!this.match(TokenType.IDENTIFIER)) {
+            this.addError(
+                ErrorCodes.INVALID_SYNTAX,
+                "Expected variable name after 'var'.",
+                varKeywordToken,
+                "Variable names must start with a letter and contain only letters, numbers, and underscores."
+            );
+            this.synchronize();
+            return;
+        }
+        
+        const nameToken = this.advance();
+        const variableName = nameToken.value;
+
+        // Check if the variable name is a reserved keyword
+        if (Lexer.RESERVED_KEYWORDS.has(variableName)) {
+            this.addError(
+                ErrorCodes.RESERVED_KEYWORD,
+                `'${variableName}' is a reserved keyword and cannot be used as a variable name.`,
+                nameToken,
+                `Choose a different name for your variable. Reserved keywords include: color, ghost, fisheye, etc.`
+            );
+            this.synchronize();
+            return;
+        }
+
+        // Add to declared variables
+        this.declaredVariables.add(variableName);
 
         // Check for initial value assignment
         let initialValue: string | number | object | undefined | null = 0; // Default value
@@ -621,8 +1231,12 @@ export class Parser {
             } else if (this.match(TokenType.IDENTIFIER)) {
                 initialValue = this.advance().value;
             } else {
-                // Skip invalid tokens
-                this.advance();
+                this.addError(
+                    ErrorCodes.MISSING_VALUE,
+                    "Expected a value after '=' in variable declaration.",
+                    this.current,
+                    "Provide an initial value like: var score = 0 or var name = \"Player\""
+                );
             }
         }
 
@@ -638,21 +1252,76 @@ export class Parser {
     // parseListDeclaration: Parses a list declaration.
     private parseListDeclaration(program: Program): void {
         // Skip 'list' keyword
-        this.advance();
+        const listKeywordToken = this.advance();
 
         // Expect a list name (identifier)
-        const listName = this.consume(TokenType.IDENTIFIER, "Expected list name").value;
+        if (!this.match(TokenType.IDENTIFIER)) {
+            this.addError(
+                ErrorCodes.INVALID_SYNTAX,
+                "Expected list name after 'list'.",
+                listKeywordToken,
+                "List names must start with a letter and contain only letters, numbers, and underscores."
+            );
+            this.synchronize();
+            return;
+        }
+        
+        const nameToken = this.advance();
+        const listName = nameToken.value;
+
+        // Check if the list name is a reserved keyword
+        if (Lexer.RESERVED_KEYWORDS.has(listName)) {
+            this.addError(
+                ErrorCodes.RESERVED_KEYWORD,
+                `'${listName}' is a reserved keyword and cannot be used as a list name.`,
+                nameToken,
+                `Choose a different name for your list. Reserved keywords include: color, ghost, fisheye, etc.`
+            );
+            this.synchronize();
+            return;
+        }
+
+        // Add to declared lists
+        this.declaredLists.add(listName);
 
         // Initialize with an empty list
         let listValues: (string | number | object | undefined | null)[] = [];
 
-        // Check for initial values
+        // Check for initial values - ONLY [] is allowed
         if (!this.isAtEnd() && this.match(TokenType.OPERATOR) && this.current.value === "=") {
             this.advance(); // Skip '='
 
-            // Parse list initialization
+            // Parse list initialization - must be []
             if (this.match(TokenType.BRACKET_OPEN)) {
-                listValues = this.parseListLiteral() as (string | number | object | undefined | null)[];
+                const openBracket = this.advance();
+                
+                // Check if it's empty []
+                if (this.match(TokenType.BRACKET_CLOSE)) {
+                    this.advance(); // Skip ']'
+                    // Empty list - this is valid
+                } else {
+                    // Non-empty brackets - not allowed
+                    this.addError(
+                        ErrorCodes.INVALID_BRACKET,
+                        "Only empty brackets '[]' are allowed for list initialization.",
+                        openBracket,
+                        "Use 'list myList = []' to create an empty list, then use 'add' to add items."
+                    );
+                    // Skip to closing bracket
+                    while (!this.isAtEnd() && !this.match(TokenType.BRACKET_CLOSE)) {
+                        this.advance();
+                    }
+                    if (this.match(TokenType.BRACKET_CLOSE)) {
+                        this.advance();
+                    }
+                }
+            } else {
+                this.addError(
+                    ErrorCodes.INVALID_SYNTAX,
+                    "Lists must be initialized with '[]'.",
+                    this.current,
+                    "Use: list myList = []"
+                );
             }
         }
 

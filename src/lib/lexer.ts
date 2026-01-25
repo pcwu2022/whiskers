@@ -4,7 +4,7 @@
 // that have meaning, such as keywords, identifiers, numbers, and symbols.
 // The lexer processes the code character by character and groups them into these tokens.
 
-import { Token, TokenType } from "@/types/compilerTypes";
+import { Token, TokenType, CompilerError, ErrorCodes } from "@/types/compilerTypes";
 
 export class Lexer {
     // The input code string.
@@ -19,6 +19,26 @@ export class Lexer {
     private column: number = 1;
     // Track indentation levels
     private indentLevels: number[] = [0];
+    // Collection of errors found during lexing
+    private errors: CompilerError[] = [];
+    
+    // Reserved keywords that cannot be used as variable names
+    public static readonly RESERVED_KEYWORDS: Set<string> = new Set([
+        // Effect names
+        "color", "fisheye", "whirl", "pixelate", "mosaic", "brightness", "ghost",
+        // Special targets
+        "mouse-pointer", "random", "edge", "myself",
+        // Control flow
+        "if", "then", "else", "end", "repeat", "forever", "until", "wait", "stop",
+        "all", "this", "script", "other", "scripts", "clone", "when", "and", "or", "not",
+        // Declaration keywords
+        "var", "list",
+        // Block keywords
+        "set", "change", "to", "by", "of", "at", "with", "for", "seconds", "steps", "degrees",
+        // Boolean
+        "true", "false",
+    ]);
+    
     // Scratch keywords - comprehensive list based on Scratch 3.0
     private keywords: Set<string> = new Set([
         // Event keywords
@@ -132,12 +152,21 @@ export class Lexer {
         "ask",
         "answer",
         "key",
+        "pressed",
         "down",
         "distance",
         "reset",
         "timer",
         "drag",
         "mode",
+        
+        // Key names for "when X key pressed"
+        "space",
+        "up",
+        "arrow",
+        "left",
+        "right",
+        "any",
         "draggable",
         "username",
         "current",
@@ -249,6 +278,23 @@ export class Lexer {
         this.code = code.endsWith("\n") ? code : code + "\n";
     }
 
+    // Get collected errors
+    getErrors(): CompilerError[] {
+        return this.errors;
+    }
+
+    // Add an error
+    private addError(code: string, message: string, suggestion?: string): void {
+        this.errors.push({
+            code,
+            message,
+            line: this.line,
+            column: this.column,
+            severity: "error",
+            suggestion,
+        });
+    }
+
     // tokenize: Main method to convert the input code into an array of tokens.
     tokenize(): Token[] {
         // Loop through the code until the end is reached.
@@ -269,15 +315,30 @@ export class Lexer {
                 this.handleNewline();
             } else if (char === "/" && this.code[this.position + 1] === "/") {
                 this.extractComment();
-            } else if (char === "(" || char === ")") {
-                this.addToken(char === "(" ? TokenType.PARENTHESIS_OPEN : TokenType.PARENTHESIS_CLOSE, char);
+            } else if (char === "(") {
+                // Check for empty parentheses
+                this.handleOpenParen();
+            } else if (char === ")") {
+                this.addToken(TokenType.PARENTHESIS_CLOSE, char);
                 this.advance();
-            } else if (char === "[" || char === "]") {
-                this.addToken(char === "[" ? TokenType.BRACKET_OPEN : TokenType.BRACKET_CLOSE, char);
+            } else if (char === "[") {
+                // Check if this is a valid list initialization []
+                this.handleOpenBracket();
+            } else if (char === "]") {
+                // Standalone closing bracket - error unless we're in list init
+                this.addToken(TokenType.BRACKET_CLOSE, char);
                 this.advance();
             } else if (char === "{" || char === "}") {
-                this.addToken(char === "{" ? TokenType.BRACE_OPEN : TokenType.BRACE_CLOSE, char);
+                // Curly braces are not allowed
+                this.addError(
+                    ErrorCodes.INVALID_CURLY_BRACKET,
+                    `Curly braces '${char}' are not allowed in Scratch syntax.`,
+                    "Remove the curly braces. Use indentation and 'end' to define code blocks."
+                );
                 this.advance();
+            } else if (char === "<" || char === ">") {
+                // Check if this is a comparison operator or an invalid angle bracket
+                this.handleAngleBracket();
             } else if (char === ":") {
                 this.addToken(TokenType.COLON, char);
                 this.advance();
@@ -309,6 +370,91 @@ export class Lexer {
 
         // Return the array of tokens.
         return this.tokens;
+    }
+
+    // Handle open parenthesis - check for empty parens
+    private handleOpenParen(): void {
+        // Look ahead to check for empty parentheses
+        let lookAhead = this.position + 1;
+        while (lookAhead < this.code.length && [" ", "\t"].includes(this.code[lookAhead])) {
+            lookAhead++;
+        }
+        
+        if (lookAhead < this.code.length && this.code[lookAhead] === ")") {
+            this.addError(
+                ErrorCodes.EMPTY_PARENTHESES,
+                "Empty parentheses '()' are not allowed.",
+                "Parentheses should only be used for grouping math expressions, e.g., (a + b) * c"
+            );
+        }
+        
+        this.addToken(TokenType.PARENTHESIS_OPEN, "(");
+        this.advance();
+    }
+
+    // Handle open bracket - only allow for list initialization []
+    private handleOpenBracket(): void {
+        // Look ahead to see if this is []
+        let lookAhead = this.position + 1;
+        while (lookAhead < this.code.length && [" ", "\t"].includes(this.code[lookAhead])) {
+            lookAhead++;
+        }
+        
+        if (lookAhead < this.code.length && this.code[lookAhead] === "]") {
+            // This is [] - valid for list initialization
+            // Check if preceded by "list NAME ="
+            // For now, allow it and let the parser validate context
+            this.addToken(TokenType.BRACKET_OPEN, "[");
+            this.advance();
+        } else {
+            // This is [something] - not allowed
+            this.addError(
+                ErrorCodes.INVALID_BRACKET,
+                "Square brackets '[...]' are not allowed except for empty list initialization '[]'.",
+                "Use variable names directly without brackets. For example, use 'score' instead of '[score]'."
+            );
+            // Still add the token for parser recovery
+            this.addToken(TokenType.BRACKET_OPEN, "[");
+            this.advance();
+        }
+    }
+
+    // Handle angle brackets - distinguish between comparison operators and invalid brackets
+    private handleAngleBracket(): void {
+        const char = this.code[this.position];
+        const nextChar = this.peek();
+        
+        // Check if it's a comparison operator (could be followed by =)
+        if (nextChar === "=") {
+            // >= or <=
+            this.addToken(TokenType.OPERATOR, char + "=");
+            this.advance();
+            this.advance();
+        } else if (char === "<") {
+            // Could be < operator or <...> angle bracket
+            // Look ahead to see if there's a matching >
+            let depth = 1;
+            let lookAhead = this.position + 1;
+            let hasContent = false;
+            
+            while (lookAhead < this.code.length && depth > 0) {
+                if (this.code[lookAhead] === "<") depth++;
+                else if (this.code[lookAhead] === ">") depth--;
+                else if (this.code[lookAhead] === "\n") break;
+                else if (![" ", "\t"].includes(this.code[lookAhead])) hasContent = true;
+                lookAhead++;
+            }
+            
+            // If we found a matching > with content inside, it's probably meant as angle brackets
+            // For comparison, user should write: a < b (with spaces)
+            // But we'll be lenient and treat < as operator
+            this.addToken(TokenType.OPERATOR, char);
+            this.advance();
+        } else {
+            // > operator
+            this.addToken(TokenType.OPERATOR, char);
+            this.advance();
+        }
     }
 
     // Process indentation at the beginning of a line
@@ -354,7 +500,11 @@ export class Lexer {
 
             // Inconsistent indentation
             if (this.indentLevels[this.indentLevels.length - 1] !== spaces) {
-                throw new Error(`Inconsistent indentation at line ${this.line}`);
+                this.addError(
+                    ErrorCodes.INCONSISTENT_INDENT,
+                    `Inconsistent indentation. Expected ${this.indentLevels[this.indentLevels.length - 1]} spaces but got ${spaces}.`,
+                    "Make sure your indentation is consistent. Use the same number of spaces for each level."
+                );
             }
         }
     }
@@ -437,7 +587,11 @@ export class Lexer {
         if (this.position < this.code.length) {
             this.advance(); // Skip closing quote
         } else {
-            throw new Error(`Unterminated string at line ${this.line}, column ${this.column}`);
+            this.addError(
+                ErrorCodes.UNTERMINATED_STRING,
+                `Unterminated string. Missing closing quote.`,
+                `Add a closing ${quote} at the end of your string.`
+            );
         }
 
         this.addToken(TokenType.STRING, value);
@@ -490,14 +644,11 @@ export class Lexer {
     }
 
     // Extract an identifier or keyword - FIXED
+    // Also handles hyphenated keywords like 'mouse-pointer'
     private extractIdentifier(): void {
         // console.log("Starting identifier at:", this.code[this.position]);
         // console.log("Full code: \n", this.code);
         let value = "";
-
-        // Start with the current character - this was missing the first character
-        // value += this.code[this.position];
-        // this.advance();
 
         // Collect valid identifier characters (letters, digits, underscores)
         while (
@@ -510,12 +661,43 @@ export class Lexer {
             this.advance();
         }
 
+        // Check for hyphenated keywords like 'mouse-pointer'
+        // Look ahead to see if we have a hyphen followed by letters
+        if (this.position < this.code.length && this.code[this.position] === "-") {
+            const potentialHyphenatedWord = value + "-" + this.peekWord();
+            if (this.keywords.has(potentialHyphenatedWord) || Lexer.RESERVED_KEYWORDS.has(potentialHyphenatedWord)) {
+                // It's a hyphenated keyword, consume the rest
+                this.advance(); // consume the hyphen
+                value += "-";
+                while (
+                    this.position < this.code.length &&
+                    (this.isAlpha(this.code[this.position]) ||
+                        this.isNumeric(this.code[this.position]) ||
+                        this.code[this.position] === "_")
+                ) {
+                    value += this.code[this.position];
+                    this.advance();
+                }
+            }
+        }
+
         // Check if this is a keyword
         if (this.keywords.has(value)) {
             this.addToken(TokenType.KEYWORD, value);
         } else {
             this.addToken(TokenType.IDENTIFIER, value);
         }
+    }
+    
+    // Peek at the word after the current position without advancing
+    private peekWord(): string {
+        let word = "";
+        let pos = this.position + 1; // Start after the hyphen
+        while (pos < this.code.length && (this.isAlpha(this.code[pos]) || this.isNumeric(this.code[pos]) || this.code[pos] === "_")) {
+            word += this.code[pos];
+            pos++;
+        }
+        return word;
     }
 
     // Helper method to add a token to the tokens array

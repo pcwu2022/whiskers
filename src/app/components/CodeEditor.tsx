@@ -6,6 +6,8 @@ import * as monaco from "monaco-editor";
 import { languageDef, languageSelector, registerScratchTheme, toolboxCategories, ToolboxCategory, ToolboxCommand } from "@/lib/codeEditorConfig";
 import FileTabs from "./FileTabs";
 import ProjectToolbar from "./ProjectToolbar";
+import ProjectNameModal from "./ProjectNameModal";
+import ResizeDivider from "./ResizeDivider";
 import { Notification, useNotifications, Tooltip } from "./ui";
 import {
     ScratchProject,
@@ -16,6 +18,14 @@ import {
     LEGACY_CODE_KEY,
     DEFAULT_SPRITE_CODE,
 } from "@/types/projectTypes";
+import { CompilerError } from "@/types/compilerTypes";
+import {
+    initDB,
+    saveProject as saveProjectToDB,
+    loadCurrentProject,
+    migrateFromLocalStorage,
+    isIndexedDBAvailable,
+} from "@/lib/storage";
 
 type monacoType = typeof monaco;
 
@@ -29,83 +39,7 @@ function generateSpriteName(sprites: SpriteFile[]): string {
     return `Sprite${num}`;
 }
 
-// Project Name Modal Component
-function ProjectNameModal({
-    isOpen,
-    title,
-    message,
-    defaultValue,
-    onConfirm,
-    onCancel,
-}: {
-    isOpen: boolean;
-    title: string;
-    message?: string;
-    defaultValue: string;
-    onConfirm: (value: string) => void;
-    onCancel: () => void;
-}) {
-    const [value, setValue] = useState(defaultValue);
-    const inputRef = useRef<HTMLInputElement>(null);
-
-    useEffect(() => {
-        if (isOpen) {
-            setValue(defaultValue);
-            setTimeout(() => {
-                inputRef.current?.focus();
-                inputRef.current?.select();
-            }, 100);
-        }
-    }, [isOpen, defaultValue]);
-
-    if (!isOpen) return null;
-
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        if (value.trim()) {
-            onConfirm(value.trim());
-        }
-    };
-
-    return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100]">
-            <div className="bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4 shadow-xl border border-gray-600">
-                <h2 className="text-xl font-bold text-white mb-2">{title}</h2>
-                {message && <p className="text-gray-300 mb-4">{message}</p>}
-                
-                <form onSubmit={handleSubmit}>
-                    <input
-                        ref={inputRef}
-                        type="text"
-                        value={value}
-                        onChange={(e) => setValue(e.target.value)}
-                        placeholder="Enter project name"
-                        className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 mb-4"
-                    />
-                    
-                    <div className="flex gap-3 justify-end">
-                        {onCancel && (
-                            <button
-                                type="button"
-                                onClick={onCancel}
-                                className="px-4 py-2 text-sm bg-gray-700 text-gray-200 rounded hover:bg-gray-600 transition-colors"
-                            >
-                                Cancel
-                            </button>
-                        )}
-                        <button
-                            type="submit"
-                            disabled={!value.trim()}
-                            className="px-4 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                            OK
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    );
-}
+// ProjectNameModal and ResizeDivider have been moved to their own files
 
 export default function CodeEditor() {
     // Project state
@@ -118,16 +52,24 @@ export default function CodeEditor() {
     const [compiled, setCompiled] = useState(false);
     const [_running, setRunning] = useState(false);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
+    const [compilerErrors, setCompilerErrors] = useState<CompilerError[]>([]);
     const [htmlContent, setHtmlContent] = useState<string | null>(null);
     const [showPreview, setShowPreview] = useState(true);
     const [showCode, setShowCode] = useState(false);
+    const [showErrors, setShowErrors] = useState(false);
     const [autoStart, setAutoStart] = useState(false);
     const [isFullscreen, setIsFullscreen] = useState(false);
     const previewIframeRef = useRef<HTMLIFrameElement>(null);
+    const mainContentRef = useRef<HTMLDivElement>(null);
 
     // UI state for toolbox sidebar
     const [showToolbox, setShowToolbox] = useState(true); // Default open on page load
     const [expandedCategory, setExpandedCategory] = useState<string | null>("Events"); // Default expanded
+    
+    // Resizable panel widths
+    const [toolboxWidth, setToolboxWidth] = useState(256); // 16rem = 256px default
+    const [previewWidth, setPreviewWidth] = useState(50); // percentage
+    const [outputHeight, setOutputHeight] = useState(256); // 16rem = 256px default
     
     // Project name editing state
     const [isEditingName, setIsEditingName] = useState(false);
@@ -145,10 +87,36 @@ export default function CodeEditor() {
     const handleRunRef = useRef<() => void>(() => {});
     const monacoInstance = useMonaco();
 
-    // Load project from localStorage on mount
+    // Load project from IndexedDB on mount (with localStorage fallback/migration)
     useEffect(() => {
-        const loadProject = () => {
+        const loadProjectData = async () => {
             try {
+                // Initialize IndexedDB
+                if (isIndexedDBAvailable()) {
+                    await initDB();
+                    
+                    // Try to load from IndexedDB first
+                    let loadedProject = await loadCurrentProject();
+                    
+                    // If no project in IndexedDB, try to migrate from localStorage
+                    if (!loadedProject) {
+                        loadedProject = await migrateFromLocalStorage();
+                    }
+                    
+                    if (loadedProject) {
+                        // Migration: Ensure project has a backdrop/stage
+                        const hasBackdrop = loadedProject.sprites.some(s => s.isStage || s.type === 'backdrop');
+                        if (!hasBackdrop) {
+                            const backdrop = createSprite('Stage', 'backdrop');
+                            loadedProject.sprites.unshift(backdrop);
+                        }
+                        setProject(loadedProject);
+                        setIsLoaded(true);
+                        return;
+                    }
+                }
+                
+                // Fallback to localStorage if IndexedDB unavailable
                 const savedProject = localStorage.getItem(PROJECT_STORAGE_KEY);
                 if (savedProject) {
                     const parsed = JSON.parse(savedProject) as ScratchProject;
@@ -157,7 +125,7 @@ export default function CodeEditor() {
                     const hasBackdrop = parsed.sprites.some(s => s.isStage || s.type === 'backdrop');
                     if (!hasBackdrop) {
                         const backdrop = createSprite('Stage', 'backdrop');
-                        parsed.sprites.unshift(backdrop); // Add backdrop at beginning
+                        parsed.sprites.unshift(backdrop);
                     }
                     
                     setProject(parsed);
@@ -189,17 +157,24 @@ export default function CodeEditor() {
             }
             setIsLoaded(true);
         };
-        loadProject();
+        loadProjectData();
     }, []);
 
-    // Save project to localStorage whenever it changes
+    // Save project to IndexedDB whenever it changes (with localStorage backup)
     useEffect(() => {
         if (project && isLoaded) {
+            // Save to IndexedDB
+            if (isIndexedDBAvailable()) {
+                saveProjectToDB(project).catch(err => {
+                    console.error("Failed to save to IndexedDB:", err);
+                });
+            }
+            // Also save to localStorage as backup
             localStorage.setItem(PROJECT_STORAGE_KEY, JSON.stringify(project));
         }
     }, [project, isLoaded]);
 
-    // Auto-compile on first load to show preview immediately
+    // Compile once on initial load to show preview
     useEffect(() => {
         if (project && isLoaded && !compiled) {
             // Small delay to ensure everything is ready
@@ -208,7 +183,8 @@ export default function CodeEditor() {
             }, 100);
             return () => clearTimeout(timer);
         }
-    }, [project, isLoaded, compiled]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isLoaded]); // Only run once when loaded, not on every project change
 
     // Handle auto-start after recompile - send message to iframe when new content is loaded
     useEffect(() => {
@@ -569,15 +545,16 @@ export default function CodeEditor() {
     };
 
     // Compile all sprites
-    const handleCompile = async (): Promise<{ js: string; html: string }> => {
-        if (!project) return { js: "", html: "" };
+    const handleCompile = async (): Promise<{ js: string; html: string; success: boolean }> => {
+        if (!project) return { js: "", html: "", success: false };
 
         setLoading(true);
         setCompiledJsCode(null);
         setErrorMessage(null);
+        setCompilerErrors([]);
         // Don't clear htmlContent here - keep showing old preview until new one is ready
 
-        let retValue = { js: "", html: "" };
+        let retValue = { js: "", html: "", success: false };
 
         try {
             // Send all sprites to the compiler
@@ -595,14 +572,27 @@ export default function CodeEditor() {
                 }),
             });
 
-            if (!response.ok) {
-                throw new Error("Failed to compile");
-            }
-
             const data = await response.json();
-            setCompiledJsCode(data.js);
-            setHtmlContent(data.html || null);
-            retValue = data;
+            
+            // Handle errors from compilation
+            if (data.errors && data.errors.length > 0) {
+                setCompilerErrors(data.errors);
+                setShowErrors(true);
+                
+                // Also update Monaco editor with error markers
+                updateEditorMarkers(data.errors);
+            }
+            
+            if (data.success) {
+                setCompiledJsCode(data.js);
+                setHtmlContent(data.html || null);
+                retValue = { js: data.js, html: data.html, success: true };
+            } else {
+                // Compilation failed - show error message
+                const errorCount = data.errors?.length || 0;
+                setErrorMessage(`Compilation failed with ${errorCount} error${errorCount !== 1 ? 's' : ''}. Fix the errors and try again.`);
+                retValue = { js: "", html: "", success: false };
+            }
         } catch (error) {
             console.error("Error compiling:", error);
             setCompiledJsCode("Compilation failed.");
@@ -614,6 +604,41 @@ export default function CodeEditor() {
 
         return retValue;
     };
+
+    // Update Monaco editor markers based on compiler errors
+    const updateEditorMarkers = useCallback((errors: CompilerError[]) => {
+        if (!monacoInstance || !editorRef.current) return;
+        
+        const model = editorRef.current.getModel();
+        if (!model) return;
+        
+        // Convert compiler errors to Monaco markers
+        const markers: monaco.editor.IMarkerData[] = errors.map(err => ({
+            severity: err.severity === "error" 
+                ? monacoInstance.MarkerSeverity.Error 
+                : err.severity === "warning"
+                ? monacoInstance.MarkerSeverity.Warning
+                : monacoInstance.MarkerSeverity.Info,
+            message: err.message + (err.suggestion ? `\n💡 ${err.suggestion}` : ""),
+            startLineNumber: err.line,
+            startColumn: err.column,
+            endLineNumber: err.endLine || err.line,
+            endColumn: err.endColumn || err.column + 10,
+            code: err.code,
+        }));
+        
+        monacoInstance.editor.setModelMarkers(model, "scratch-compiler", markers);
+    }, [monacoInstance]);
+
+    // Clear markers when code changes
+    useEffect(() => {
+        if (monacoInstance && editorRef.current) {
+            const model = editorRef.current.getModel();
+            if (model) {
+                monacoInstance.editor.setModelMarkers(model, "scratch-compiler", []);
+            }
+        }
+    }, [currentCode, monacoInstance]);
 
     const handleRun = async () => {
         setRunning(true);
@@ -730,11 +755,14 @@ export default function CodeEditor() {
                         onProjectNameChange={handleProjectNameChange}
                         onNotify={handleNotify}
                     />
-                    <Tooltip content={showCode ? "Hide generated JavaScript" : "Show generated JavaScript"}>
+                    <Tooltip content={!compiled ? "Run code first to see output" : (showCode ? "Hide generated JavaScript" : "Show generated JavaScript")}>
                         <button
-                            onClick={() => compiled ? setShowCode(!showCode) : (() => {})()}
+                            onClick={() => compiled && compiledJsCode ? setShowCode(!showCode) : undefined}
+                            disabled={!compiled || !compiledJsCode}
                             className={`px-4 py-1.5 rounded font-medium text-sm transition-colors ${
-                                showCode
+                                !compiled || !compiledJsCode
+                                ? "bg-gray-700 text-gray-500 cursor-not-allowed"
+                                : showCode
                                 ? "bg-purple-800 text-white"
                                 : "bg-purple-900 hover:bg-purple-800 text-white"
                             }`}
@@ -746,87 +774,106 @@ export default function CodeEditor() {
             </div>
 
             {/* Main content area */}
-            <div className="flex-1 flex overflow-hidden">
+            <div className="flex-1 flex overflow-hidden" ref={mainContentRef}>
                 {/* Left sidebar - Toolbox with color-coded categories */}
                 {showToolbox && (
-                    <div className="w-64 bg-gray-900 border-r border-gray-700 flex flex-col overflow-hidden">
-                        {/* Toolbox scrollbar styles */}
-                        <style>{`
-                            .toolbox-scroll::-webkit-scrollbar {
-                                width: 6px;
-                            }
-                            .toolbox-scroll::-webkit-scrollbar-track {
-                                background: transparent;
-                            }
-                            .toolbox-scroll::-webkit-scrollbar-thumb {
-                                background: #4b5563;
-                                border-radius: 3px;
-                            }
-                            .toolbox-scroll::-webkit-scrollbar-thumb:hover {
-                                background: #6b7280;
-                            }
-                            .toolbox-scroll {
-                                scrollbar-width: thin;
-                                scrollbar-color: #4b5563 transparent;
-                            }
-                        `}</style>
-                        <div className="bg-gray-800 px-3 py-2 text-gray-300 text-sm border-b border-gray-700 font-medium flex items-center justify-between">
-                            <span>Toolbox</span>
-                            <button
-                                onClick={() => setShowToolbox(false)}
-                                className="text-gray-500 hover:text-gray-300 text-lg leading-none"
-                            >
-                                ×
-                            </button>
-                        </div>
-                        <div className="toolbox-scroll flex-1 overflow-y-auto">
-                            {toolboxCategories.map((category) => (
-                                <div key={category.name} className="border-b border-gray-800">
-                                    {/* Category Header */}
-                                    <button
-                                        onClick={() => setExpandedCategory(
-                                            expandedCategory === category.name ? null : category.name
+                    <>
+                        <div 
+                            className="bg-gray-900 flex flex-col overflow-hidden flex-shrink-0"
+                            style={{ width: `${toolboxWidth}px`, minWidth: "150px", maxWidth: "400px" }}
+                        >
+                            {/* Toolbox scrollbar styles */}
+                            <style>{`
+                                .toolbox-scroll::-webkit-scrollbar {
+                                    width: 6px;
+                                }
+                                .toolbox-scroll::-webkit-scrollbar-track {
+                                    background: transparent;
+                                }
+                                .toolbox-scroll::-webkit-scrollbar-thumb {
+                                    background: #4b5563;
+                                    border-radius: 3px;
+                                }
+                                .toolbox-scroll::-webkit-scrollbar-thumb:hover {
+                                    background: #6b7280;
+                                }
+                                .toolbox-scroll {
+                                    scrollbar-width: thin;
+                                    scrollbar-color: #4b5563 transparent;
+                                }
+                            `}</style>
+                            <div className="bg-gray-800 px-3 py-2 text-gray-300 text-sm border-b border-gray-700 font-medium flex items-center justify-between">
+                                <span>Toolbox</span>
+                                <button
+                                    onClick={() => setShowToolbox(false)}
+                                    className="text-gray-500 hover:text-gray-300 text-lg leading-none"
+                                >
+                                    ×
+                                </button>
+                            </div>
+                            <div className="toolbox-scroll flex-1 overflow-y-auto">
+                                {toolboxCategories.map((category) => (
+                                    <div key={category.name} className="border-b border-gray-800">
+                                        {/* Category Header */}
+                                        <button
+                                            onClick={() => setExpandedCategory(
+                                                expandedCategory === category.name ? null : category.name
+                                            )}
+                                            className="w-full px-3 py-2 flex items-center justify-between hover:bg-gray-800 transition-colors"
+                                            style={{ borderLeft: `4px solid ${category.color}` }}
+                                        >
+                                            <span className="text-sm font-medium" style={{ color: category.color }}>
+                                                {category.name}
+                                            </span>
+                                            <span className="text-gray-500 text-xs">
+                                                {expandedCategory === category.name ? "▼" : "▶"}
+                                            </span>
+                                        </button>
+                                        
+                                        {/* Category Commands */}
+                                        {expandedCategory === category.name && (
+                                            <div className="bg-gray-850 py-1">
+                                                {category.commands.map((command, idx) => (
+                                                    <button
+                                                        key={idx}
+                                                        onClick={() => insertToolboxCommand(command)}
+                                                        className="w-full px-4 py-1.5 text-left text-xs hover:bg-gray-700 transition-colors flex items-center gap-2 group"
+                                                        title={command.description}
+                                                    >
+                                                        <span
+                                                            className="w-2 h-2 rounded-full flex-shrink-0"
+                                                            style={{ backgroundColor: category.color }}
+                                                        />
+                                                        <span className="text-gray-300 group-hover:text-white truncate">
+                                                            {command.label}
+                                                        </span>
+                                                    </button>
+                                                ))}
+                                            </div>
                                         )}
-                                        className="w-full px-3 py-2 flex items-center justify-between hover:bg-gray-800 transition-colors"
-                                        style={{ borderLeft: `4px solid ${category.color}` }}
-                                    >
-                                        <span className="text-sm font-medium" style={{ color: category.color }}>
-                                            {category.name}
-                                        </span>
-                                        <span className="text-gray-500 text-xs">
-                                            {expandedCategory === category.name ? "▼" : "▶"}
-                                        </span>
-                                    </button>
-                                    
-                                    {/* Category Commands */}
-                                    {expandedCategory === category.name && (
-                                        <div className="bg-gray-850 py-1">
-                                            {category.commands.map((command, idx) => (
-                                                <button
-                                                    key={idx}
-                                                    onClick={() => insertToolboxCommand(command)}
-                                                    className="w-full px-4 py-1.5 text-left text-xs hover:bg-gray-700 transition-colors flex items-center gap-2 group"
-                                                    title={command.description}
-                                                >
-                                                    <span
-                                                        className="w-2 h-2 rounded-full flex-shrink-0"
-                                                        style={{ backgroundColor: category.color }}
-                                                    />
-                                                    <span className="text-gray-300 group-hover:text-white truncate">
-                                                        {command.label}
-                                                    </span>
-                                                </button>
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
-                            ))}
+                                    </div>
+                                ))}
+                            </div>
                         </div>
-                    </div>
+                        <ResizeDivider
+                            orientation="vertical"
+                            onResize={(delta) => {
+                                setToolboxWidth(prev => {
+                                    const newWidth = prev + delta;
+                                    // Snap close if dragged below threshold
+                                    if (newWidth < 100) {
+                                        setShowToolbox(false);
+                                        return 256; // Reset to default for next open
+                                    }
+                                    return Math.max(150, Math.min(400, newWidth));
+                                });
+                            }}
+                        />
+                    </>
                 )}
 
                 {/* Code Editor Panel */}
-                <div className={`flex flex-col ${showPreview ? "w-1/2" : "flex-1"} transition-all`}>
+                <div className="flex flex-col flex-1 min-w-0">
                     {/* File Tabs */}
                     <FileTabs
                         sprites={project.sprites}
@@ -870,14 +917,14 @@ export default function CodeEditor() {
                     </div>
                 </div>
 
-                {/* Preview Panel */}
+                {/* Preview Panel - Fixed width, not draggable */}
                 {showPreview && !isFullscreen && (
-                    <div className="w-1/2 flex flex-col border-l border-gray-700">
+                    <div className="w-1/3 flex flex-col border-l border-gray-700">
                         <div className="bg-gray-800 px-3 py-2 flex justify-between items-center border-b border-gray-700">
                             <span className="text-gray-400 text-sm">🎮 Preview</span>
                         </div>
                         <div className="flex-1 bg-gray-100">
-                            {htmlContent && (
+                            {htmlContent ? (
                                 <iframe
                                     ref={previewIframeRef}
                                     srcDoc={htmlContent.replace('__IS_FULLSCREEN__', 'false')}
@@ -885,6 +932,13 @@ export default function CodeEditor() {
                                     title="Preview"
                                     sandbox="allow-scripts"
                                 />
+                            ) : (
+                                <div className="w-full h-full flex items-center justify-center text-gray-500 bg-white">
+                                    <div className="text-center">
+                                        <div className="text-4xl mb-2">🚩</div>
+                                        <div>Click the green flag to run</div>
+                                    </div>
+                                </div>
                             )}
                         </div>
                     </div>
@@ -910,43 +964,131 @@ export default function CodeEditor() {
             {errorMessage && (
                 <div className="bg-red-900 border-t border-red-700 px-4 py-2 flex justify-between items-center">
                     <span className="text-red-200 text-sm">⚠ {errorMessage}</span>
-                    <button
-                        onClick={() => setErrorMessage(null)}
-                        className="text-red-400 hover:text-red-200"
-                    >
-                        ×
-                    </button>
-                </div>
-            )}
-
-            {/* Generated JS Code Panel (collapsible) */}
-            {showCode && compiledJsCode && (
-                <div className="h-64 border-t border-gray-700 flex flex-col">
-                    <div className="bg-gray-800 px-3 py-2 flex justify-between items-center border-b border-gray-700">
-                        <span className="text-gray-400 text-sm">📄 Generated JavaScript</span>
+                    <div className="flex items-center gap-2">
+                        {compilerErrors.length > 0 && (
+                            <button
+                                onClick={() => setShowErrors(!showErrors)}
+                                className="text-red-300 hover:text-white text-sm underline"
+                            >
+                                {showErrors ? "Hide Details" : "Show Details"}
+                            </button>
+                        )}
                         <button
-                            onClick={() => setShowCode(false)}
-                            className="text-gray-400 hover:text-white text-lg leading-none"
+                            onClick={() => {
+                                setErrorMessage(null);
+                                setShowErrors(false);
+                            }}
+                            className="text-red-400 hover:text-red-200"
                         >
                             ×
                         </button>
                     </div>
-                    <div className="flex-1">
-                        <Editor
-                            width="100%"
-                            height="100%"
-                            language="javascript"
-                            theme="scratch-dark"
-                            value={compiledJsCode}
-                            options={{
-                                readOnly: true,
-                                automaticLayout: true,
-                                minimap: { enabled: false },
-                                fontSize: 12,
-                            }}
-                        />
+                </div>
+            )}
+
+            {/* Detailed Error Panel */}
+            {showErrors && compilerErrors.length > 0 && (
+                <div className="max-h-48 border-t border-red-700 bg-gray-900 overflow-y-auto">
+                    <div className="px-3 py-2 bg-red-900/50 border-b border-red-800 flex justify-between items-center sticky top-0">
+                        <span className="text-red-300 text-sm font-medium">
+                            🐛 {compilerErrors.length} Error{compilerErrors.length !== 1 ? 's' : ''} Found
+                        </span>
+                        <button
+                            onClick={() => setShowErrors(false)}
+                            className="text-red-400 hover:text-white text-lg leading-none"
+                        >
+                            ×
+                        </button>
+                    </div>
+                    <div className="divide-y divide-gray-800">
+                        {compilerErrors.map((err, idx) => (
+                            <div 
+                                key={idx}
+                                className="px-4 py-3 hover:bg-gray-800/50 cursor-pointer transition-colors"
+                                onClick={() => {
+                                    // Jump to error location in editor
+                                    if (editorRef.current) {
+                                        editorRef.current.revealLineInCenter(err.line);
+                                        editorRef.current.setPosition({ lineNumber: err.line, column: err.column });
+                                        editorRef.current.focus();
+                                    }
+                                }}
+                            >
+                                <div className="flex items-start gap-3">
+                                    <span className={`mt-0.5 text-xs font-bold px-1.5 py-0.5 rounded ${
+                                        err.severity === "error" 
+                                            ? "bg-red-500/20 text-red-400" 
+                                            : err.severity === "warning"
+                                            ? "bg-yellow-500/20 text-yellow-400"
+                                            : "bg-blue-500/20 text-blue-400"
+                                    }`}>
+                                        {err.code}
+                                    </span>
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-gray-200 text-sm">{err.message}</p>
+                                        {err.suggestion && (
+                                            <p className="text-green-400 text-xs mt-1">
+                                                💡 {err.suggestion}
+                                            </p>
+                                        )}
+                                        <p className="text-gray-500 text-xs mt-1">
+                                            Line {err.line}, Column {err.column}
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
                     </div>
                 </div>
+            )}
+
+            {/* Generated JS Code Panel (collapsible and resizable) */}
+            {showCode && compiledJsCode && (
+                <>
+                    <ResizeDivider
+                        orientation="horizontal"
+                        onResize={(delta) => {
+                            setOutputHeight(prev => {
+                                const newHeight = prev - delta;
+                                // Snap close if dragged below threshold
+                                if (newHeight < 60) {
+                                    setShowCode(false);
+                                    return 256; // Reset to default for next open
+                                }
+                                return Math.max(100, Math.min(500, newHeight));
+                            });
+                        }}
+                    />
+                    <div 
+                        className="border-t border-gray-700 flex flex-col flex-shrink-0"
+                        style={{ height: `${outputHeight}px`, minHeight: "100px", maxHeight: "500px" }}
+                    >
+                        <div className="bg-gray-800 px-3 py-2 flex justify-between items-center border-b border-gray-700">
+                            <span className="text-gray-400 text-sm">📄 Generated JavaScript</span>
+                            <button
+                                onClick={() => setShowCode(false)}
+                                className="text-gray-400 hover:text-white text-lg leading-none"
+                            >
+                                ×
+                            </button>
+                        </div>
+                        <div className="flex-1">
+                            <Editor
+                                width="100%"
+                                height="100%"
+                                language="javascript"
+                                theme="scratch-dark"
+                                value={compiledJsCode}
+                                options={{
+                                    readOnly: true,
+                                    automaticLayout: true,
+                                    minimap: { enabled: false },
+                                    fontSize: 12,
+                                }}
+                            />
+                        </div>
+                    </div>
+                </>
             )}
         </div>
     );

@@ -1,45 +1,45 @@
 /**
  * Test Cases: Event Blocks
- * Tests: when flagClicked, when key pressed, broadcast, when I receive
+ * Tests: when green flag clicked, when key pressed, broadcast, when I receive
  */
 
 import { ScratchTextCompiler } from '../src/lib/compiler';
 
 const testCases = [
     {
-        name: "when flagClicked",
-        code: `when flagClicked
+        name: "when green flag clicked",
+        code: `when green flag clicked
     say "Started!"
 `,
-        expectContains: ["whenFlagClicked", "say"]
+        expectContains: ["onGreenFlag", "say"]
     },
     {
         name: "when key pressed",
-        code: `when [space] key pressed
-    move 10
+        code: `when space key pressed
+    move 10 steps
 `,
-        expectContains: ["whenKeyPressed", "space"]
+        expectContains: ["onEvent", "keyPressed_space", "move"]
     },
     {
         name: "when this sprite clicked",
         code: `when this sprite clicked
     say "Clicked!"
 `,
-        expectContains: ["whenSpriteClicked"]
+        expectContains: ["onSpriteClicked", "say"]
     },
     {
         name: "broadcast and receive",
-        code: `when flagClicked
+        code: `when green flag clicked
     broadcast "start"
 
 when I receive "start"
     say "Received!"
 `,
-        expectContains: ["broadcast", "whenReceived", "start"]
+        expectContains: ["broadcast", "onBroadcast", "start"]
     },
     {
         name: "broadcast and wait",
-        code: `when flagClicked
+        code: `when green flag clicked
     broadcast "message" and wait
     say "Done waiting"
 `,
@@ -56,15 +56,16 @@ let failed = 0;
 for (const test of testCases) {
     const result = compiler.compile(test.code);
     const allFound = test.expectContains.every(str => result.js.includes(str));
+    const hasError = result.errors && result.errors.some(e => e.severity === "error");
     
-    if (allFound && !result.error) {
+    if (allFound && !hasError) {
         console.log(`✅ PASS: ${test.name}`);
         passed++;
     } else {
         console.log(`❌ FAIL: ${test.name}`);
         console.log(`   Expected to contain: ${test.expectContains.join(", ")}`);
         console.log(`   Output: ${result.js.substring(0, 200)}...`);
-        if (result.error) console.log(`   Error: ${result.error}`);
+        if (hasError) console.log(`   Errors: ${result.errors.map(e => e.message).join(", ")}`);
         failed++;
     }
 }

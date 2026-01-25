@@ -50,34 +50,34 @@ export const BACKDROP_NAME = "Stage";
 export const DEFAULT_SPRITE_CODE = `// Welcome to CatScript Playground! 🐱
 // Click the green flag to see this code in action
 
-when flagClicked
+when green flag clicked
     say "Hello! Watch me dance!"
-    wait 1
+    wait 1 seconds
     repeat 4
-        move 50
-        turn right 90
-        wait 0.3
+        move 50 steps
+        turn right 90 degrees
+        wait 0.3 seconds
 
 // Keyboard controls - try pressing these keys!
-when keyPressed space
+when space key pressed
     say "You pressed space!"
 
-when keyPressed up
-    move 20
+when up arrow key pressed
+    move 20 steps
 
-when keyPressed down
-    move -20
+when down arrow key pressed
+    move -20 steps
 
-when keyPressed left
-    turn left 15
+when left arrow key pressed
+    turn left 15 degrees
 
-when keyPressed right
-    turn right 15
+when right arrow key pressed
+    turn right 15 degrees
 `;
 
 // Default initial code for backdrop/stage
 export const DEFAULT_BACKDROP_CODE = `// Stage scripts go here
-when flagClicked
+when green flag clicked
     // Stage initialization
 `;
 
@@ -94,7 +94,7 @@ export function createCostume(name: string): Costume {
 
 // Empty code for additional sprites
 export const EMPTY_SPRITE_CODE = `// Add your code here
-when flagClicked
+when green flag clicked
     // Your code goes here
 `;
 

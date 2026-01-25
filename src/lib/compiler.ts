@@ -6,12 +6,26 @@ import { Lexer } from "./lexer";
 import { Parser } from "./parser";
 import { CodeGenerator, MultiSpriteCodeGenerator } from "./codeGenerator";
 import Debugger from "./debugger";
+import { CompilerError } from "@/types/compilerTypes";
 
 // Sprite input for multi-sprite compilation
 interface SpriteInput {
     name: string;
     code: string;
     isStage?: boolean;
+}
+
+// Compilation result interface
+interface CompilationResult {
+    js: string;
+    html: string;
+    errors: CompilerError[];
+    success: boolean;
+}
+
+// Multi-sprite compilation result
+interface MultiSpriteCompilationResult extends CompilationResult {
+    parsedSprites: unknown;
 }
 
 // Main compiler class
@@ -26,49 +40,75 @@ export class ScratchTextCompiler {
             filePath: "src/debug/compilerOutput.json",
         });
     }
+    
     // compile: Main method that takes Scratch-like text code as input and returns JavaScript code.
-    compile(code: string): { js: string; html: string; error?: string } {
+    compile(code: string): CompilationResult {
+        const allErrors: CompilerError[] = [];
+        
         try {
             // Step 1: Tokenize the input using the Lexer.
-            // The Lexer converts the raw text input into an array of tokens,
-            // which are the basic building blocks of the programming language.
             const lexer = new Lexer(code);
             const tokens = lexer.tokenize();
+            
+            // Collect lexer errors
+            allErrors.push(...lexer.getErrors());
 
             this.debugger.log("info", "Lexer output (tokens) ", tokens);
 
             // Step 2: Parse tokens into an Abstract Syntax Tree (AST) using the Parser.
-            // The Parser takes the tokens and constructs an AST, which represents the
-            // structure of the program in a hierarchical format.
             const parser = new Parser(tokens);
             const program = parser.parse();
+            
+            // Collect parser errors
+            allErrors.push(...parser.getErrors());
 
             this.debugger.log("info", "Parser output (program) ", program);
 
+            // If there are errors, don't generate code
+            if (allErrors.some(e => e.severity === "error")) {
+                return {
+                    js: "",
+                    html: "",
+                    errors: allErrors,
+                    success: false,
+                };
+            }
+
             // Step 3: Generate JavaScript code from the AST using the CodeGenerator.
-            // The CodeGenerator traverses the AST and produces JavaScript code that
-            // corresponds to the original Scratch-like input.
             const generator = new CodeGenerator(program);
             const jsCode = generator.generate();
 
             this.debugger.log("info", "Generator output (jsCode) ", jsCode);
 
             // Return the generated JavaScript code.
-            return jsCode;
+            return {
+                ...jsCode,
+                errors: allErrors,
+                success: true,
+            };
         } catch (error) {
             // Handle any errors that occur during compilation.
             console.error("Compilation error:", error);
-            // Return an error message as a comment in the JavaScript output.
+            allErrors.push({
+                code: "E999",
+                message: error instanceof Error ? error.message : String(error),
+                line: 1,
+                column: 1,
+                severity: "error",
+            });
             return {
                 js: "",
                 html: "",
-                error: `// Compilation error: ${error instanceof Error ? error.message : String(error)}`,
+                errors: allErrors,
+                success: false,
             };
         }
     }
 
     // compileMultiSprite: Compile multiple sprites into a single program
-    compileMultiSprite(sprites: SpriteInput[]): { js: string; html: string; parsedSprites: unknown; error?: string } {
+    compileMultiSprite(sprites: SpriteInput[]): MultiSpriteCompilationResult {
+        const allErrors: CompilerError[] = [];
+        
         try {
             const parsedSprites: { name: string; program: ReturnType<Parser["parse"]>; isStage?: boolean }[] = [];
 
@@ -76,8 +116,25 @@ export class ScratchTextCompiler {
             for (const sprite of sprites) {
                 const lexer = new Lexer(sprite.code);
                 const tokens = lexer.tokenize();
+                
+                // Collect lexer errors with sprite context
+                lexer.getErrors().forEach(err => {
+                    allErrors.push({
+                        ...err,
+                        message: `[${sprite.name}] ${err.message}`,
+                    });
+                });
+                
                 const parser = new Parser(tokens);
                 const program = parser.parse();
+                
+                // Collect parser errors with sprite context
+                parser.getErrors().forEach(err => {
+                    allErrors.push({
+                        ...err,
+                        message: `[${sprite.name}] ${err.message}`,
+                    });
+                });
 
                 this.debugger.log("info", `Parsed sprite: ${sprite.name}`, program);
 
@@ -88,20 +145,44 @@ export class ScratchTextCompiler {
                 });
             }
 
+            // If there are errors, don't generate code
+            if (allErrors.some(e => e.severity === "error")) {
+                return {
+                    js: "",
+                    html: "",
+                    errors: allErrors,
+                    parsedSprites: [],
+                    success: false,
+                };
+            }
+
             // Generate combined JavaScript code
             const generator = new MultiSpriteCodeGenerator(parsedSprites);
             const jsCode = generator.generate();
 
             this.debugger.log("info", "Multi-sprite generator output", jsCode);
 
-            return { ...jsCode, parsedSprites };
+            return {
+                ...jsCode,
+                errors: allErrors,
+                parsedSprites,
+                success: true,
+            };
         } catch (error) {
             console.error("Multi-sprite compilation error:", error);
+            allErrors.push({
+                code: "E999",
+                message: error instanceof Error ? error.message : String(error),
+                line: 1,
+                column: 1,
+                severity: "error",
+            });
             return {
                 js: "",
                 html: "",
+                errors: allErrors,
                 parsedSprites: [],
-                error: `// Compilation error: ${error instanceof Error ? error.message : String(error)}`,
+                success: false,
             };
         }
     }
@@ -109,34 +190,59 @@ export class ScratchTextCompiler {
 
 // compile: Asynchronous function that wraps the compiler and handles potential errors.
 // This function is designed to be used in an asynchronous context, such as in a web environment.
-export async function compile(code: string): Promise<{ js: string; html: string } | { error: string }> {
+export async function compile(code: string): Promise<CompilationResult> {
     try {
         // Create an instance of the ScratchTextCompiler.
         const compiler = new ScratchTextCompiler();
         // Call the compile method to generate JavaScript code.
-        const { js, html } = compiler.compile(code);
-        // Return the generated code in a result object.
-        return { js: js, html: html };
+        return compiler.compile(code);
     } catch (error) {
         // Handle any errors that occur during the compilation process.
         console.error("Error in compile function:", error);
         // Return an error object indicating compilation failure.
-        return { error: "Compilation failed in compiler function." };
+        return {
+            js: "",
+            html: "",
+            errors: [{
+                code: "E999",
+                message: "Compilation failed in compiler function.",
+                line: 1,
+                column: 1,
+                severity: "error",
+            }],
+            success: false,
+        };
     }
 }
 
 // compileMultiSprite: Compile multiple sprites
-export async function compileMultiSprite(sprites: SpriteInput[], debug?: boolean): Promise<{ js: string; html: string; debugInfo?: unknown } | { error: string }> {
+export async function compileMultiSprite(sprites: SpriteInput[], debug?: boolean): Promise<MultiSpriteCompilationResult> {
     try {
         const compiler = new ScratchTextCompiler();
-        const { js, html, parsedSprites } = compiler.compileMultiSprite(sprites);
+        const result = compiler.compileMultiSprite(sprites);
         
-        if (debug) {
-            return { js, html, debugInfo: { parsedSprites } };
+        if (!debug) {
+            // Remove parsedSprites from result if not debugging
+            return { ...result, parsedSprites: undefined };
         }
-        return { js, html };
+        return result;
     } catch (error) {
         console.error("Error in compileMultiSprite function:", error);
-        return { error: "Multi-sprite compilation failed." };
+        return {
+            js: "",
+            html: "",
+            errors: [{
+                code: "E999",
+                message: "Multi-sprite compilation failed.",
+                line: 1,
+                column: 1,
+                severity: "error",
+            }],
+            parsedSprites: [],
+            success: false,
+        };
     }
 }
+
+// Export types for consumers
+export type { CompilationResult, MultiSpriteCompilationResult, SpriteInput, CompilerError };
