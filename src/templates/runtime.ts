@@ -15,6 +15,7 @@ const scratchRuntime = {
     },
     currentSprite: 'Sprite1',
     variables: {},
+    variableDisplays: {},  // Track variable display elements and their positions
     lists: {},
     procedures: {},
     events: {},
@@ -42,6 +43,7 @@ const scratchRuntime = {
             rotationStyle: options.rotationStyle || 'all around',
             draggable: options.draggable || false,
             costumes: options.costumes || ['costume1'],
+            costumeUrls: options.costumeUrls || [],
             currentCostume: options.currentCostume || 0,
             effects: {
                 color: 0,
@@ -210,10 +212,12 @@ const scratchRuntime = {
                     if (idx >= 0) this.currentCostume = idx;
                 }
                 console.log(name + ' switched to costume: ' + this.costumes[this.currentCostume]);
+                self.updateSpriteCostume(name);
             },
             nextCostume: function() {
                 this.currentCostume = (this.currentCostume + 1) % this.costumes.length;
                 console.log(name + ' switched to costume: ' + this.costumes[this.currentCostume]);
+                self.updateSpriteCostume(name);
             },
             goToFrontLayer: function() {
                 const maxLayer = Object.keys(self.sprites).length;
@@ -281,14 +285,57 @@ const scratchRuntime = {
         const sprite = this.sprites[name];
         const spriteDiv = document.getElementById('sprite-' + name);
         if (spriteDiv && sprite) {
-            spriteDiv.style.left = (sprite.x + this.stage.width/2 - 15) + 'px';
-            spriteDiv.style.bottom = (sprite.y + this.stage.height/2 - 15) + 'px';
+            // Get actual dimensions (for costume images)
+            const width = spriteDiv.offsetWidth || 30;
+            const height = spriteDiv.offsetHeight || 30;
+            spriteDiv.style.left = (sprite.x + this.stage.width/2 - width/2) + 'px';
+            spriteDiv.style.bottom = (sprite.y + this.stage.height/2 - height/2) + 'px';
         }
         // Also update speech bubble position if it exists
         const bubble = document.getElementById('speech-' + name);
         if (bubble && sprite) {
             bubble.style.left = (sprite.x + this.stage.width/2 + 20) + 'px';
             bubble.style.bottom = (sprite.y + this.stage.height/2 + 30) + 'px';
+        }
+    },
+
+    // Update sprite costume
+    updateSpriteCostume: function(name) {
+        const sprite = this.sprites[name];
+        const spriteDiv = document.getElementById('sprite-' + name);
+        if (!spriteDiv || !sprite) return;
+        
+        const hasImage = sprite.costumeUrls && sprite.costumeUrls.length > 0 && sprite.costumeUrls[sprite.currentCostume];
+        
+        if (hasImage) {
+            // Update existing image or create new one
+            let img = spriteDiv.querySelector('.sprite-costume');
+            if (!img) {
+                // Create image if it doesn't exist (sprite was using fallback)
+                img = document.createElement('img');
+                img.className = 'sprite-costume';
+                img.style.pointerEvents = 'none';
+                img.style.userSelect = 'none';
+                img.draggable = false;
+                spriteDiv.innerHTML = '';  // Clear fallback content
+                spriteDiv.style.backgroundColor = 'transparent';
+                spriteDiv.style.borderRadius = '0';
+                spriteDiv.appendChild(img);
+            }
+            
+            const self = this;
+            img.onload = function() {
+                const width = img.naturalWidth * (sprite.size / 100);
+                const height = img.naturalHeight * (sprite.size / 100);
+                spriteDiv.style.width = width + 'px';
+                spriteDiv.style.height = height + 'px';
+                img.style.width = width + 'px';
+                img.style.height = height + 'px';
+                img.style.maxWidth = 'none';
+                img.style.maxHeight = 'none';
+                self.updateSpritePosition(name);
+            };
+            img.src = sprite.costumeUrls[sprite.currentCostume];
         }
     },
 
@@ -407,65 +454,112 @@ const scratchRuntime = {
         const sprite = this.sprites[name];
         if (!sprite) return;
         
-        // Use different colors for different sprites
+        // Use different colors for different sprites (fallback when no costume image)
         const colors = ['#ff6b6b', '#4ecdc4', '#ffe66d', '#95e1d3', '#f38181', '#aa96da', '#fcbad3', '#a8d8ea'];
         const colorIndex = Object.keys(this.sprites).indexOf(name) % colors.length;
         
         const spriteDiv = document.createElement('div');
         spriteDiv.id = 'sprite-' + name;
         spriteDiv.style.position = 'absolute';
-        spriteDiv.style.width = '30px';
-        spriteDiv.style.height = '30px';
-        spriteDiv.style.backgroundColor = colors[colorIndex];
-        spriteDiv.style.borderRadius = '50%';
-        spriteDiv.style.left = (sprite.x + this.stage.width/2 - 15) + 'px';
-        spriteDiv.style.bottom = (sprite.y + this.stage.height/2 - 15) + 'px';
-        spriteDiv.style.transform = 'rotate(0deg)';
-        spriteDiv.style.transition = 'left 0.05s, bottom 0.05s';
         spriteDiv.style.display = sprite.visible ? 'flex' : 'none';
         spriteDiv.style.alignItems = 'center';
         spriteDiv.style.justifyContent = 'center';
-        spriteDiv.style.fontSize = '10px';
-        spriteDiv.style.fontWeight = 'bold';
-        spriteDiv.style.color = 'white';
-        spriteDiv.style.textShadow = '0 0 2px black';
-        spriteDiv.style.cursor = sprite.draggable ? 'grab' : 'default';
+        spriteDiv.style.cursor = 'grab';  // Always show grab cursor (draggable when not running)
         spriteDiv.style.zIndex = sprite.layer || 1;
-        spriteDiv.textContent = name.charAt(0);
+        spriteDiv.style.transformOrigin = 'center center';
         
-        // Make draggable if enabled
-        if (sprite.draggable) {
-            const self = this;
-            let isDragging = false;
-            let dragOffsetX = 0;
-            let dragOffsetY = 0;
+        // Check if sprite has costume images
+        const hasImage = sprite.costumeUrls && sprite.costumeUrls.length > 0 && sprite.costumeUrls[sprite.currentCostume];
+        
+        if (hasImage) {
+            // Create image element for costume
+            const img = document.createElement('img');
+            img.className = 'sprite-costume';
+            img.src = sprite.costumeUrls[sprite.currentCostume];
+            img.style.maxWidth = '100px';
+            img.style.maxHeight = '100px';
+            img.style.pointerEvents = 'none';
+            img.style.userSelect = 'none';
+            img.draggable = false;
+            spriteDiv.appendChild(img);
             
-            spriteDiv.addEventListener('mousedown', function(e) {
-                if (self.dragMode === 'draggable' || sprite.draggable) {
-                    isDragging = true;
-                    dragOffsetX = e.clientX - spriteDiv.getBoundingClientRect().left - 15;
-                    dragOffsetY = e.clientY - spriteDiv.getBoundingClientRect().top - 15;
-                    spriteDiv.style.cursor = 'grabbing';
-                }
-            });
+            // Wait for image to load to get dimensions
+            img.onload = () => {
+                const width = img.naturalWidth * (sprite.size / 100);
+                const height = img.naturalHeight * (sprite.size / 100);
+                spriteDiv.style.width = width + 'px';
+                spriteDiv.style.height = height + 'px';
+                img.style.width = width + 'px';
+                img.style.height = height + 'px';
+                img.style.maxWidth = 'none';
+                img.style.maxHeight = 'none';
+                // Update position based on actual size
+                spriteDiv.style.left = (sprite.x + this.stage.width/2 - width/2) + 'px';
+                spriteDiv.style.bottom = (sprite.y + this.stage.height/2 - height/2) + 'px';
+            };
             
-            document.addEventListener('mousemove', function(e) {
-                if (isDragging) {
-                    const stageDiv = document.getElementById('stage');
-                    const rect = stageDiv.getBoundingClientRect();
-                    // Account for scaling when converting mouse to sprite coordinates
-                    const scale = stageDiv.clientWidth / 480;
-                    sprite.x = ((e.clientX - rect.left) / scale - self.stage.width/2) - dragOffsetX;
-                    sprite.y = (self.stage.height/2 - (e.clientY - rect.top) / scale) + dragOffsetY;
-                    self.updateSpritePosition(name);
-                }
-            });
-            
-            document.addEventListener('mouseup', function() {
+            // Initial position (will be updated when image loads)
+            spriteDiv.style.left = (sprite.x + this.stage.width/2 - 50) + 'px';
+            spriteDiv.style.bottom = (sprite.y + this.stage.height/2 - 50) + 'px';
+        } else {
+            // Fallback: colored circle with letter
+            spriteDiv.style.width = '30px';
+            spriteDiv.style.height = '30px';
+            spriteDiv.style.backgroundColor = colors[colorIndex];
+            spriteDiv.style.borderRadius = '50%';
+            spriteDiv.style.left = (sprite.x + this.stage.width/2 - 15) + 'px';
+            spriteDiv.style.bottom = (sprite.y + this.stage.height/2 - 15) + 'px';
+            spriteDiv.style.fontSize = '10px';
+            spriteDiv.style.fontWeight = 'bold';
+            spriteDiv.style.color = 'white';
+            spriteDiv.style.textShadow = '0 0 2px black';
+            spriteDiv.textContent = name.charAt(0);
+        }
+        
+        spriteDiv.style.transform = 'rotate(0deg)';
+        spriteDiv.style.transition = 'left 0.05s, bottom 0.05s';
+        
+        // Make draggable - when not running, all sprites can be dragged
+        // When running, only sprites with draggable=true can be dragged
+        const self = this;
+        let isDragging = false;
+        let dragOffsetX = 0;
+        let dragOffsetY = 0;
+        
+        spriteDiv.addEventListener('mousedown', function(e) {
+            // Allow dragging if: not running, OR (running AND sprite.draggable is true)
+            const canDrag = !self.running || sprite.draggable || self.dragMode === 'draggable';
+            if (canDrag) {
+                isDragging = true;
+                dragOffsetX = e.clientX - spriteDiv.getBoundingClientRect().left - 15;
+                dragOffsetY = e.clientY - spriteDiv.getBoundingClientRect().top - 15;
+                spriteDiv.style.cursor = 'grabbing';
+                e.stopPropagation(); // Prevent stage click event
+            }
+        });
+        
+        document.addEventListener('mousemove', function(e) {
+            if (isDragging) {
+                const stageDiv = document.getElementById('stage');
+                const rect = stageDiv.getBoundingClientRect();
+                // Account for scaling when converting mouse to sprite coordinates
+                const scale = stageDiv.clientWidth / 480;
+                sprite.x = ((e.clientX - rect.left) / scale - self.stage.width/2) - dragOffsetX;
+                sprite.y = (self.stage.height/2 - (e.clientY - rect.top) / scale) + dragOffsetY;
+                self.updateSpritePosition(name);
+            }
+        });
+        
+        document.addEventListener('mouseup', function() {
+            if (isDragging) {
                 isDragging = false;
                 spriteDiv.style.cursor = 'grab';
-            });
-        }
+                // Log position after drag (only when not running, as that's when user is positioning)
+                if (!self.running) {
+                    console.log('📍 ' + name + ' moved to x: ' + Math.round(sprite.x) + ', y: ' + Math.round(sprite.y));
+                }
+            }
+        });
         
         stageContent.appendChild(spriteDiv);
     },
@@ -485,6 +579,7 @@ const scratchRuntime = {
             size: original.size,
             rotationStyle: original.rotationStyle,
             costumes: original.costumes.slice(),
+            costumeUrls: original.costumeUrls ? original.costumeUrls.slice() : [],
             currentCostume: original.currentCostume,
             isClone: true,
             cloneOf: spriteName
@@ -695,6 +790,121 @@ const scratchRuntime = {
             this.events[event] = [];
         }
         this.events[event].push(callback);
+    },
+
+    // Variable display management
+    nextVarDisplayY: 10,  // Track Y position for stacking variable displays
+    
+    createVariableDisplay: function(varName) {
+        const self = this;
+        const stageContent = document.getElementById('stage-content');
+        if (!stageContent) return;
+        
+        // Don't create if already exists
+        if (document.getElementById('var-' + varName)) return;
+        
+        const display = document.createElement('div');
+        display.id = 'var-' + varName;
+        display.className = 'scratch-variable-display';
+        display.style.position = 'absolute';
+        display.style.left = '10px';
+        display.style.top = this.nextVarDisplayY + 'px';
+        display.style.backgroundColor = 'rgba(255, 140, 0, 0.9)';
+        display.style.color = 'white';
+        display.style.padding = '4px 10px';
+        display.style.borderRadius = '12px';
+        display.style.fontSize = '12px';
+        display.style.fontFamily = 'sans-serif';
+        display.style.fontWeight = 'bold';
+        display.style.cursor = 'grab';
+        display.style.userSelect = 'none';
+        display.style.zIndex = '500';
+        display.style.boxShadow = '0 2px 4px rgba(0,0,0,0.2)';
+        display.style.minWidth = '60px';
+        display.innerHTML = '<span class="var-name">' + varName + '</span>: <span class="var-value">' + (this.variables[varName] !== undefined ? this.variables[varName] : 0) + '</span>';
+        
+        // Store position info
+        this.variableDisplays[varName] = { x: 10, y: this.nextVarDisplayY, visible: true };
+        this.nextVarDisplayY += 28;  // Stack next variable below
+        
+        // Make draggable
+        let isDragging = false;
+        let dragOffsetX = 0;
+        let dragOffsetY = 0;
+        
+        display.addEventListener('mousedown', function(e) {
+            isDragging = true;
+            const rect = display.getBoundingClientRect();
+            dragOffsetX = e.clientX - rect.left;
+            dragOffsetY = e.clientY - rect.top;
+            display.style.cursor = 'grabbing';
+            e.stopPropagation();
+        });
+        
+        document.addEventListener('mousemove', function(e) {
+            if (isDragging) {
+                const stageContentRect = stageContent.getBoundingClientRect();
+                const scale = stageContent.parentElement.clientWidth / 480;
+                const newX = (e.clientX - stageContentRect.left) / scale - dragOffsetX;
+                const newY = (e.clientY - stageContentRect.top) / scale - dragOffsetY;
+                display.style.left = newX + 'px';
+                display.style.top = newY + 'px';
+                self.variableDisplays[varName].x = newX;
+                self.variableDisplays[varName].y = newY;
+            }
+        });
+        
+        document.addEventListener('mouseup', function() {
+            if (isDragging) {
+                isDragging = false;
+                display.style.cursor = 'grab';
+            }
+        });
+        
+        stageContent.appendChild(display);
+    },
+    
+    updateVariableDisplay: function(varName) {
+        const display = document.getElementById('var-' + varName);
+        if (display) {
+            const valueSpan = display.querySelector('.var-value');
+            if (valueSpan) {
+                valueSpan.textContent = this.variables[varName] !== undefined ? this.variables[varName] : 0;
+            }
+        }
+    },
+    
+    showVariableDisplay: function(varName) {
+        const display = document.getElementById('var-' + varName);
+        if (display) {
+            display.style.display = 'block';
+            this.variableDisplays[varName].visible = true;
+        } else {
+            // Create if doesn't exist
+            this.createVariableDisplay(varName);
+        }
+    },
+    
+    hideVariableDisplay: function(varName) {
+        const display = document.getElementById('var-' + varName);
+        if (display) {
+            display.style.display = 'none';
+            if (this.variableDisplays[varName]) {
+                this.variableDisplays[varName].visible = false;
+            }
+        }
+    },
+    
+    // Set variable with automatic display update
+    setVariable: function(varName, value) {
+        this.variables[varName] = value;
+        this.updateVariableDisplay(varName);
+    },
+    
+    // Change variable with automatic display update
+    changeVariable: function(varName, delta) {
+        this.variables[varName] = Number(this.variables[varName] || 0) + Number(delta);
+        this.updateVariableDisplay(varName);
     },
 
     // Wait for seconds

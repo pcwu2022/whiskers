@@ -85,6 +85,13 @@ export class Parser {
         return this.current.type === type;
     }
 
+    // Check if the current token matches the type and value
+    // This helper avoids TypeScript type narrowing issues
+    private matchKeyword(value: string): boolean {
+        if (this.isAtEnd()) return false;
+        return this.current.type === TokenType.KEYWORD && this.current.value === value;
+    }
+
     // Consume a token if it matches the expected type, otherwise throw an error
     private consume(type: TokenType, errorMessage: string): Token {
         if (this.match(type)) {
@@ -461,7 +468,7 @@ export class Parser {
                             } else if (nextWord === "random") {
                                 this.advance(); // Consume 'random'
                                 this.skipIrrelevant();
-                                if (!this.isAtEnd() && this.match(TokenType.KEYWORD) && this.current.value === "position") {
+                                if (!this.isAtEnd() && this.matchKeyword("position")) {
                                     this.advance(); // Consume 'position'
                                 }
                                 blockKeyword = "goToRandom";
@@ -471,14 +478,14 @@ export class Parser {
                             } else if (nextWord === "front") {
                                 this.advance(); // Consume 'front'
                                 this.skipIrrelevant();
-                                if (!this.isAtEnd() && this.match(TokenType.KEYWORD) && this.current.value === "layer") {
+                                if (!this.isAtEnd() && this.matchKeyword("layer")) {
                                     this.advance(); // Consume 'layer'
                                 }
                                 blockKeyword = "goToFront";
                             } else if (nextWord === "back") {
                                 this.advance(); // Consume 'back'
                                 this.skipIrrelevant();
-                                if (!this.isAtEnd() && this.match(TokenType.KEYWORD) && this.current.value === "layer") {
+                                if (!this.isAtEnd() && this.matchKeyword("layer")) {
                                     this.advance(); // Consume 'layer'
                                 }
                                 blockKeyword = "goToBack";
@@ -516,7 +523,7 @@ export class Parser {
                 if (nextWord === "in") {
                     this.advance(); // Consume 'in'
                     this.skipIrrelevant();
-                    if (!this.isAtEnd() && this.match(TokenType.KEYWORD) && this.current.value === "direction") {
+                    if (!this.isAtEnd() && this.matchKeyword("direction")) {
                         this.advance(); // Consume 'direction'
                     }
                     blockKeyword = "pointInDirection";
@@ -533,28 +540,28 @@ export class Parser {
                 if (nextWord === "x") {
                     this.advance(); // Consume 'x'
                     this.skipIrrelevant();
-                    if (!this.isAtEnd() && this.match(TokenType.KEYWORD) && this.current.value === "to") {
+                    if (!this.isAtEnd() && this.matchKeyword("to")) {
                         this.advance(); // Consume 'to'
                     }
                     blockKeyword = "setX";
                 } else if (nextWord === "y") {
                     this.advance(); // Consume 'y'
                     this.skipIrrelevant();
-                    if (!this.isAtEnd() && this.match(TokenType.KEYWORD) && this.current.value === "to") {
+                    if (!this.isAtEnd() && this.matchKeyword("to")) {
                         this.advance(); // Consume 'to'
                     }
                     blockKeyword = "setY";
                 } else if (nextWord === "size") {
                     this.advance(); // Consume 'size'
                     this.skipIrrelevant();
-                    if (!this.isAtEnd() && this.match(TokenType.KEYWORD) && this.current.value === "to") {
+                    if (!this.isAtEnd() && this.matchKeyword("to")) {
                         this.advance(); // Consume 'to'
                     }
                     blockKeyword = "setSize";
                 } else if (nextWord === "rotation") {
                     this.advance(); // Consume 'rotation'
                     this.skipIrrelevant();
-                    if (!this.isAtEnd() && this.match(TokenType.KEYWORD) && this.current.value === "style") {
+                    if (!this.isAtEnd() && this.matchKeyword("style")) {
                         this.advance(); // Consume 'style'
                     }
                     blockKeyword = "setRotationStyle";
@@ -566,14 +573,14 @@ export class Parser {
                         if (penProp === "color") {
                             this.advance();
                             this.skipIrrelevant();
-                            if (!this.isAtEnd() && this.match(TokenType.KEYWORD) && this.current.value === "to") {
+                            if (!this.isAtEnd() && this.matchKeyword("to")) {
                                 this.advance();
                             }
                             blockKeyword = "setPenColor";
                         } else if (penProp === "size") {
                             this.advance();
                             this.skipIrrelevant();
-                            if (!this.isAtEnd() && this.match(TokenType.KEYWORD) && this.current.value === "to") {
+                            if (!this.isAtEnd() && this.matchKeyword("to")) {
                                 this.advance();
                             }
                             blockKeyword = "setPenSize";
@@ -582,7 +589,7 @@ export class Parser {
                 } else if (nextWord === "volume") {
                     this.advance(); // Consume 'volume'
                     this.skipIrrelevant();
-                    if (!this.isAtEnd() && this.match(TokenType.KEYWORD) && this.current.value === "to") {
+                    if (!this.isAtEnd() && this.matchKeyword("to")) {
                         this.advance(); // Consume 'to'
                     }
                     blockKeyword = "setVolume";
@@ -592,10 +599,10 @@ export class Parser {
                     if (effectNames.includes(nextWord)) {
                         this.advance(); // Consume effect name
                         this.skipIrrelevant();
-                        if (!this.isAtEnd() && this.match(TokenType.KEYWORD) && this.current.value === "effect") {
+                        if (!this.isAtEnd() && this.matchKeyword("effect")) {
                             this.advance(); // Consume 'effect'
                             this.skipIrrelevant();
-                            if (!this.isAtEnd() && this.match(TokenType.KEYWORD) && this.current.value === "to") {
+                            if (!this.isAtEnd() && this.matchKeyword("to")) {
                                 this.advance(); // Consume 'to'
                             }
                         }
@@ -617,21 +624,21 @@ export class Parser {
                 if (nextWord === "x") {
                     this.advance();
                     this.skipIrrelevant();
-                    if (!this.isAtEnd() && this.match(TokenType.KEYWORD) && this.current.value === "by") {
+                    if (!this.isAtEnd() && this.matchKeyword("by")) {
                         this.advance();
                     }
                     blockKeyword = "changeX";
                 } else if (nextWord === "y") {
                     this.advance();
                     this.skipIrrelevant();
-                    if (!this.isAtEnd() && this.match(TokenType.KEYWORD) && this.current.value === "by") {
+                    if (!this.isAtEnd() && this.matchKeyword("by")) {
                         this.advance();
                     }
                     blockKeyword = "changeY";
                 } else if (nextWord === "size") {
                     this.advance();
                     this.skipIrrelevant();
-                    if (!this.isAtEnd() && this.match(TokenType.KEYWORD) && this.current.value === "by") {
+                    if (!this.isAtEnd() && this.matchKeyword("by")) {
                         this.advance();
                     }
                     blockKeyword = "changeSize";
@@ -643,7 +650,7 @@ export class Parser {
                         if (penProp === "size") {
                             this.advance();
                             this.skipIrrelevant();
-                            if (!this.isAtEnd() && this.match(TokenType.KEYWORD) && this.current.value === "by") {
+                            if (!this.isAtEnd() && this.matchKeyword("by")) {
                                 this.advance();
                             }
                             blockKeyword = "changePenSize";
@@ -652,7 +659,7 @@ export class Parser {
                 } else if (nextWord === "volume") {
                     this.advance();
                     this.skipIrrelevant();
-                    if (!this.isAtEnd() && this.match(TokenType.KEYWORD) && this.current.value === "by") {
+                    if (!this.isAtEnd() && this.matchKeyword("by")) {
                         this.advance();
                     }
                     blockKeyword = "changeVolume";
@@ -662,10 +669,10 @@ export class Parser {
                     if (effectNames.includes(nextWord)) {
                         this.advance();
                         this.skipIrrelevant();
-                        if (!this.isAtEnd() && this.match(TokenType.KEYWORD) && this.current.value === "effect") {
+                        if (!this.isAtEnd() && this.matchKeyword("effect")) {
                             this.advance();
                             this.skipIrrelevant();
-                            if (!this.isAtEnd() && this.match(TokenType.KEYWORD) && this.current.value === "by") {
+                            if (!this.isAtEnd() && this.matchKeyword("by")) {
                                 this.advance();
                             }
                         }
@@ -679,14 +686,48 @@ export class Parser {
         } else if (blockKeyword === "repeat") {
             // support 'repeat until' as a combined keyword
             this.skipIrrelevant();
-            if (!this.isAtEnd() && this.match(TokenType.KEYWORD) && this.current.value === "until") {
+            if (!this.isAtEnd() && this.matchKeyword("until")) {
                 this.advance();
                 blockKeyword = "repeatUntil";
+            }
+        } else if (blockKeyword === "switch") {
+            // Handle "switch costume to <name>" or "switch backdrop to <name>"
+            this.skipIrrelevant();
+            if (!this.isAtEnd() && this.match(TokenType.KEYWORD)) {
+                const nextWord = this.current.value as string;
+                if (nextWord === "costume") {
+                    this.advance(); // consume "costume"
+                    this.skipIrrelevant();
+                    if (!this.isAtEnd() && this.matchKeyword("to")) {
+                        this.advance(); // consume "to"
+                    }
+                    blockKeyword = "switchCostume";
+                } else if (nextWord === "backdrop") {
+                    this.advance(); // consume "backdrop"
+                    this.skipIrrelevant();
+                    if (!this.isAtEnd() && this.matchKeyword("to")) {
+                        this.advance(); // consume "to"
+                    }
+                    blockKeyword = "switchBackdrop";
+                }
+            }
+        } else if (blockKeyword === "next") {
+            // Handle "next costume" or "next backdrop"
+            this.skipIrrelevant();
+            if (!this.isAtEnd() && this.match(TokenType.KEYWORD)) {
+                const nextWord = this.current.value as string;
+                if (nextWord === "costume") {
+                    this.advance(); // consume "costume"
+                    blockKeyword = "nextCostume";
+                } else if (nextWord === "backdrop") {
+                    this.advance(); // consume "backdrop"
+                    blockKeyword = "nextBackdrop";
+                }
             }
         } else if (blockKeyword === "create") {
             // Handle "create clone of myself" or "create clone of <sprite>"
             this.skipIrrelevant();
-            if (!this.isAtEnd() && this.match(TokenType.KEYWORD) && this.current.value === "clone") {
+            if (!this.isAtEnd() && this.matchKeyword("clone")) {
                 this.advance(); // consume "clone"
                 this.skipIrrelevant();
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -698,7 +739,7 @@ export class Parser {
         } else if (blockKeyword === "delete") {
             // Handle "delete this clone"
             this.skipIrrelevant();
-            if (!this.isAtEnd() && this.match(TokenType.KEYWORD) && this.current.value === "this") {
+            if (!this.isAtEnd() && this.matchKeyword("this")) {
                 this.advance(); // consume "this"
                 this.skipIrrelevant();
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -717,10 +758,10 @@ export class Parser {
                     // "when green flag clicked"
                     this.advance(); // Consume 'green'
                     this.skipIrrelevant();
-                    if (!this.isAtEnd() && this.match(TokenType.KEYWORD) && this.current.value === "flag") {
+                    if (!this.isAtEnd() && this.matchKeyword("flag")) {
                         this.advance(); // Consume 'flag'
                         this.skipIrrelevant();
-                        if (!this.isAtEnd() && this.match(TokenType.KEYWORD) && this.current.value === "clicked") {
+                        if (!this.isAtEnd() && this.matchKeyword("clicked")) {
                             this.advance(); // Consume 'clicked'
                         }
                     }
@@ -729,10 +770,10 @@ export class Parser {
                     // "when this sprite clicked"
                     this.advance(); // Consume 'this'
                     this.skipIrrelevant();
-                    if (!this.isAtEnd() && this.match(TokenType.KEYWORD) && this.current.value === "sprite") {
+                    if (!this.isAtEnd() && this.matchKeyword("sprite")) {
                         this.advance(); // Consume 'sprite'
                         this.skipIrrelevant();
-                        if (!this.isAtEnd() && this.match(TokenType.KEYWORD) && this.current.value === "clicked") {
+                        if (!this.isAtEnd() && this.matchKeyword("clicked")) {
                             this.advance(); // Consume 'clicked'
                         }
                     }
@@ -786,10 +827,10 @@ export class Parser {
                     this.advance(); // Consume the key name
                     this.skipIrrelevant();
                     
-                    if (!this.isAtEnd() && this.match(TokenType.KEYWORD) && this.current.value === "key") {
+                    if (!this.isAtEnd() && this.matchKeyword("key")) {
                         this.advance(); // Consume 'key'
                         this.skipIrrelevant();
-                        if (!this.isAtEnd() && this.match(TokenType.KEYWORD) && this.current.value === "pressed") {
+                        if (!this.isAtEnd() && this.matchKeyword("pressed")) {
                             this.advance(); // Consume 'pressed'
                             blockKeyword = "whenKeyPressed";
                             // Store the key name by encoding it temporarily
@@ -803,10 +844,10 @@ export class Parser {
                 this.advance(); // Consume the key name
                 this.skipIrrelevant();
                 
-                if (!this.isAtEnd() && this.match(TokenType.KEYWORD) && this.current.value === "key") {
+                if (!this.isAtEnd() && this.matchKeyword("key")) {
                     this.advance(); // Consume 'key'
                     this.skipIrrelevant();
-                    if (!this.isAtEnd() && this.match(TokenType.KEYWORD) && this.current.value === "pressed") {
+                    if (!this.isAtEnd() && this.matchKeyword("pressed")) {
                         this.advance(); // Consume 'pressed'
                         blockKeyword = `whenKeyPressed:${keyName}`;
                     }
@@ -854,7 +895,7 @@ export class Parser {
         if (blockKeyword === "if") {
             // Check for an else clause
             this.skipIrrelevant();
-            if (!this.isAtEnd() && this.match(TokenType.KEYWORD) && this.current.value === "else") {
+            if (!this.isAtEnd() && this.matchKeyword("else")) {
                 this.advance(); // Consume 'else'
 
                 // Parse the else block
@@ -949,7 +990,7 @@ export class Parser {
         }
         
         // Skip 'to' if present
-        if (!this.isAtEnd() && this.match(TokenType.KEYWORD) && this.current.value === "to") {
+        if (!this.isAtEnd() && this.matchKeyword("to")) {
             this.advance();
             this.skipIrrelevant();
         }

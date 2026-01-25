@@ -8,10 +8,14 @@ import FileTabs from "./FileTabs";
 import ProjectToolbar from "./ProjectToolbar";
 import ProjectNameModal from "./ProjectNameModal";
 import ResizeDivider from "./ResizeDivider";
+import CostumeSidebar from "./CostumeSidebar";
+import SoundSidebar from "./SoundSidebar";
 import { Notification, useNotifications, Tooltip } from "./ui";
 import {
     ScratchProject,
     SpriteFile,
+    Costume,
+    Sound,
     createProject,
     createSprite,
     PROJECT_STORAGE_KEY,
@@ -29,10 +33,52 @@ import {
 
 type monacoType = typeof monaco;
 
+// Sidebar type - only one can be open at a time
+type SidebarType = "toolbox" | "costumes" | "sounds" | null;
+
+// Helper to load default costume image as data URL
+async function loadDefaultCostumeData(isStage: boolean = false): Promise<string | null> {
+    const url = isStage ? "/stage.png" : "/costume1.png";
+    try {
+        const response = await fetch(url);
+        const blob = await response.blob();
+        return new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result as string);
+            reader.onerror = () => resolve(null);
+            reader.readAsDataURL(blob);
+        });
+    } catch (error) {
+        console.error("Failed to load default costume:", error);
+        return null;
+    }
+}
+
+// Helper to load default costumes for all sprites in a project
+async function loadDefaultCostumesForProject(project: ScratchProject): Promise<ScratchProject> {
+    const updatedSprites = await Promise.all(
+        project.sprites.map(async (sprite) => {
+            // Only update costumes that don't have data
+            const updatedCostumes = await Promise.all(
+                sprite.costumes.map(async (costume) => {
+                    if (!costume.data) {
+                        const data = await loadDefaultCostumeData(sprite.isStage);
+                        return { ...costume, data };
+                    }
+                    return costume;
+                })
+            );
+            return { ...sprite, costumes: updatedCostumes };
+        })
+    );
+    return { ...project, sprites: updatedSprites };
+}
+
 // Helper to generate unique sprite names
 function generateSpriteName(sprites: SpriteFile[]): string {
     const existingNames = new Set(sprites.map((s) => s.name));
-    let num = sprites.length + 1;
+    // Start from 2 since the first sprite is "Cat"
+    let num = 2;
     while (existingNames.has(`Sprite${num}`)) {
         num++;
     }
@@ -63,7 +109,7 @@ export default function CodeEditor() {
     const mainContentRef = useRef<HTMLDivElement>(null);
 
     // UI state for toolbox sidebar
-    const [showToolbox, setShowToolbox] = useState(true); // Default open on page load
+    const [activeSidebar, setActiveSidebar] = useState<SidebarType>("toolbox"); // Default open on page load
     const [expandedCategory, setExpandedCategory] = useState<string | null>("Events"); // Default expanded
     
     // Resizable panel widths
@@ -110,6 +156,8 @@ export default function CodeEditor() {
                             const backdrop = createSprite('Stage', 'backdrop');
                             loadedProject.sprites.unshift(backdrop);
                         }
+                        // Load default costumes for any sprites missing costume data
+                        loadedProject = await loadDefaultCostumesForProject(loadedProject);
                         setProject(loadedProject);
                         setIsLoaded(true);
                         return;
@@ -119,7 +167,7 @@ export default function CodeEditor() {
                 // Fallback to localStorage if IndexedDB unavailable
                 const savedProject = localStorage.getItem(PROJECT_STORAGE_KEY);
                 if (savedProject) {
-                    const parsed = JSON.parse(savedProject) as ScratchProject;
+                    let parsed = JSON.parse(savedProject) as ScratchProject;
                     
                     // Migration: Ensure project has a backdrop/stage
                     const hasBackdrop = parsed.sprites.some(s => s.isStage || s.type === 'backdrop');
@@ -127,12 +175,16 @@ export default function CodeEditor() {
                         const backdrop = createSprite('Stage', 'backdrop');
                         parsed.sprites.unshift(backdrop);
                     }
+                    // Load default costumes for any sprites missing costume data
+                    parsed = await loadDefaultCostumesForProject(parsed);
                     
                     setProject(parsed);
                 } else {
                     // Check for legacy code and migrate
                     const legacyCode = localStorage.getItem(LEGACY_CODE_KEY);
-                    const newProject = createProject("My Project");
+                    let newProject = createProject("My Project");
+                    // Load default costume data for all sprites
+                    newProject = await loadDefaultCostumesForProject(newProject);
                     if (legacyCode && legacyCode.trim()) {
                         // Put legacy code in the first sprite (not backdrop)
                         const firstSprite = newProject.sprites.find(s => !s.isStage);
@@ -150,7 +202,9 @@ export default function CodeEditor() {
                 }
             } catch (error) {
                 console.error("Error loading project:", error);
-                const newProject = createProject("My Project");
+                let newProject = createProject("My Project");
+                // Load default costume data for all sprites
+                newProject = await loadDefaultCostumesForProject(newProject);
                 setProject(newProject);
                 setIsFirstLoad(true);
                 setShowFirstLoadNameModal(true);
@@ -184,7 +238,7 @@ export default function CodeEditor() {
             return () => clearTimeout(timer);
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [isLoaded]); // Only run once when loaded, not on every project change
+    }, [isLoaded, compiled]); // Also re-run when compiled changes (e.g., new project)
 
     // Handle auto-start after recompile - send message to iframe when new content is loaded
     useEffect(() => {
@@ -378,7 +432,7 @@ export default function CodeEditor() {
                 ),
             };
         });
-        setCompiled(false);
+        // Don't auto-compile on code change - only compile on specific triggers
     }, [project]);
 
     // Sprite management functions
@@ -386,9 +440,14 @@ export default function CodeEditor() {
         setProject((prev) => prev ? { ...prev, activeSprite: id } : prev);
     };
 
-    const handleAddSprite = () => {
+    const handleAddSprite = async () => {
         if (!project) return;
         const newSprite = createSprite(generateSpriteName(project.sprites), "sprite", true);
+        // Load default costume data for the new sprite
+        const costumeData = await loadDefaultCostumeData(false);
+        if (costumeData && newSprite.costumes.length > 0) {
+            newSprite.costumes[0].data = costumeData;
+        }
         setProject((prev) => {
             if (!prev) return prev;
             return {
@@ -403,6 +462,14 @@ export default function CodeEditor() {
     const handleRenameSprite = (id: string, newName: string) => {
         setProject((prev) => {
             if (!prev) return prev;
+            // Check for duplicate sprite names
+            const isDuplicate = prev.sprites.some(
+                (sprite) => sprite.id !== id && sprite.name.toLowerCase() === newName.toLowerCase()
+            );
+            if (isDuplicate) {
+                alert(`A sprite named "${newName}" already exists. Please choose a different name.`);
+                return prev;
+            }
             return {
                 ...prev,
                 updatedAt: Date.now(),
@@ -437,6 +504,15 @@ export default function CodeEditor() {
 
         const newSprite = createSprite(`${sprite.name} copy`);
         newSprite.code = sprite.code;
+        // Copy costumes and sounds too
+        newSprite.costumes = sprite.costumes.map(c => ({
+            ...c,
+            id: `costume_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        }));
+        newSprite.sounds = sprite.sounds.map(s => ({
+            ...s,
+            id: `sound_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        }));
 
         setProject((prev) => {
             if (!prev) return prev;
@@ -448,6 +524,38 @@ export default function CodeEditor() {
             };
         });
     };
+
+    // Costume management for active sprite
+    const handleCostumesChange = useCallback((costumes: Costume[], currentCostume: number) => {
+        setProject((prev) => {
+            if (!prev) return prev;
+            return {
+                ...prev,
+                updatedAt: Date.now(),
+                sprites: prev.sprites.map((sprite) =>
+                    sprite.id === prev.activeSprite
+                        ? { ...sprite, costumes, currentCostume, updatedAt: Date.now() }
+                        : sprite
+                ),
+            };
+        });
+    }, []);
+
+    // Sound management for active sprite
+    const handleSoundsChange = useCallback((sounds: Sound[]) => {
+        setProject((prev) => {
+            if (!prev) return prev;
+            return {
+                ...prev,
+                updatedAt: Date.now(),
+                sprites: prev.sprites.map((sprite) =>
+                    sprite.id === prev.activeSprite
+                        ? { ...sprite, sounds, updatedAt: Date.now() }
+                        : sprite
+                ),
+            };
+        });
+    }, []);
 
     // Import handlers
     const handleImportProject = (importedProject: ScratchProject) => {
@@ -557,7 +665,7 @@ export default function CodeEditor() {
         let retValue = { js: "", html: "", success: false };
 
         try {
-            // Send all sprites to the compiler
+            // Send all sprites to the compiler with costume/sound data for rendering
             const response = await fetch("/api/compile", {
                 method: "POST",
                 headers: {
@@ -568,6 +676,11 @@ export default function CodeEditor() {
                         name: s.name,
                         code: s.code,
                         isStage: s.isStage,
+                        costumeNames: s.costumes.map(c => c.name),
+                        costumeUrls: s.costumes.map(c => c.data),
+                        currentCostume: s.currentCostume,
+                        soundNames: s.sounds.map(snd => snd.name),
+                        soundUrls: s.sounds.map(snd => snd.data),
                     })),
                 }),
             });
@@ -584,7 +697,8 @@ export default function CodeEditor() {
             }
             
             if (data.success) {
-                setCompiledJsCode(data.js);
+                // Use userCode for display (without runtime), but use full js for execution
+                setCompiledJsCode(data.userCode || data.js);
                 setHtmlContent(data.html || null);
                 retValue = { js: data.js, html: data.html, success: true };
             } else {
@@ -755,7 +869,7 @@ export default function CodeEditor() {
                         onProjectNameChange={handleProjectNameChange}
                         onNotify={handleNotify}
                     />
-                    <Tooltip content={!compiled ? "Run code first to see output" : (showCode ? "Hide generated JavaScript" : "Show generated JavaScript")}>
+                    <Tooltip content={!compiled ? "Run code first to see output" : (showCode ? "Hide generated Code" : "Show generated Code")}>
                         <button
                             onClick={() => compiled && compiledJsCode ? setShowCode(!showCode) : undefined}
                             disabled={!compiled || !compiledJsCode}
@@ -775,85 +889,145 @@ export default function CodeEditor() {
 
             {/* Main content area */}
             <div className="flex-1 flex overflow-hidden" ref={mainContentRef}>
-                {/* Left sidebar - Toolbox with color-coded categories */}
-                {showToolbox && (
+                {/* Left sidebar - Tabbed panel for Toolbox, Costumes, Sounds */}
+                {activeSidebar && (
                     <>
                         <div 
                             className="bg-gray-900 flex flex-col overflow-hidden flex-shrink-0"
                             style={{ width: `${toolboxWidth}px`, minWidth: "150px", maxWidth: "400px" }}
                         >
-                            {/* Toolbox scrollbar styles */}
-                            <style>{`
-                                .toolbox-scroll::-webkit-scrollbar {
-                                    width: 6px;
-                                }
-                                .toolbox-scroll::-webkit-scrollbar-track {
-                                    background: transparent;
-                                }
-                                .toolbox-scroll::-webkit-scrollbar-thumb {
-                                    background: #4b5563;
-                                    border-radius: 3px;
-                                }
-                                .toolbox-scroll::-webkit-scrollbar-thumb:hover {
-                                    background: #6b7280;
-                                }
-                                .toolbox-scroll {
-                                    scrollbar-width: thin;
-                                    scrollbar-color: #4b5563 transparent;
-                                }
-                            `}</style>
-                            <div className="bg-gray-800 px-3 py-2 text-gray-300 text-sm border-b border-gray-700 font-medium flex items-center justify-between">
-                                <span>Toolbox</span>
-                                <button
-                                    onClick={() => setShowToolbox(false)}
-                                    className="text-gray-500 hover:text-gray-300 text-lg leading-none"
-                                >
-                                    ×
-                                </button>
+                            {/* Sidebar Tabs */}
+                            <div className="flex border-b border-gray-700">
+                                <Tooltip content="Code blocks">
+                                    <button
+                                        onClick={() => setActiveSidebar("toolbox")}
+                                        className={`flex-1 px-2 py-2 text-sm font-medium transition-colors ${
+                                            activeSidebar === "toolbox"
+                                                ? "bg-gray-800 text-yellow-400 border-b-2 border-yellow-400"
+                                                : "bg-gray-900 text-gray-500 hover:text-gray-300 hover:bg-gray-800"
+                                        }`}
+                                    >
+                                        📦 Blocks
+                                    </button>
+                                </Tooltip>
+                                <Tooltip content="Sprite costumes">
+                                    <button
+                                        onClick={() => setActiveSidebar("costumes")}
+                                        className={`flex-1 px-2 py-2 text-sm font-medium transition-colors ${
+                                            activeSidebar === "costumes"
+                                                ? "bg-gray-800 text-purple-400 border-b-2 border-purple-400"
+                                                : "bg-gray-900 text-gray-500 hover:text-gray-300 hover:bg-gray-800"
+                                        }`}
+                                    >
+                                        🎨 Costumes
+                                    </button>
+                                </Tooltip>
+                                <Tooltip content="Sprite sounds">
+                                    <button
+                                        onClick={() => setActiveSidebar("sounds")}
+                                        className={`flex-1 px-2 py-2 text-sm font-medium transition-colors ${
+                                            activeSidebar === "sounds"
+                                                ? "bg-gray-800 text-pink-400 border-b-2 border-pink-400"
+                                                : "bg-gray-900 text-gray-500 hover:text-gray-300 hover:bg-gray-800"
+                                        }`}
+                                    >
+                                        🔊 Sounds
+                                    </button>
+                                </Tooltip>
                             </div>
-                            <div className="toolbox-scroll flex-1 overflow-y-auto">
-                                {toolboxCategories.map((category) => (
-                                    <div key={category.name} className="border-b border-gray-800">
-                                        {/* Category Header */}
-                                        <button
-                                            onClick={() => setExpandedCategory(
-                                                expandedCategory === category.name ? null : category.name
-                                            )}
-                                            className="w-full px-3 py-2 flex items-center justify-between hover:bg-gray-800 transition-colors"
-                                            style={{ borderLeft: `4px solid ${category.color}` }}
-                                        >
-                                            <span className="text-sm font-medium" style={{ color: category.color }}>
-                                                {category.name}
-                                            </span>
-                                            <span className="text-gray-500 text-xs">
-                                                {expandedCategory === category.name ? "▼" : "▶"}
-                                            </span>
-                                        </button>
-                                        
-                                        {/* Category Commands */}
-                                        {expandedCategory === category.name && (
-                                            <div className="bg-gray-850 py-1">
-                                                {category.commands.map((command, idx) => (
-                                                    <button
-                                                        key={idx}
-                                                        onClick={() => insertToolboxCommand(command)}
-                                                        className="w-full px-4 py-1.5 text-left text-xs hover:bg-gray-700 transition-colors flex items-center gap-2 group"
-                                                        title={command.description}
-                                                    >
-                                                        <span
-                                                            className="w-2 h-2 rounded-full flex-shrink-0"
-                                                            style={{ backgroundColor: category.color }}
-                                                        />
-                                                        <span className="text-gray-300 group-hover:text-white truncate">
-                                                            {command.label}
-                                                        </span>
-                                                    </button>
-                                                ))}
+
+                            {/* Toolbox Content */}
+                            {activeSidebar === "toolbox" && (
+                                <>
+                                    {/* Toolbox scrollbar styles */}
+                                    <style>{`
+                                        .toolbox-scroll::-webkit-scrollbar {
+                                            width: 6px;
+                                        }
+                                        .toolbox-scroll::-webkit-scrollbar-track {
+                                            background: transparent;
+                                        }
+                                        .toolbox-scroll::-webkit-scrollbar-thumb {
+                                            background: #4b5563;
+                                            border-radius: 3px;
+                                        }
+                                        .toolbox-scroll::-webkit-scrollbar-thumb:hover {
+                                            background: #6b7280;
+                                        }
+                                        .toolbox-scroll {
+                                            scrollbar-width: thin;
+                                            scrollbar-color: #4b5563 transparent;
+                                        }
+                                    `}</style>
+                                    <div className="toolbox-scroll flex-1 overflow-y-auto">
+                                        {toolboxCategories.map((category) => (
+                                            <div key={category.name} className="border-b border-gray-800">
+                                                {/* Category Header */}
+                                                <button
+                                                    onClick={() => setExpandedCategory(
+                                                        expandedCategory === category.name ? null : category.name
+                                                    )}
+                                                    className="w-full px-3 py-2 flex items-center justify-between hover:bg-gray-800 transition-colors"
+                                                    style={{ borderLeft: `4px solid ${category.color}` }}
+                                                >
+                                                    <span className="text-sm font-medium" style={{ color: category.color }}>
+                                                        {category.name}
+                                                    </span>
+                                                    <span className="text-gray-500 text-xs">
+                                                        {expandedCategory === category.name ? "▼" : "▶"}
+                                                    </span>
+                                                </button>
+                                                
+                                                {/* Category Commands */}
+                                                {expandedCategory === category.name && (
+                                                    <div className="bg-gray-850 py-1">
+                                                        {category.commands.map((command, idx) => (
+                                                            <button
+                                                                key={idx}
+                                                                onClick={() => insertToolboxCommand(command)}
+                                                                className="w-full px-4 py-1.5 text-left text-xs hover:bg-gray-700 transition-colors flex items-center gap-2 group"
+                                                                title={command.description}
+                                                            >
+                                                                <span
+                                                                    className="w-2 h-2 rounded-full flex-shrink-0"
+                                                                    style={{ backgroundColor: category.color }}
+                                                                />
+                                                                <span className="text-gray-300 group-hover:text-white truncate">
+                                                                    {command.label}
+                                                                </span>
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                )}
                                             </div>
-                                        )}
+                                        ))}
                                     </div>
-                                ))}
-                            </div>
+                                </>
+                            )}
+
+                            {/* Costumes Content */}
+                            {activeSidebar === "costumes" && activeSprite && (
+                                <CostumeSidebar
+                                    costumes={activeSprite.costumes}
+                                    currentCostume={activeSprite.currentCostume}
+                                    onCostumesChange={handleCostumesChange}
+                                    onClose={() => setActiveSidebar(null)}
+                                    width={toolboxWidth}
+                                    spriteName={activeSprite.name}
+                                    isStage={activeSprite.isStage}
+                                />
+                            )}
+
+                            {/* Sounds Content */}
+                            {activeSidebar === "sounds" && activeSprite && (
+                                <SoundSidebar
+                                    sounds={activeSprite.sounds}
+                                    onSoundsChange={handleSoundsChange}
+                                    onClose={() => setActiveSidebar(null)}
+                                    width={toolboxWidth}
+                                    spriteName={activeSprite.name}
+                                />
+                            )}
                         </div>
                         <ResizeDivider
                             orientation="vertical"
@@ -862,7 +1036,7 @@ export default function CodeEditor() {
                                     const newWidth = prev + delta;
                                     // Snap close if dragged below threshold
                                     if (newWidth < 100) {
-                                        setShowToolbox(false);
+                                        setActiveSidebar(null);
                                         return 256; // Reset to default for next open
                                     }
                                     return Math.max(150, Math.min(400, newWidth));
@@ -883,8 +1057,8 @@ export default function CodeEditor() {
                         onRenameSprite={handleRenameSprite}
                         onDeleteSprite={handleDeleteSprite}
                         onDuplicateSprite={handleDuplicateSprite}
-                        showToolbox={showToolbox}
-                        onToggleToolbox={() => setShowToolbox(!showToolbox)}
+                        showToolbox={activeSidebar !== null}
+                        onToggleToolbox={() => setActiveSidebar(activeSidebar ? null : "toolbox")}
                     />
                     
                     {/* Editor Label */}

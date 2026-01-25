@@ -5,9 +5,47 @@
 
 import React, { useRef, useState } from "react";
 import Link from "next/link";
-import { ScratchProject, SpriteFile, createSprite, createProject } from "@/types/projectTypes";
+import { ScratchProject, SpriteFile, Costume, Sound, createSprite, createProject, createCostume, createSound } from "@/types/projectTypes";
 import JSZip from "jszip";
 import { Tooltip } from "./ui";
+
+// Helper to load default costume image as data URL
+async function loadDefaultCostumeData(isStage: boolean = false): Promise<string | null> {
+    const url = isStage ? "/stage.png" : "/costume1.png";
+    try {
+        const response = await fetch(url);
+        const blob = await response.blob();
+        return new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result as string);
+            reader.onerror = () => resolve(null);
+            reader.readAsDataURL(blob);
+        });
+    } catch (error) {
+        console.error("Failed to load default costume:", error);
+        return null;
+    }
+}
+
+// Helper to load default costumes for all sprites in a project
+async function loadDefaultCostumesForProject(project: ScratchProject): Promise<ScratchProject> {
+    const updatedSprites = await Promise.all(
+        project.sprites.map(async (sprite) => {
+            // Only update costumes that don't have data
+            const updatedCostumes = await Promise.all(
+                sprite.costumes.map(async (costume) => {
+                    if (!costume.data) {
+                        const data = await loadDefaultCostumeData(sprite.isStage);
+                        return { ...costume, data };
+                    }
+                    return costume;
+                })
+            );
+            return { ...sprite, costumes: updatedCostumes };
+        })
+    );
+    return { ...project, sprites: updatedSprites };
+}
 
 interface ProjectToolbarProps {
     project: ScratchProject;
@@ -177,18 +215,105 @@ export default function ProjectToolbar({
             updatedAt: project.updatedAt,
         }, null, 2));
 
-        // Add each sprite as a .scratch file
+        // Compile the project and add the HTML
+        try {
+            const response = await fetch("/api/compile", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    sprites: project.sprites.map(s => ({
+                        name: s.name,
+                        code: s.code,
+                        isStage: s.isStage,
+                        costumeNames: s.costumes.map(c => c.name),
+                        costumeUrls: s.costumes.map(c => c.data),
+                        currentCostume: s.currentCostume,
+                        soundNames: s.sounds.map(snd => snd.name),
+                        soundUrls: s.sounds.map(snd => snd.data),
+                    })),
+                }),
+            });
+            const data = await response.json();
+            if (data.success && data.html) {
+                // Add compiled HTML that can run standalone in a browser
+                zip.file(`${project.name}.html`, data.html);
+            }
+        } catch (error) {
+            console.error("Failed to compile for download:", error);
+            // Continue with download even if compilation fails
+        }
+
+        // Add each sprite as a .scratch file with its metadata and assets
         project.sprites.forEach((sprite) => {
-            zip.file(`sprites/${sprite.name}.scratch`, sprite.code);
-            // Also save sprite metadata
-            zip.file(`sprites/${sprite.name}.meta.json`, JSON.stringify({
+            const spriteFolder = `sprites/${sprite.name}`;
+            
+            // Save code
+            zip.file(`${spriteFolder}/code.scratch`, sprite.code);
+            
+            // Save sprite metadata (including costume and sound references)
+            zip.file(`${spriteFolder}/sprite.json`, JSON.stringify({
                 id: sprite.id,
                 name: sprite.name,
                 type: sprite.type,
                 isStage: sprite.isStage,
+                currentCostume: sprite.currentCostume,
+                x: sprite.x,
+                y: sprite.y,
+                direction: sprite.direction,
+                size: sprite.size,
+                visible: sprite.visible,
+                draggable: sprite.draggable,
+                rotationStyle: sprite.rotationStyle,
                 createdAt: sprite.createdAt,
                 updatedAt: sprite.updatedAt,
             }, null, 2));
+            
+            // Save costumes with sprite prefix in filename
+            sprite.costumes.forEach((costume, index) => {
+                // Use sprite name prefix in the filename for organization
+                const storageName = `${sprite.name}_${costume.name}`;
+                
+                // Save costume metadata
+                zip.file(`${spriteFolder}/costumes/${index}_${storageName}.json`, JSON.stringify({
+                    id: costume.id,
+                    name: costume.name,  // Store display name (without prefix)
+                    mimeType: costume.mimeType,
+                    width: costume.width,
+                    height: costume.height,
+                    rotationCenterX: costume.rotationCenterX,
+                    rotationCenterY: costume.rotationCenterY,
+                }, null, 2));
+                
+                // Save costume image data if present
+                if (costume.data) {
+                    // Extract base64 data and save as binary
+                    const base64Data = costume.data.split(',')[1];
+                    const extension = costume.mimeType.split('/')[1] || 'png';
+                    zip.file(`${spriteFolder}/costumes/${index}_${storageName}.${extension}`, base64Data, { base64: true });
+                }
+            });
+            
+            // Save sounds with sprite prefix in filename
+            sprite.sounds.forEach((sound, index) => {
+                // Use sprite name prefix in the filename for organization
+                const storageName = `${sprite.name}_${sound.name}`;
+                
+                // Save sound metadata
+                zip.file(`${spriteFolder}/sounds/${index}_${storageName}.json`, JSON.stringify({
+                    id: sound.id,
+                    name: sound.name,  // Store display name (without prefix)
+                    mimeType: sound.mimeType,
+                    duration: sound.duration,
+                }, null, 2));
+                
+                // Save sound data if present
+                if (sound.data) {
+                    // Extract base64 data and save as binary
+                    const base64Data = sound.data.split(',')[1];
+                    const extension = sound.mimeType.split('/')[1] || 'mp3';
+                    zip.file(`${spriteFolder}/sounds/${index}_${storageName}.${extension}`, base64Data, { base64: true });
+                }
+            });
         });
 
         // Generate and download - Changed from .scratch.zip to .zip
@@ -255,8 +380,10 @@ export default function ProjectToolbar({
     };
 
     // Handle project name confirmation
-    const handleNameConfirm = (name: string) => {
-        const newProject = createProject(name);
+    const handleNameConfirm = async (name: string) => {
+        let newProject = createProject(name);
+        // Load default costume data for all sprites
+        newProject = await loadDefaultCostumesForProject(newProject);
         onNewProject(newProject);
         setShowNameModal(false);
         setPendingAction(null);
@@ -342,7 +469,7 @@ export default function ProjectToolbar({
             // Check if it's a valid project
             const projectJsonFile = zip.file("project.json");
             if (!projectJsonFile) {
-                // It might be a folder of .scratch files
+                // It might be a folder of .scratch files (legacy format)
                 await handleFolderZip(zip, file.name);
                 return;
             }
@@ -353,42 +480,142 @@ export default function ProjectToolbar({
 
             // Load all sprites
             const sprites: SpriteFile[] = [];
-            const spriteFiles = zip.folder("sprites");
+            const spriteFolders = Object.keys(zip.files)
+                .filter(path => path.startsWith("sprites/") && path.endsWith("/sprite.json"))
+                .map(path => path.replace("/sprite.json", ""));
             
-            if (spriteFiles) {
-                const scratchFiles: { [key: string]: string } = {};
-                const metaFiles: { [key: string]: unknown } = {};
+            // Check for legacy format (flat sprites folder)
+            if (spriteFolders.length === 0) {
+                await handleLegacyZipImport(zip, projectMeta, file.name);
+                return;
+            }
 
-                // First pass: collect all files
-                await Promise.all(
-                    Object.keys(zip.files)
-                        .filter((path) => path.startsWith("sprites/"))
-                        .map(async (path) => {
-                            const file = zip.files[path];
-                            if (file.dir) return;
-                            
-                            const content = await file.async("text");
-                            const fileName = path.replace("sprites/", "");
-                            
-                            if (fileName.endsWith(".scratch")) {
-                                scratchFiles[fileName.replace(".scratch", "")] = content;
-                            } else if (fileName.endsWith(".meta.json")) {
-                                metaFiles[fileName.replace(".meta.json", "")] = JSON.parse(content);
-                            }
-                        })
-                );
-
-                // Second pass: combine into sprites
-                for (const name of Object.keys(scratchFiles)) {
-                    const meta = metaFiles[name] as { id?: string; createdAt?: number; updatedAt?: number; isStage?: boolean; type?: string } | undefined;
-                    const isStage = name === "Stage" || meta?.isStage || meta?.type === "backdrop";
-                    const sprite = createSprite(name, isStage ? "backdrop" : "sprite");
-                    sprite.code = scratchFiles[name];
-                    if (meta?.id) sprite.id = meta.id;
-                    if (meta?.createdAt) sprite.createdAt = meta.createdAt;
-                    if (meta?.updatedAt) sprite.updatedAt = meta.updatedAt;
-                    sprites.push(sprite);
+            // New format: sprites/SpriteName/sprite.json, code.scratch, costumes/, sounds/
+            for (const spriteFolder of spriteFolders) {
+                // Load sprite metadata
+                const spriteJsonFile = zip.file(`${spriteFolder}/sprite.json`);
+                if (!spriteJsonFile) continue;
+                
+                const spriteMeta = JSON.parse(await spriteJsonFile.async("text"));
+                const spriteName = spriteMeta.name || spriteFolder.split("/").pop() || "Sprite";
+                
+                // Create sprite
+                const sprite = createSprite(spriteName, spriteMeta.isStage ? "backdrop" : "sprite");
+                sprite.id = spriteMeta.id || sprite.id;
+                sprite.currentCostume = spriteMeta.currentCostume || 0;
+                sprite.x = spriteMeta.x ?? 0;
+                sprite.y = spriteMeta.y ?? 0;
+                sprite.direction = spriteMeta.direction ?? 90;
+                sprite.size = spriteMeta.size ?? 100;
+                sprite.visible = spriteMeta.visible ?? true;
+                sprite.draggable = spriteMeta.draggable ?? false;
+                sprite.rotationStyle = spriteMeta.rotationStyle || "all around";
+                sprite.createdAt = spriteMeta.createdAt || Date.now();
+                sprite.updatedAt = spriteMeta.updatedAt || Date.now();
+                
+                // Load code
+                const codeFile = zip.file(`${spriteFolder}/code.scratch`);
+                if (codeFile) {
+                    sprite.code = await codeFile.async("text");
                 }
+                
+                // Load costumes
+                const costumeFiles = Object.keys(zip.files)
+                    .filter(path => path.startsWith(`${spriteFolder}/costumes/`) && path.endsWith(".json"));
+                
+                if (costumeFiles.length > 0) {
+                    sprite.costumes = [];
+                    for (const costumeJsonPath of costumeFiles) {
+                        const costumeJson = JSON.parse(await zip.files[costumeJsonPath].async("text"));
+                        
+                        // Find the matching image file
+                        const basePath = costumeJsonPath.replace(".json", "");
+                        let costumeData: string | null = null;
+                        
+                        // Look for image file with various extensions
+                        for (const ext of ["png", "jpg", "jpeg", "gif", "svg", "webp"]) {
+                            const imgFile = zip.file(`${basePath}.${ext}`);
+                            if (imgFile) {
+                                const imgData = await imgFile.async("base64");
+                                const mimeType = costumeJson.mimeType || `image/${ext === "svg" ? "svg+xml" : ext}`;
+                                costumeData = `data:${mimeType};base64,${imgData}`;
+                                break;
+                            }
+                        }
+                        
+                        const costume: Costume = {
+                            id: costumeJson.id || `costume_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                            name: costumeJson.name || "costume",
+                            data: costumeData,
+                            mimeType: costumeJson.mimeType || "image/png",
+                            width: costumeJson.width || 100,
+                            height: costumeJson.height || 100,
+                            rotationCenterX: costumeJson.rotationCenterX || 0,
+                            rotationCenterY: costumeJson.rotationCenterY || 0,
+                        };
+                        sprite.costumes.push(costume);
+                    }
+                    
+                    // Sort by filename index prefix
+                    sprite.costumes.sort((a, b) => {
+                        const aMatch = costumeFiles.find(f => f.includes(a.name));
+                        const bMatch = costumeFiles.find(f => f.includes(b.name));
+                        const aIndex = aMatch ? parseInt(aMatch.split("/").pop()?.split("_")[0] || "0") : 0;
+                        const bIndex = bMatch ? parseInt(bMatch.split("/").pop()?.split("_")[0] || "0") : 0;
+                        return aIndex - bIndex;
+                    });
+                }
+                
+                // Ensure at least one costume
+                if (sprite.costumes.length === 0) {
+                    sprite.costumes = [createCostume(sprite.isStage ? "backdrop1" : "costume1")];
+                }
+                
+                // Load sounds
+                const soundFiles = Object.keys(zip.files)
+                    .filter(path => path.startsWith(`${spriteFolder}/sounds/`) && path.endsWith(".json"));
+                
+                if (soundFiles.length > 0) {
+                    sprite.sounds = [];
+                    for (const soundJsonPath of soundFiles) {
+                        const soundJson = JSON.parse(await zip.files[soundJsonPath].async("text"));
+                        
+                        // Find the matching audio file
+                        const basePath = soundJsonPath.replace(".json", "");
+                        let soundData: string | null = null;
+                        
+                        // Look for audio file with various extensions
+                        for (const ext of ["mp3", "wav", "ogg", "m4a", "mpeg"]) {
+                            const audioFile = zip.file(`${basePath}.${ext}`);
+                            if (audioFile) {
+                                const audioData = await audioFile.async("base64");
+                                const mimeType = soundJson.mimeType || `audio/${ext === "mp3" ? "mpeg" : ext}`;
+                                soundData = `data:${mimeType};base64,${audioData}`;
+                                break;
+                            }
+                        }
+                        
+                        const sound: Sound = {
+                            id: soundJson.id || `sound_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                            name: soundJson.name || "sound",
+                            data: soundData,
+                            mimeType: soundJson.mimeType || "audio/mpeg",
+                            duration: soundJson.duration || 0,
+                        };
+                        sprite.sounds.push(sound);
+                    }
+                    
+                    // Sort by filename index prefix
+                    sprite.sounds.sort((a, b) => {
+                        const aMatch = soundFiles.find(f => f.includes(a.name));
+                        const bMatch = soundFiles.find(f => f.includes(b.name));
+                        const aIndex = aMatch ? parseInt(aMatch.split("/").pop()?.split("_")[0] || "0") : 0;
+                        const bIndex = bMatch ? parseInt(bMatch.split("/").pop()?.split("_")[0] || "0") : 0;
+                        return aIndex - bIndex;
+                    });
+                }
+                
+                sprites.push(sprite);
             }
 
             // Ensure Stage is first and we have one
@@ -420,6 +647,72 @@ export default function ProjectToolbar({
             console.error("Error importing ZIP:", error);
             onNotify("Failed to import project. Please check the file format.", "error");
         }
+    };
+
+    // Handle legacy ZIP format (flat sprites folder)
+    const handleLegacyZipImport = async (zip: JSZip, projectMeta: { id?: string; name?: string; version?: string; activeSprite?: string; createdAt?: number }, fileName: string) => {
+        const sprites: SpriteFile[] = [];
+        const scratchFiles: { [key: string]: string } = {};
+        const metaFiles: { [key: string]: { id?: string; createdAt?: number; updatedAt?: number; isStage?: boolean; type?: string } } = {};
+
+        // First pass: collect all files
+        await Promise.all(
+            Object.keys(zip.files)
+                .filter((path) => path.startsWith("sprites/"))
+                .map(async (path) => {
+                    const file = zip.files[path];
+                    if (file.dir) return;
+                    
+                    const content = await file.async("text");
+                    const fileName = path.replace("sprites/", "");
+                    
+                    if (fileName.endsWith(".scratch")) {
+                        scratchFiles[fileName.replace(".scratch", "")] = content;
+                    } else if (fileName.endsWith(".meta.json")) {
+                        metaFiles[fileName.replace(".meta.json", "")] = JSON.parse(content);
+                    }
+                })
+        );
+
+        // Second pass: combine into sprites
+        for (const name of Object.keys(scratchFiles)) {
+            const meta = metaFiles[name];
+            const isStage = name === "Stage" || meta?.isStage || meta?.type === "backdrop";
+            const sprite = createSprite(name, isStage ? "backdrop" : "sprite");
+            sprite.code = scratchFiles[name];
+            if (meta?.id) sprite.id = meta.id;
+            if (meta?.createdAt) sprite.createdAt = meta.createdAt;
+            if (meta?.updatedAt) sprite.updatedAt = meta.updatedAt;
+            sprites.push(sprite);
+        }
+
+        // Ensure Stage is first and we have one
+        const stageSprite = sprites.find(s => s.isStage);
+        const nonStageSprites = sprites.filter(s => !s.isStage);
+        
+        let finalSprites: SpriteFile[];
+        if (stageSprite) {
+            finalSprites = [stageSprite, ...nonStageSprites];
+        } else if (sprites.length > 0) {
+            const backdrop = createSprite("Stage", "backdrop");
+            finalSprites = [backdrop, ...sprites];
+        } else {
+            finalSprites = project.sprites;
+        }
+
+        // Create the imported project
+        const importedProject: ScratchProject = {
+            id: projectMeta.id || `project_${Date.now()}`,
+            name: projectMeta.name || fileName.replace(".scratch.zip", "").replace(".zip", ""),
+            version: projectMeta.version || "1.1.0",
+            sprites: finalSprites,
+            activeSprite: finalSprites.find(s => !s.isStage)?.id || finalSprites[0].id,
+            createdAt: projectMeta.createdAt || Date.now(),
+            updatedAt: Date.now(),
+        };
+
+        onImportProject(importedProject);
+        onNotify(`Project "${importedProject.name}" loaded!`, "success");
     };
 
     // Handle a ZIP that's just a folder of .scratch files

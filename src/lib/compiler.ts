@@ -7,18 +7,25 @@ import { Parser } from "./parser";
 import { CodeGenerator, MultiSpriteCodeGenerator } from "./codeGenerator";
 import Debugger from "./debugger";
 import { CompilerError } from "@/types/compilerTypes";
+import { BlockNode, Program } from "@/types/blockTypes";
 
 // Sprite input for multi-sprite compilation
 interface SpriteInput {
     name: string;
     code: string;
     isStage?: boolean;
+    costumeNames?: string[];  // Available costume names for validation
+    costumeUrls?: string[];   // Costume image URLs (data URLs)
+    currentCostume?: number;  // Current costume index
+    soundNames?: string[];    // Available sound names for validation
+    soundUrls?: string[];     // Sound URLs (data URLs)
 }
 
 // Compilation result interface
 interface CompilationResult {
     js: string;
     html: string;
+    userCode: string;
     errors: CompilerError[];
     success: boolean;
 }
@@ -39,6 +46,93 @@ export class ScratchTextCompiler {
             saveToFile: true,
             filePath: "src/debug/compilerOutput.json",
         });
+    }
+
+    // Validate costume and sound references in the AST
+    private validateAssetReferences(
+        spriteName: string,
+        code: string,
+        program: Program,
+        costumeNames: string[],
+        soundNames: string[]
+    ): CompilerError[] {
+        const errors: CompilerError[] = [];
+        const costumeSet = new Set(costumeNames.map(n => n.toLowerCase()));
+        const soundSet = new Set(soundNames.map(n => n.toLowerCase()));
+        const codeLines = code.split('\n');
+
+        // Helper to find line number for a string in code
+        const findLineNumber = (searchText: string): number => {
+            const lowerSearch = searchText.toLowerCase();
+            for (let i = 0; i < codeLines.length; i++) {
+                if (codeLines[i].toLowerCase().includes(lowerSearch)) {
+                    return i + 1;
+                }
+            }
+            return 1;
+        };
+
+        // Recursively check blocks for costume/sound references
+        const checkBlock = (block: BlockNode) => {
+            // Check for switch costume blocks
+            if (block.name === "switchCostume" && block.args.length > 0) {
+                const costumeName = String(block.args[0]).toLowerCase();
+                // Check if it's a string (not a variable reference)
+                if (typeof block.args[0] === 'string' && costumeNames.length > 0) {
+                    if (!costumeSet.has(costumeName)) {
+                        const lineNum = findLineNumber(`switch costume to "${block.args[0]}"`);
+                        errors.push({
+                            code: "W101",
+                            message: `[${spriteName}] Costume "${block.args[0]}" does not exist`,
+                            line: lineNum,
+                            column: 1,
+                            severity: "warning",
+                            suggestion: `Available costumes: ${costumeNames.join(', ') || 'none'}. Add a costume in the Costumes tab.`,
+                        });
+                    }
+                }
+            }
+
+            // Check for play sound blocks
+            if ((block.name === "playSound" || block.name === "playSoundUntilDone") && block.args.length > 0) {
+                const soundName = String(block.args[0]).toLowerCase();
+                // Check if it's a string (not a variable reference)
+                if (typeof block.args[0] === 'string' && soundNames.length >= 0) {
+                    if (!soundSet.has(soundName)) {
+                        const lineNum = findLineNumber(`play sound "${block.args[0]}"`);
+                        errors.push({
+                            code: "W102",
+                            message: `[${spriteName}] Sound "${block.args[0]}" does not exist`,
+                            line: lineNum,
+                            column: 1,
+                            severity: "warning",
+                            suggestion: `Available sounds: ${soundNames.length > 0 ? soundNames.join(', ') : 'none'}. Add a sound in the Sounds tab.`,
+                        });
+                    }
+                }
+            }
+
+            // Check nested blocks in body
+            if (block.body) {
+                block.body.forEach(checkBlock);
+            }
+            if (block.elseBody) {
+                block.elseBody.forEach(checkBlock);
+            }
+            // Check nested blocks in next
+            if (block.next) {
+                checkBlock(block.next);
+            }
+        };
+
+        // Check all scripts in the program
+        for (const script of program.scripts) {
+            for (const block of script.blocks) {
+                checkBlock(block);
+            }
+        }
+
+        return errors;
     }
     
     // compile: Main method that takes Scratch-like text code as input and returns JavaScript code.
@@ -69,6 +163,7 @@ export class ScratchTextCompiler {
                 return {
                     js: "",
                     html: "",
+                    userCode: "",
                     errors: allErrors,
                     success: false,
                 };
@@ -99,6 +194,7 @@ export class ScratchTextCompiler {
             return {
                 js: "",
                 html: "",
+                userCode: "",
                 errors: allErrors,
                 success: false,
             };
@@ -110,7 +206,16 @@ export class ScratchTextCompiler {
         const allErrors: CompilerError[] = [];
         
         try {
-            const parsedSprites: { name: string; program: ReturnType<Parser["parse"]>; isStage?: boolean }[] = [];
+            const parsedSprites: { 
+                name: string; 
+                program: ReturnType<Parser["parse"]>; 
+                isStage?: boolean;
+                costumeNames?: string[];
+                costumeUrls?: string[];
+                currentCostume?: number;
+                soundNames?: string[];
+                soundUrls?: string[];
+            }[] = [];
 
             // Parse each sprite's code
             for (const sprite of sprites) {
@@ -136,12 +241,29 @@ export class ScratchTextCompiler {
                     });
                 });
 
+                // Validate costume and sound references if names are provided
+                if (sprite.costumeNames || sprite.soundNames) {
+                    const validationErrors = this.validateAssetReferences(
+                        sprite.name,
+                        sprite.code,
+                        program,
+                        sprite.costumeNames || [],
+                        sprite.soundNames || []
+                    );
+                    allErrors.push(...validationErrors);
+                }
+
                 this.debugger.log("info", `Parsed sprite: ${sprite.name}`, program);
 
                 parsedSprites.push({
                     name: sprite.name,
                     program,
                     isStage: sprite.isStage,
+                    costumeNames: sprite.costumeNames,
+                    costumeUrls: sprite.costumeUrls,
+                    currentCostume: sprite.currentCostume,
+                    soundNames: sprite.soundNames,
+                    soundUrls: sprite.soundUrls,
                 });
             }
 
@@ -150,6 +272,7 @@ export class ScratchTextCompiler {
                 return {
                     js: "",
                     html: "",
+                    userCode: "",
                     errors: allErrors,
                     parsedSprites: [],
                     success: false,
@@ -180,6 +303,7 @@ export class ScratchTextCompiler {
             return {
                 js: "",
                 html: "",
+                userCode: "",
                 errors: allErrors,
                 parsedSprites: [],
                 success: false,
@@ -203,6 +327,7 @@ export async function compile(code: string): Promise<CompilationResult> {
         return {
             js: "",
             html: "",
+            userCode: "",
             errors: [{
                 code: "E999",
                 message: "Compilation failed in compiler function.",
@@ -231,6 +356,7 @@ export async function compileMultiSprite(sprites: SpriteInput[], debug?: boolean
         return {
             js: "",
             html: "",
+            userCode: "",
             errors: [{
                 code: "E999",
                 message: "Multi-sprite compilation failed.",

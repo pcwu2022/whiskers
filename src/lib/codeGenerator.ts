@@ -10,6 +10,8 @@ export class CodeGenerator {
     private program: Program;
     // The generated JavaScript code output
     private output: string = "";
+    // User code only (without runtime)
+    private userCode: string = "";
     // HTML output for browser display
     private htmlOutput: string = "";
     // Current indentation level for code formatting
@@ -27,7 +29,7 @@ export class CodeGenerator {
      * Main method to generate the JavaScript and HTML code
      * @returns Object containing JavaScript code and HTML
      */
-    generate(): { js: string; html: string } {
+    generate(): { js: string; html: string; userCode: string } {
         // First pass to collect all custom procedures
         this.collectProcedures();
 
@@ -40,6 +42,7 @@ export class CodeGenerator {
         return {
             js: this.output,
             html: this.htmlOutput,
+            userCode: this.userCode,
         };
     }
 
@@ -77,6 +80,9 @@ export class CodeGenerator {
         // Add runtime support code
         this.generateRuntimeSupport();
 
+        // Mark the start of user code
+        const userCodeStart = this.output.length;
+
         // Generate code for variables
         this.generateVariablesCode();
 
@@ -88,6 +94,9 @@ export class CodeGenerator {
 
         // Generate code for scripts
         this.generateScriptsCode();
+
+        // Extract just the user code (everything after the runtime)
+        this.userCode = this.output.substring(userCodeStart);
     }
 
     /**
@@ -111,6 +120,11 @@ export class CodeGenerator {
                 } else {
                     this.output += `scratchRuntime.variables["${name}"] = ${JSON.stringify(value)};\n`;
                 }
+            });
+            // Create variable displays for all declared variables
+            this.output += `// Create variable displays\n`;
+            this.program.variables.forEach((_, name) => {
+                this.output += `scratchRuntime.createVariableDisplay("${name}");\n`;
             });
         } else {
             this.output += `// No variables defined\n`;
@@ -461,8 +475,7 @@ export class CodeGenerator {
                 break;
             case "switchCostume":
                 const costume = this.formatArg(block.args[0]);
-                this.write(`// Switch costume (simplified implementation)\n`);
-                this.write(`console.log(\`Switching costume to \${${costume}}\`);\n`);
+                this.write(`${sprite}.switchCostume(${costume});\n`);
                 break;
             case "goToFrontLayer":
             case "goToFront":
@@ -975,11 +988,11 @@ export class CodeGenerator {
                 // For set, args are: [varName, expression]
                 const varName = block.args[0];
                 // Find the actual value (skip "to" keyword if present)
-                let varValue: unknown = block.args[1];
+                let varValue: string | number | BlockNode = block.args[1] as string | number | BlockNode;
                 if (varValue === "to" && block.args.length > 2) {
-                    varValue = block.args[2];
+                    varValue = block.args[2] as string | number | BlockNode;
                 }
-                this.write(`scratchRuntime.variables["${varName}"] = ${this.formatArg(varValue)};\n`);
+                this.write(`scratchRuntime.setVariable("${varName}", ${this.formatArg(varValue)});\n`);
                 break;
             }
             case "change":
@@ -988,50 +1001,20 @@ export class CodeGenerator {
                 // For change, args are: [varName, expression]
                 const changeVarName = block.args[0];
                 // Find the actual value (skip "by" keyword if present)
-                let changeValue: unknown = block.args[1];
+                let changeValue: string | number | BlockNode = block.args[1] as string | number | BlockNode;
                 if (changeValue === "by" && block.args.length > 2) {
-                    changeValue = block.args[2];
+                    changeValue = block.args[2] as string | number | BlockNode;
                 }
-                this.write(
-                    `scratchRuntime.variables["${changeVarName}"] = Number(scratchRuntime.variables["${changeVarName}"]) + Number(${this.formatArg(changeValue)});\n`
-                );
+                this.write(`scratchRuntime.changeVariable("${changeVarName}", ${this.formatArg(changeValue)});\n`);
                 break;
             }
             case "showVariable":
                 const showVarName = block.args[0];
-                this.write(`// Show variable in the UI\n`);
-                this.write(`(() => {\n`);
-                this.indent++;
-                this.write(`const varDisplay = document.getElementById('var-${showVarName}');\n`);
-                this.write(`if (!varDisplay) {\n`);
-                this.indent++;
-                this.write(`const newVarDisplay = document.createElement('div');\n`);
-                this.write(`newVarDisplay.id = 'var-${showVarName}';\n`);
-                this.write(`newVarDisplay.className = 'scratch-variable';\n`);
-                this.write(`newVarDisplay.style.position = 'absolute';\n`);
-                this.write(`newVarDisplay.style.top = '10px';\n`);
-                this.write(`newVarDisplay.style.left = '10px';\n`);
-                this.write(`newVarDisplay.style.backgroundColor = 'rgba(255,255,255,0.7)';\n`);
-                this.write(`newVarDisplay.style.padding = '5px';\n`);
-                this.write(`newVarDisplay.style.borderRadius = '5px';\n`);
-                this.write(
-                    `newVarDisplay.textContent = '${showVarName}: ' + scratchRuntime.variables["${showVarName}"];\n`
-                );
-                this.write(`document.getElementById('stage').appendChild(newVarDisplay);\n`);
-                this.indent--;
-                this.write(`} else {\n`);
-                this.indent++;
-                this.write(`varDisplay.style.display = 'block';\n`);
-                this.indent--;
-                this.write(`}\n`);
-                this.indent--;
-                this.write(`})();\n`);
+                this.write(`scratchRuntime.showVariableDisplay("${showVarName}");\n`);
                 break;
             case "hideVariable":
                 const hideVarName = block.args[0];
-                this.write(`// Hide variable in the UI\n`);
-                this.write(`const varDisplay = document.getElementById('var-${hideVarName}');\n`);
-                this.write(`if (varDisplay) varDisplay.style.display = 'none';\n`);
+                this.write(`scratchRuntime.hideVariableDisplay("${hideVarName}");\n`);
                 break;
             case "addToList":
                 const listName = block.args[0];
@@ -1411,18 +1394,40 @@ export class CodeGenerator {
  * Supports all Scratch 3.0 block categories
  */
 export class MultiSpriteCodeGenerator {
-    private sprites: { name: string; program: Program; isStage?: boolean }[];
+    private sprites: { 
+        name: string; 
+        program: Program; 
+        isStage?: boolean;
+        costumeNames?: string[];
+        costumeUrls?: string[];
+        currentCostume?: number;
+        soundNames?: string[];
+        soundUrls?: string[];
+    }[];
     private output: string = "";
+    private userCode: string = "";
     private htmlOutput: string = "";
     private procedures: Map<string, string[]> = new Map();
 
-    constructor(sprites: { name: string; program: Program; isStage?: boolean }[]) {
+    constructor(sprites: { 
+        name: string; 
+        program: Program; 
+        isStage?: boolean;
+        costumeNames?: string[];
+        costumeUrls?: string[];
+        currentCostume?: number;
+        soundNames?: string[];
+        soundUrls?: string[];
+    }[]) {
         this.sprites = sprites;
     }
 
-    generate(): { js: string; html: string } {
+    generate(): { js: string; html: string; userCode: string } {
         // Add runtime support code
         this.output = SCRATCH_RUNTIME;
+
+        // Mark the start of user code
+        const userCodeStart = this.output.length;
 
         // Collect all procedures from all sprites
         this.collectAllProcedures();
@@ -1442,12 +1447,16 @@ export class MultiSpriteCodeGenerator {
         // Generate code for each sprite's scripts
         this.generateSpriteScripts();
 
+        // Extract just the user code (everything after the runtime)
+        this.userCode = this.output.substring(userCodeStart);
+
         // Generate HTML
         this.htmlOutput = generateHTMLTemplate(this.output);
 
         return {
             js: this.output,
             html: this.htmlOutput,
+            userCode: this.userCode,
         };
     }
 
@@ -1538,6 +1547,11 @@ export class MultiSpriteCodeGenerator {
                 continue;
             }
             
+            // Get costume names and URLs
+            const costumeNames = sprite.costumeNames || ['costume1'];
+            const costumeUrls = sprite.costumeUrls || [];
+            const currentCostume = sprite.currentCostume || 0;
+            
             // Initialize the sprite with options
             const xOffset = (i - Math.floor(this.sprites.length / 2)) * 50;
             this.output += `scratchRuntime.initSprite("${safeName}", {\n`;
@@ -1547,8 +1561,9 @@ export class MultiSpriteCodeGenerator {
             this.output += `    visible: true,\n`;
             this.output += `    size: 100,\n`;
             this.output += `    rotationStyle: 'all around',\n`;
-            this.output += `    costumes: ['costume1'],\n`;
-            this.output += `    currentCostume: 0\n`;
+            this.output += `    costumes: ${JSON.stringify(costumeNames)},\n`;
+            this.output += `    costumeUrls: ${JSON.stringify(costumeUrls)},\n`;
+            this.output += `    currentCostume: ${currentCostume}\n`;
             this.output += `});\n`;
         }
         

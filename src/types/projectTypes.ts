@@ -5,11 +5,21 @@ export type SpriteType = "sprite" | "backdrop";
 
 export interface Costume {
     id: string;
-    name: string;
-    // For now, costumes are placeholders. In the future, these will be image URLs or data URLs
-    data: string | null;      // Image data URL or null for placeholder
+    name: string;             // Display name (file name without extension)
+    data: string | null;      // Base64 data URL for image, null for default
+    mimeType: string;         // Image MIME type (e.g., "image/png")
+    width: number;            // Image width in pixels
+    height: number;           // Image height in pixels
     rotationCenterX: number;  // Costume rotation center X
     rotationCenterY: number;  // Costume rotation center Y
+}
+
+export interface Sound {
+    id: string;
+    name: string;             // Display name (file name without extension)
+    data: string | null;      // Base64 data URL for audio
+    mimeType: string;         // Audio MIME type (e.g., "audio/mp3")
+    duration: number;         // Duration in seconds
 }
 
 export interface SpriteFile {
@@ -18,9 +28,9 @@ export interface SpriteFile {
     code: string;             // The scratch code for this sprite
     type: SpriteType;         // "sprite" or "backdrop"
     isStage: boolean;         // True only for the backdrop/stage
-    costumes: Costume[];      // List of costumes (placeholder for now)
+    costumes: Costume[];      // List of costumes
     currentCostume: number;   // Index of current costume
-    sounds: string[];         // List of sound names (placeholder for now)
+    sounds: Sound[];          // List of sounds
     x: number;                // Initial X position (sprites only)
     y: number;                // Initial Y position (sprites only)
     direction: number;        // Direction in degrees (sprites only, 90 = right)
@@ -81,14 +91,28 @@ when green flag clicked
     // Stage initialization
 `;
 
-// Create a placeholder costume
-export function createCostume(name: string): Costume {
+// Create a placeholder costume (uses default logo if no data provided)
+export function createCostume(name: string, data: string | null = null, mimeType: string = "image/png"): Costume {
     return {
         id: `costume_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
         name,
-        data: null, // Placeholder - will be image data in the future
+        data,
+        mimeType,
+        width: data ? 0 : 100,  // Will be set when image loads
+        height: data ? 0 : 100,
         rotationCenterX: 0,
         rotationCenterY: 0,
+    };
+}
+
+// Create a sound entry
+export function createSound(name: string, data: string | null = null, mimeType: string = "audio/mpeg"): Sound {
+    return {
+        id: `sound_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        name,
+        data,
+        mimeType,
+        duration: 0,  // Will be set when audio loads
     };
 }
 
@@ -144,6 +168,40 @@ export function createProject(name: string = "My Project"): ScratchProject {
 export function canDeleteSprite(sprite: SpriteFile): boolean {
     return !sprite.isStage && sprite.type !== "backdrop";
 }
+
+// Get display name for a costume (without sprite prefix)
+export function getCostumeDisplayName(fullName: string, spriteName: string): string {
+    const prefix = `${spriteName}_`;
+    if (fullName.startsWith(prefix)) {
+        return fullName.slice(prefix.length);
+    }
+    return fullName;
+}
+
+// Get full storage name for a costume (with sprite prefix)
+export function getCostumeStorageName(displayName: string, spriteName: string): string {
+    return `${spriteName}_${displayName}`;
+}
+
+// Get display name for a sound (without sprite prefix)
+export function getSoundDisplayName(fullName: string, spriteName: string): string {
+    const prefix = `${spriteName}_`;
+    if (fullName.startsWith(prefix)) {
+        return fullName.slice(prefix.length);
+    }
+    return fullName;
+}
+
+// Get full storage name for a sound (with sprite prefix)
+export function getSoundStorageName(displayName: string, spriteName: string): string {
+    return `${spriteName}_${displayName}`;
+}
+
+// Default costume URL for sprites
+export const DEFAULT_SPRITE_COSTUME_URL = "/costume1.png";
+
+// Default costume URL for stage (blank background)
+export const DEFAULT_STAGE_COSTUME_URL = "/stage.png";
 
 // Storage key for localStorage
 export const PROJECT_STORAGE_KEY = "scratchProject";

@@ -62,6 +62,14 @@ export function generateHTMLTemplate(jsCode: string): string {
             object-fit: contain;
         }
         
+        .flag-btn.disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+        .flag-btn.disabled:hover {
+            transform: none;
+        }
+        
         .fullscreen-btn {
             font-size: 18px;
             margin-left: auto;
@@ -76,16 +84,19 @@ export function generateHTMLTemplate(jsCode: string): string {
             display: flex;
             flex-direction: column;
             min-height: 200px;
+            max-height: calc(100vh - 150px); /* Limit height to maintain aspect ratio */
         }
         
         #stage {
-            flex: 1;
             background-color: white;
             border: 2px solid #d0d0d0;
             border-radius: 8px;
             position: relative;
             overflow: hidden;
-            aspect-ratio: 4 / 3;
+            aspect-ratio: 480 / 360;
+            width: 100%;
+            max-width: calc((100vh - 150px) * 480 / 360); /* Maintain aspect ratio based on available height */
+            margin: 0 auto; /* Center horizontally */
         }
         
         #stage-content {
@@ -98,7 +109,21 @@ export function generateHTMLTemplate(jsCode: string): string {
             /* Scale is calculated by JS based on actual stage size */
         }
         
-        #stage-overlay {
+        /* Mouse position tooltip */
+        #mouse-tooltip {
+            position: fixed;
+            background: rgba(0, 0, 0, 0.75);
+            color: white;
+            font-size: 11px;
+            font-family: monospace;
+            padding: 2px 6px;
+            border-radius: 4px;
+            pointer-events: none;
+            z-index: 1000;
+            display: none;
+            white-space: nowrap;
+        }
+                #stage-overlay {
             position: absolute;
             top: 0;
             left: 0;
@@ -217,6 +242,7 @@ export function generateHTMLTemplate(jsCode: string): string {
         body.fullscreen #stage {
             width: 100%;
             height: 100%;
+            max-width: none;
         }
         body.fullscreen .output-section {
             display: none;
@@ -255,13 +281,15 @@ export function generateHTMLTemplate(jsCode: string): string {
             <div id="console"></div>
         </div>
     </div>
+    <div id="mouse-tooltip"></div>
 
     <script>
         // State
         let outputCollapsed = false;
+        let isRunning = false;
         const IS_FULLSCREEN = __IS_FULLSCREEN__;
         
-        // Scale the stage content to fit the actual stage size
+        // Scale the stage content to fit the actual stage size while maintaining 480:360 aspect ratio
         function updateStageScale() {
             const stage = document.getElementById('stage');
             const content = document.getElementById('stage-content');
@@ -276,6 +304,51 @@ export function generateHTMLTemplate(jsCode: string): string {
         
         // Update scale on window resize
         window.addEventListener('resize', updateStageScale);
+        
+        // Mouse position tooltip
+        const mouseTooltip = document.getElementById('mouse-tooltip');
+        document.getElementById('stage').addEventListener('mousemove', function(e) {
+            const stage = document.getElementById('stage');
+            const rect = stage.getBoundingClientRect();
+            const scale = stage.clientWidth / 480;
+            const x = Math.round((e.clientX - rect.left) / scale - 240);
+            const y = Math.round(180 - (e.clientY - rect.top) / scale);
+            
+            mouseTooltip.style.display = 'block';
+            mouseTooltip.style.left = (e.clientX + 12) + 'px';
+            mouseTooltip.style.top = (e.clientY + 12) + 'px';
+            mouseTooltip.textContent = 'x: ' + x + ', y: ' + y;
+        });
+        
+        document.getElementById('stage').addEventListener('mouseleave', function() {
+            mouseTooltip.style.display = 'none';
+        });
+        
+        // Stage click logging
+        document.getElementById('stage').addEventListener('click', function(e) {
+            // Don't log if clicking on overlay
+            if (e.target.closest('#stage-overlay')) return;
+            
+            const stage = document.getElementById('stage');
+            const rect = stage.getBoundingClientRect();
+            const scale = stage.clientWidth / 480;
+            const x = Math.round((e.clientX - rect.left) / scale - 240);
+            const y = Math.round(180 - (e.clientY - rect.top) / scale);
+            
+            console.log('🖱️ Stage clicked at x: ' + x + ', y: ' + y);
+        });
+        
+        // Update flag button state based on running status
+        function updateFlagButton() {
+            const flagBtn = document.getElementById('flag-btn');
+            if (isRunning) {
+                flagBtn.classList.add('disabled');
+                flagBtn.title = 'Program is running';
+            } else {
+                flagBtn.classList.remove('disabled');
+                flagBtn.title = 'Run program';
+            }
+        }
         
         // Console logging override
         const originalLog = console.log;
@@ -340,6 +413,8 @@ export function generateHTMLTemplate(jsCode: string): string {
                 const consoleEl = document.getElementById('console');
                 if (consoleEl) consoleEl.innerHTML = '';
                 if (typeof scratchRuntime !== 'undefined') {
+                    isRunning = true;
+                    updateFlagButton();
                     scratchRuntime.greenFlag();
                 }
             }
@@ -347,6 +422,9 @@ export function generateHTMLTemplate(jsCode: string): string {
         
         // Green Flag button - request recompile from parent
         document.getElementById('flag-btn').addEventListener('click', function() {
+            // Don't run if already running
+            if (isRunning) return;
+            
             // Hide the initial overlay
             document.getElementById('stage-overlay').classList.add('hidden');
             
@@ -364,24 +442,30 @@ export function generateHTMLTemplate(jsCode: string): string {
             } else {
                 // Standalone mode - just restart
                 if (typeof scratchRuntime !== 'undefined') {
+                    isRunning = true;
+                    updateFlagButton();
                     scratchRuntime.greenFlag();
                 }
             }
         });
         
-        // Stop button (also resets)
+        // Stop button - stops animation but keeps sprites visible for debugging
         document.getElementById('stop-btn').addEventListener('click', function() {
             if (typeof scratchRuntime !== 'undefined') {
                 scratchRuntime.stopAll();
             }
-            // Reset by reloading
-            setTimeout(function() { location.reload(); }, 100);
+            isRunning = false;
+            updateFlagButton();
+            // Don't reload - allow user to move sprites for debugging
+            console.log('🛑 Program stopped. Sprites can be moved for debugging.');
         });
         
         // Initial setup on load
         window.addEventListener('load', function() {
             // Initial scale calculation
             updateStageScale();
+            // Initialize flag button state
+            updateFlagButton();
         });
         
         // Generated program code

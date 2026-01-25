@@ -1,11 +1,11 @@
 // IndexedDB Storage for CatScript Playground
 // Provides persistent storage for projects, costumes, and sounds
 
-import { ScratchProject } from "@/types/projectTypes";
+import { ScratchProject, Costume, Sound } from "@/types/projectTypes";
 
 // Database configuration
 const DB_NAME = "catscript-playground";
-const DB_VERSION = 1;
+const DB_VERSION = 2;  // Bump version for schema update
 
 // Store names
 const STORES = {
@@ -15,13 +15,13 @@ const STORES = {
     SETTINGS: "settings",
 } as const;
 
-// Schema types for future extension
-export interface CostumeAsset {
+// Schema types for stored assets (with Blob data for efficiency)
+export interface StoredCostumeAsset {
     id: string;
     projectId: string;
     spriteId: string;
     name: string;
-    data: Blob | null;  // Image data
+    data: Blob | null;  // Image data as Blob
     mimeType: string;
     width: number;
     height: number;
@@ -31,12 +31,12 @@ export interface CostumeAsset {
     updatedAt: number;
 }
 
-export interface SoundAsset {
+export interface StoredSoundAsset {
     id: string;
     projectId: string;
     spriteId: string;
     name: string;
-    data: Blob | null;  // Audio data
+    data: Blob | null;  // Audio data as Blob
     mimeType: string;
     duration: number;   // Duration in seconds
     createdAt: number;
@@ -334,7 +334,7 @@ export async function migrateFromLocalStorage(): Promise<ScratchProject | null> 
 }
 
 // Costume storage functions (for future use)
-export async function saveCostume(costume: CostumeAsset): Promise<void> {
+export async function saveCostume(costume: StoredCostumeAsset): Promise<void> {
     const database = await initDB();
     
     return new Promise((resolve, reject) => {
@@ -347,7 +347,7 @@ export async function saveCostume(costume: CostumeAsset): Promise<void> {
     });
 }
 
-export async function getCostumesForSprite(projectId: string, spriteId: string): Promise<CostumeAsset[]> {
+export async function getCostumesForSprite(projectId: string, spriteId: string): Promise<StoredCostumeAsset[]> {
     const database = await initDB();
     
     return new Promise((resolve, reject) => {
@@ -361,8 +361,21 @@ export async function getCostumesForSprite(projectId: string, spriteId: string):
     });
 }
 
+export async function deleteCostume(costumeId: string): Promise<void> {
+    const database = await initDB();
+    
+    return new Promise((resolve, reject) => {
+        const transaction = database.transaction(STORES.COSTUMES, "readwrite");
+        const store = transaction.objectStore(STORES.COSTUMES);
+        const request = store.delete(costumeId);
+
+        request.onsuccess = () => resolve();
+        request.onerror = () => reject(request.error);
+    });
+}
+
 // Sound storage functions (for future use)
-export async function saveSound(sound: SoundAsset): Promise<void> {
+export async function saveSound(sound: StoredSoundAsset): Promise<void> {
     const database = await initDB();
     
     return new Promise((resolve, reject) => {
@@ -375,7 +388,7 @@ export async function saveSound(sound: SoundAsset): Promise<void> {
     });
 }
 
-export async function getSoundsForSprite(projectId: string, spriteId: string): Promise<SoundAsset[]> {
+export async function getSoundsForSprite(projectId: string, spriteId: string): Promise<StoredSoundAsset[]> {
     const database = await initDB();
     
     return new Promise((resolve, reject) => {
@@ -387,6 +400,111 @@ export async function getSoundsForSprite(projectId: string, spriteId: string): P
         request.onsuccess = () => resolve(request.result || []);
         request.onerror = () => reject(request.error);
     });
+}
+
+export async function deleteSound(soundId: string): Promise<void> {
+    const database = await initDB();
+    
+    return new Promise((resolve, reject) => {
+        const transaction = database.transaction(STORES.SOUNDS, "readwrite");
+        const store = transaction.objectStore(STORES.SOUNDS);
+        const request = store.delete(soundId);
+
+        request.onsuccess = () => resolve();
+        request.onerror = () => reject(request.error);
+    });
+}
+
+// Helper: Convert base64 data URL to Blob
+export function dataURLToBlob(dataURL: string): Blob {
+    const [header, base64] = dataURL.split(',');
+    const mimeMatch = header.match(/:(.*?);/);
+    const mimeType = mimeMatch ? mimeMatch[1] : 'application/octet-stream';
+    const byteCharacters = atob(base64);
+    const byteNumbers = new Array(byteCharacters.length);
+    for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+    }
+    const byteArray = new Uint8Array(byteNumbers);
+    return new Blob([byteArray], { type: mimeType });
+}
+
+// Helper: Convert Blob to base64 data URL
+export function blobToDataURL(blob: Blob): Promise<string> {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+    });
+}
+
+// Helper: Convert Costume to StoredCostumeAsset
+export function costumeToStoredAsset(
+    costume: Costume, 
+    projectId: string, 
+    spriteId: string
+): StoredCostumeAsset {
+    const now = Date.now();
+    return {
+        id: costume.id,
+        projectId,
+        spriteId,
+        name: costume.name,
+        data: costume.data ? dataURLToBlob(costume.data) : null,
+        mimeType: costume.mimeType,
+        width: costume.width,
+        height: costume.height,
+        rotationCenterX: costume.rotationCenterX,
+        rotationCenterY: costume.rotationCenterY,
+        createdAt: now,
+        updatedAt: now,
+    };
+}
+
+// Helper: Convert StoredCostumeAsset to Costume
+export async function storedAssetToCostume(asset: StoredCostumeAsset): Promise<Costume> {
+    return {
+        id: asset.id,
+        name: asset.name,
+        data: asset.data ? await blobToDataURL(asset.data) : null,
+        mimeType: asset.mimeType,
+        width: asset.width,
+        height: asset.height,
+        rotationCenterX: asset.rotationCenterX,
+        rotationCenterY: asset.rotationCenterY,
+    };
+}
+
+// Helper: Convert Sound to StoredSoundAsset
+export function soundToStoredAsset(
+    sound: Sound,
+    projectId: string,
+    spriteId: string
+): StoredSoundAsset {
+    const now = Date.now();
+    return {
+        id: sound.id,
+        projectId,
+        spriteId,
+        name: sound.name,
+        data: sound.data ? dataURLToBlob(sound.data) : null,
+        mimeType: sound.mimeType,
+        duration: sound.duration,
+        createdAt: now,
+        updatedAt: now,
+    };
+}
+
+// Helper: Convert StoredSoundAsset to Sound
+export async function storedAssetToSound(asset: StoredSoundAsset): Promise<Sound> {
+    return {
+        id: asset.id,
+        name: asset.name,
+        data: asset.data ? await blobToDataURL(asset.data) : null,
+        mimeType: asset.mimeType,
+        duration: asset.duration,
+    };
 }
 
 // Settings functions

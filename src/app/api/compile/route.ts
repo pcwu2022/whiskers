@@ -7,11 +7,17 @@ interface SpriteInput {
     name: string;
     code: string;
     isStage?: boolean;
+    costumeNames?: string[];  // Available costume names for this sprite
+    costumeUrls?: string[];   // Costume image URLs (data URLs)
+    currentCostume?: number;  // Current costume index
+    soundNames?: string[];    // Available sound names for this sprite
+    soundUrls?: string[];     // Sound URLs (data URLs)
 }
 
 interface CompilationResponse {
     js: string;
     html: string;
+    userCode: string;
     success: boolean;
     errors: CompilerError[];
     debugInfo?: unknown;
@@ -29,6 +35,7 @@ export async function POST(request: Request) {
             const response: CompilationResponse = {
                 js: result.js,
                 html: result.html,
+                userCode: result.userCode,
                 success: result.success,
                 errors: result.errors,
             };
@@ -48,6 +55,7 @@ export async function POST(request: Request) {
         const response: CompilationResponse = {
             js: result.js,
             html: result.html,
+            userCode: result.userCode,
             success: result.success,
             errors: result.errors,
         };
@@ -58,6 +66,7 @@ export async function POST(request: Request) {
         return NextResponse.json({
             js: "",
             html: "",
+            userCode: "",
             success: false,
             errors: [{
                 code: "E999",
