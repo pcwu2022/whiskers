@@ -3,13 +3,15 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import Editor, { useMonaco } from "@monaco-editor/react";
 import * as monaco from "monaco-editor";
-import { languageDef, languageConfiguration, languageSelector, registerScratchTheme, toolboxCategories, ToolboxCategory, ToolboxCommand } from "@/lib/codeEditorConfig";
+import { languageDef, languageConfiguration, languageSelector, registerScratchTheme, toolboxCategories, ToolboxCategory, ToolboxCommand, BlockType } from "@/lib/codeEditorConfig";
 import FileTabs from "./FileTabs";
 import ProjectToolbar from "./ProjectToolbar";
 import ProjectNameModal from "./ProjectNameModal";
 import ResizeDivider from "./ResizeDivider";
 import CostumeSidebar from "./CostumeSidebar";
 import SoundSidebar from "./SoundSidebar";
+import DraggableBlock from "./DraggableBlock";
+import { DropZoneManager, DropZone } from "./DropZoneManager";
 import { Notification, useNotifications, Tooltip } from "./ui";
 import {
     ScratchProject,
@@ -30,6 +32,7 @@ import {
     migrateFromLocalStorage,
     isIndexedDBAvailable,
 } from "@/lib/storage";
+import { generateEmptyPreviewTemplate } from "@/templates";
 
 type monacoType = typeof monaco;
 
@@ -146,6 +149,15 @@ export default function CodeEditor() {
 
     const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
     const handleRunRef = useRef<() => void>(() => {});
+    
+    // Drag and drop state
+    const [isDragging, setIsDragging] = useState(false);
+    const [draggedCommand, setDraggedCommand] = useState<ToolboxCommand | null>(null);
+    const [draggedBlockType, setDraggedBlockType] = useState<BlockType | null>(null);
+    const [activeDropZone, setActiveDropZone] = useState<DropZone | null>(null);
+    const [dragPosition, setDragPosition] = useState<{ x: number; y: number } | null>(null);
+    const dropZoneManagerRef = useRef<DropZoneManager | null>(null);
+    const editorContainerRef = useRef<HTMLDivElement>(null);
     const monacoInstance = useMonaco();
 
     // Load project from IndexedDB on mount (with localStorage fallback/migration)
@@ -357,12 +369,15 @@ export default function CodeEditor() {
     // Handle editor mount
     const handleEditorDidMount = (editor: monaco.editor.IStandaloneCodeEditor, monacoRef: monacoType) => {
         editorRef.current = editor;
+        dropZoneManagerRef.current = new DropZoneManager(editor);
         if (monacoInstance) {
             monacoRef.editor.setModelLanguage(editor.getModel()!, "scratchSyntax");
         }
     };
 
     // Insert code from toolbox into editor with smart indentation
+    // Note: This function is kept for potential keyboard shortcut integration
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const insertToolboxCommand = useCallback((command: ToolboxCommand) => {
         const editor = editorRef.current;
         if (!editor) return;
@@ -431,6 +446,71 @@ export default function CodeEditor() {
         };
         editor.setPosition(newPosition);
         editor.focus();
+    }, []);
+
+    // Drag and drop handlers for toolbox blocks
+    const handleBlockDragStart = useCallback((command: ToolboxCommand, _rect: DOMRect) => {
+        setIsDragging(true);
+        setDraggedCommand(command);
+        setDraggedBlockType(command.blockType || "statement");
+        
+        // Initialize drop zone manager if needed
+        if (editorRef.current && !dropZoneManagerRef.current) {
+            dropZoneManagerRef.current = new DropZoneManager(editorRef.current);
+        }
+    }, []);
+
+    const handleBlockDragEnd = useCallback(() => {
+        setIsDragging(false);
+        setDraggedCommand(null);
+        setDraggedBlockType(null);
+        setActiveDropZone(null);
+        setDragPosition(null);
+    }, []);
+
+    // Handle drag over the editor area
+    const handleEditorDragOver = useCallback((e: React.DragEvent) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "copy";
+
+        if (!dropZoneManagerRef.current || !draggedBlockType) return;
+
+        const x = e.clientX;
+        const y = e.clientY;
+        setDragPosition({ x, y });
+
+        // Find nearest valid drop zone
+        const nearestZone = dropZoneManagerRef.current.findNearestDropZone(x, y, draggedBlockType);
+        setActiveDropZone(nearestZone);
+    }, [draggedBlockType]);
+
+    // Handle drop on the editor
+    const handleEditorDrop = useCallback((e: React.DragEvent) => {
+        e.preventDefault();
+        
+        if (!dropZoneManagerRef.current || !activeDropZone || !draggedCommand) {
+            handleBlockDragEnd();
+            return;
+        }
+
+        // Insert the code at the drop zone
+        dropZoneManagerRef.current.insertAtDropZone(
+            activeDropZone,
+            draggedCommand.code,
+            draggedCommand.needsIndent
+        );
+
+        handleBlockDragEnd();
+    }, [activeDropZone, draggedCommand, handleBlockDragEnd]);
+
+    // Handle drag leave
+    const handleEditorDragLeave = useCallback((e: React.DragEvent) => {
+        // Only clear if actually leaving the editor container
+        const relatedTarget = e.relatedTarget as HTMLElement;
+        if (!editorContainerRef.current?.contains(relatedTarget)) {
+            setActiveDropZone(null);
+            setDragPosition(null);
+        }
     }, []);
 
     // Update code for active sprite
@@ -720,15 +800,19 @@ export default function CodeEditor() {
                 setHtmlContent(data.html || null);
                 retValue = { js: data.js, html: data.html, success: true };
             } else {
-                // Compilation failed - show error message
+                // Compilation failed - show error message but still show preview with working green flag
                 const errorCount = data.errors?.length || 0;
                 setErrorMessage(`Compilation failed with ${errorCount} error${errorCount !== 1 ? 's' : ''}. Fix the errors and try again.`);
+                // Generate empty preview so user can still interact with the stage
+                setHtmlContent(generateEmptyPreviewTemplate());
                 retValue = { js: "", html: "", success: false };
             }
         } catch (error) {
             console.error("Error compiling:", error);
             setCompiledJsCode("Compilation failed.");
             setErrorMessage(String(error));
+            // Generate empty preview so user can still interact with the stage
+            setHtmlContent(generateEmptyPreviewTemplate());
         } finally {
             setLoading(false);
             setCompiled(true);
@@ -998,22 +1082,15 @@ export default function CodeEditor() {
                                                 
                                                 {/* Category Commands */}
                                                 {expandedCategory === category.name && (
-                                                    <div className="bg-gray-850 py-1">
+                                                    <div className="bg-gray-850 py-2 flex flex-col items-start overflow-x-auto">
                                                         {category.commands.map((command, idx) => (
-                                                            <button
+                                                            <DraggableBlock
                                                                 key={idx}
-                                                                onClick={() => insertToolboxCommand(command)}
-                                                                className="w-full px-4 py-1.5 text-left text-xs hover:bg-gray-700 transition-colors flex items-center gap-2 group"
-                                                                title={command.description}
-                                                            >
-                                                                <span
-                                                                    className="w-2 h-2 rounded-full flex-shrink-0"
-                                                                    style={{ backgroundColor: category.color }}
-                                                                />
-                                                                <span className="text-gray-300 group-hover:text-white truncate">
-                                                                    {command.label}
-                                                                </span>
-                                                            </button>
+                                                                command={command}
+                                                                categoryColor={category.color}
+                                                                onDragStart={handleBlockDragStart}
+                                                                onDragEnd={handleBlockDragEnd}
+                                                            />
                                                         ))}
                                                     </div>
                                                 )}
@@ -1082,10 +1159,21 @@ export default function CodeEditor() {
                     {/* Editor Label */}
                     <div className="bg-gray-800 px-3 py-2 text-gray-400 text-sm border-b border-gray-700">
                         <span>📝 {activeSprite?.name || "Scratch Code"}</span>
+                        {isDragging && (
+                            <span className="ml-2 text-yellow-400 text-xs animate-pulse">
+                                ✨ Drop block here
+                            </span>
+                        )}
                     </div>
                     
-                    {/* Monaco Editor */}
-                    <div className="flex-1">
+                    {/* Monaco Editor with Drop Zone Overlay */}
+                    <div 
+                        ref={editorContainerRef}
+                        className={`flex-1 relative ${isDragging ? "ring-2 ring-yellow-400 ring-inset" : ""}`}
+                        onDragOver={handleEditorDragOver}
+                        onDrop={handleEditorDrop}
+                        onDragLeave={handleEditorDragLeave}
+                    >
                         <Editor
                             width="100%"
                             height="100%"
@@ -1106,6 +1194,54 @@ export default function CodeEditor() {
                             beforeMount={handleEditorWillMount}
                             onMount={handleEditorDidMount}
                         />
+                        
+                        {/* Drop Zone Indicator Overlay */}
+                        {isDragging && activeDropZone && activeDropZone.rect && editorContainerRef.current && (
+                            <div
+                                className="absolute pointer-events-none z-50 transition-all duration-75"
+                                style={{
+                                    left: activeDropZone.rect.left - editorContainerRef.current.getBoundingClientRect().left,
+                                    top: activeDropZone.rect.top - editorContainerRef.current.getBoundingClientRect().top,
+                                    width: activeDropZone.rect.width,
+                                    height: activeDropZone.rect.height,
+                                }}
+                            >
+                                {/* Drop zone highlight line */}
+                                <div 
+                                    className={`absolute w-full h-1 rounded-full ${
+                                        draggedBlockType === "reporter" || draggedBlockType === "boolean"
+                                            ? "bg-green-400"
+                                            : "bg-yellow-400"
+                                    }`}
+                                    style={{
+                                        top: activeDropZone.type === "line-after" ? "100%" : "0",
+                                        boxShadow: `0 0 8px ${draggedBlockType === "reporter" || draggedBlockType === "boolean" ? "#4ade80" : "#facc15"}`,
+                                    }}
+                                />
+                                {/* Visual indicator dot */}
+                                <div 
+                                    className={`absolute w-3 h-3 rounded-full ${
+                                        draggedBlockType === "reporter" || draggedBlockType === "boolean"
+                                            ? "bg-green-400"
+                                            : "bg-yellow-400"
+                                    }`}
+                                    style={{
+                                        left: -6,
+                                        top: activeDropZone.type === "line-after" ? "calc(100% - 6px)" : -6,
+                                        boxShadow: `0 0 8px ${draggedBlockType === "reporter" || draggedBlockType === "boolean" ? "#4ade80" : "#facc15"}`,
+                                    }}
+                                />
+                            </div>
+                        )}
+                        
+                        {/* Drag overlay hint when dragging but no valid zone */}
+                        {isDragging && !activeDropZone && (
+                            <div className="absolute inset-0 bg-gray-900/30 pointer-events-none flex items-center justify-center">
+                                <div className="bg-gray-800/90 px-4 py-2 rounded-lg text-gray-400 text-sm">
+                                    Drag to a valid position
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>
 

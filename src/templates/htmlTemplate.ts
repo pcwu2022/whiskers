@@ -1,6 +1,15 @@
 // HTML Template for Scratch Program Output
 // This template wraps the generated JavaScript code in an HTML page
 
+// Generate an empty preview template (no code, but workable green flag for recompile)
+export function generateEmptyPreviewTemplate(): string {
+    return generateHTMLTemplate(`
+        // Empty preview - no code compiled yet or compilation failed
+        // The green flag will trigger a recompile from the parent editor
+        console.log('⚠️ No code compiled. Fix errors in your code and click the green flag to compile.');
+    `);
+}
+
 export function generateHTMLTemplate(jsCode: string): string {
     return `<!DOCTYPE html>
 <html lang="en">

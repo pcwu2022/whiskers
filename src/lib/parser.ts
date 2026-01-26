@@ -1177,6 +1177,14 @@ export class Parser {
                 // Number argument
                 args.push(parseFloat(this.advance().value));
             } else if (this.match(TokenType.IDENTIFIER)) {
+                // First check if this starts a multi-word built-in reporter
+                const multiWordReporter = this.tryMatchMultiWordReporter();
+                if (multiWordReporter) {
+                    // It's a built-in reporter like "current date" or "mouse x"
+                    args.push(`$${multiWordReporter}`);
+                    continue;
+                }
+                
                 // Check if this identifier is a declared variable or list
                 const token = this.current;
                 const identifierName = this.advance().value;
@@ -1223,8 +1231,15 @@ export class Parser {
                     this.advance(); // Skip ']'
                 }
             } else if (this.match(TokenType.KEYWORD)) {
-                // Keyword argument
-                args.push(this.advance().value);
+                // Check if this starts a multi-word built-in reporter
+                const multiWordReporter = this.tryMatchMultiWordReporter();
+                if (multiWordReporter) {
+                    // It's a built-in reporter like "current date" or "mouse x"
+                    args.push(`$${multiWordReporter}`);
+                } else {
+                    // Single keyword argument
+                    args.push(this.advance().value);
+                }
             } else if (this.match(TokenType.OPERATOR)) {
                 // Operator
                 args.push(this.advance().value);

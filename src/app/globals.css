@@ -24,3 +24,40 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Draggable block styles */
+.block-shape {
+  transition: filter 0.15s ease;
+}
+
+.block-shape:hover {
+  filter: brightness(1.1) drop-shadow(2px 2px 4px rgba(0,0,0,0.3));
+}
+
+/* Drag ghost styling */
+[draggable="true"] {
+  -webkit-user-drag: element;
+  user-select: none;
+}
+
+/* Drop zone animation */
+@keyframes dropzone-pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+.drop-zone-indicator {
+  animation: dropzone-pulse 0.8s ease-in-out infinite;
+}
+
+/* Toolbox block container */
+.toolbox-blocks {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 4px;
+}

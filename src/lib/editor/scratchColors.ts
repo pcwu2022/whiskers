@@ -3,7 +3,7 @@ export const SCRATCH_COLORS = {
     motion: "#4C97FF",      // Blue
     looks: "#9966FF",       // Purple
     sound: "#CF63CF",       // Magenta/Pink
-    events: "#FFBF00",      // Yellow
+    events: "#D4A017",      // Darker Gold/Yellow
     control: "#FFAB19",     // Light Orange
     sensing: "#5CB1D6",     // Sky Blue
     operators: "#59C059",   // Green

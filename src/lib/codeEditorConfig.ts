@@ -12,4 +12,4 @@ export {
     initialCode,
 } from "./editor";
 
-export type { ToolboxCommand, ToolboxCategory } from "./editor";
+export type { ToolboxCommand, ToolboxCategory, BlockType } from "./editor";

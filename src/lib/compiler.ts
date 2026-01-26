@@ -135,11 +135,66 @@ export class ScratchTextCompiler {
         return errors;
     }
     
+    // Check for unfilled placeholder symbols in code
+    private checkForPlaceholders(code: string, spriteName?: string): CompilerError[] {
+        const errors: CompilerError[] = [];
+        const lines = code.split('\n');
+        const prefix = spriteName ? `[${spriteName}] ` : '';
+        
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i];
+            const lineNum = i + 1;
+            
+            // Check for reporter placeholder (⬤)
+            let col = line.indexOf('⬤');
+            if (col !== -1) {
+                errors.push({
+                    code: "E100",
+                    message: `${prefix}Unfilled value slot (⬤) found - please fill in this blank with a value or reporter`,
+                    line: lineNum,
+                    column: col + 1,
+                    severity: "error",
+                    suggestion: "Drag a reporter block or type a value to fill in this slot",
+                });
+            }
+            
+            // Check for boolean placeholder (⯁)
+            col = line.indexOf('⯁');
+            if (col !== -1) {
+                errors.push({
+                    code: "E101",
+                    message: `${prefix}Unfilled boolean slot (⯁) found - please fill in this blank with a condition`,
+                    line: lineNum,
+                    column: col + 1,
+                    severity: "error",
+                    suggestion: "Drag a boolean block or type a condition to fill in this slot",
+                });
+            }
+        }
+        
+        return errors;
+    }
+
     // compile: Main method that takes Scratch-like text code as input and returns JavaScript code.
     compile(code: string): CompilationResult {
         const allErrors: CompilerError[] = [];
         
         try {
+            // Step 0: Check for unfilled placeholders
+            const placeholderErrors = this.checkForPlaceholders(code);
+            allErrors.push(...placeholderErrors);
+            
+            // If there are placeholder errors, stop early
+            if (placeholderErrors.length > 0) {
+                return {
+                    js: "",
+                    html: "",
+                    userCode: "",
+                    errors: allErrors,
+                    success: false,
+                };
+            }
+            
             // Step 1: Tokenize the input using the Lexer.
             const lexer = new Lexer(code);
             const tokens = lexer.tokenize();
@@ -206,6 +261,24 @@ export class ScratchTextCompiler {
         const allErrors: CompilerError[] = [];
         
         try {
+            // Step 0: Check for unfilled placeholders in all sprites
+            for (const sprite of sprites) {
+                const placeholderErrors = this.checkForPlaceholders(sprite.code, sprite.name);
+                allErrors.push(...placeholderErrors);
+            }
+            
+            // If there are placeholder errors, stop early
+            if (allErrors.length > 0) {
+                return {
+                    js: "",
+                    html: "",
+                    userCode: "",
+                    errors: allErrors,
+                    parsedSprites: [],
+                    success: false,
+                };
+            }
+            
             const parsedSprites: { 
                 name: string; 
                 program: ReturnType<Parser["parse"]>; 

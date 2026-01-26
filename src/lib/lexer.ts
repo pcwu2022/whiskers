@@ -173,6 +173,8 @@ export class Lexer {
         "year",
         "month",
         "date",
+        "day",
+        "week",
         "dayofweek",
         "hour",
         "minute",

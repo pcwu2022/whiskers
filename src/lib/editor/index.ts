@@ -4,5 +4,5 @@ export { scratchTheme, registerScratchTheme } from "./scratchTheme";
 export { languageDef, languageConfiguration } from "./scratchLanguage";
 export { languageSelector } from "./scratchCompletions";
 export { toolboxCategories } from "./toolboxConfig";
-export type { ToolboxCommand, ToolboxCategory } from "./toolboxConfig";
+export type { ToolboxCommand, ToolboxCategory, BlockType } from "./toolboxConfig";
 export { initialCode } from "./initialCode";
