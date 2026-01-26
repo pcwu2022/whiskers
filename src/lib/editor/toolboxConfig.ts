@@ -36,6 +36,10 @@ export const toolboxCategories: ToolboxCategory[] = [
             { label: "set y to _", code: "set y to █", description: "Set y position" },
             { label: "if on edge, bounce", code: "if on edge, bounce", description: "Bounce off edge" },
             { label: "set rotation style _", code: "set rotation style █", description: "Set rotation style" },
+            // Motion Reporters (built-in variables)
+            { label: "x position", code: "x position", description: "Sprite's x position" },
+            { label: "y position", code: "y position", description: "Sprite's y position" },
+            { label: "direction", code: "direction", description: "Sprite's direction" },
         ],
     },
     {
@@ -60,6 +64,12 @@ export const toolboxCategories: ToolboxCategory[] = [
             { label: "hide", code: "hide", description: "Hide sprite" },
             { label: "go to front layer", code: "go to front layer", description: "Go to front" },
             { label: "go to back layer", code: "go to back layer", description: "Go to back" },
+            // Looks Reporters (built-in variables)
+            { label: "costume number", code: "costume number", description: "Current costume number" },
+            { label: "costume name", code: "costume name", description: "Current costume name" },
+            { label: "backdrop number", code: "backdrop number", description: "Current backdrop number" },
+            { label: "backdrop name", code: "backdrop name", description: "Current backdrop name" },
+            { label: "size", code: "size", description: "Sprite's size percentage" },
         ],
     },
     {
@@ -72,6 +82,8 @@ export const toolboxCategories: ToolboxCategory[] = [
             { label: "stop all sounds", code: "stop all sounds", description: "Stop all sounds" },
             { label: "change volume by _", code: "change volume by █", description: "Change volume" },
             { label: "set volume to _", code: "set volume to █", description: "Set volume" },
+            // Sound Reporters (built-in variables)
+            { label: "volume", code: "volume", description: "Current volume" },
         ],
     },
     {
@@ -117,14 +129,25 @@ export const toolboxCategories: ToolboxCategory[] = [
             { label: "touching edge", code: "touching edge", description: "Check touching edge" },
             { label: "touching color _", code: 'touching color "█"', description: "Check touching color" },
             { label: "ask _ and wait", code: 'ask "█" and wait', description: "Ask user for input" },
-            { label: "answer", code: "answer", description: "Get user's answer" },
             { label: "key _ pressed", code: "key █ pressed", description: "Check key pressed" },
             { label: "mouse down", code: "mouse down", description: "Check mouse button" },
-            { label: "mouse x", code: "mouse x", description: "Get mouse x position" },
-            { label: "mouse y", code: "mouse y", description: "Get mouse y position" },
             { label: "distance to _", code: 'distance to "█"', description: "Get distance to sprite" },
-            { label: "timer", code: "timer", description: "Get timer value" },
             { label: "reset timer", code: "reset timer", description: "Reset timer to 0" },
+            // Sensing Reporters (built-in variables)
+            { label: "answer", code: "answer", description: "User's last answer" },
+            { label: "mouse x", code: "mouse x", description: "Mouse x position" },
+            { label: "mouse y", code: "mouse y", description: "Mouse y position" },
+            { label: "loudness", code: "loudness", description: "Microphone loudness" },
+            { label: "timer", code: "timer", description: "Time since last reset" },
+            { label: "username", code: "username", description: "User's username" },
+            { label: "current year", code: "current year", description: "Current year" },
+            { label: "current month", code: "current month", description: "Current month (1-12)" },
+            { label: "current date", code: "current date", description: "Current day of month (1-31)" },
+            { label: "current day of week", code: "current day of week", description: "Day of week (1-7)" },
+            { label: "current hour", code: "current hour", description: "Current hour (0-23)" },
+            { label: "current minute", code: "current minute", description: "Current minute (0-59)" },
+            { label: "current second", code: "current second", description: "Current second (0-59)" },
+            { label: "days since 2000", code: "days since 2000", description: "Days since Jan 1, 2000" },
         ],
     },
     {

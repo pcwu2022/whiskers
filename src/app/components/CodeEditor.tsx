@@ -3,7 +3,7 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import Editor, { useMonaco } from "@monaco-editor/react";
 import * as monaco from "monaco-editor";
-import { languageDef, languageSelector, registerScratchTheme, toolboxCategories, ToolboxCategory, ToolboxCommand } from "@/lib/codeEditorConfig";
+import { languageDef, languageConfiguration, languageSelector, registerScratchTheme, toolboxCategories, ToolboxCategory, ToolboxCommand } from "@/lib/codeEditorConfig";
 import FileTabs from "./FileTabs";
 import ProjectToolbar from "./ProjectToolbar";
 import ProjectNameModal from "./ProjectNameModal";
@@ -83,6 +83,21 @@ function generateSpriteName(sprites: SpriteFile[]): string {
         num++;
     }
     return `Sprite${num}`;
+}
+
+// Helper to sanitize compiled code for display - replaces long data URLs with filenames
+function sanitizeCodeForDisplay(code: string): string {
+    // Replace data URLs in costumeUrls arrays with just the filename comment
+    // Pattern: "data:image/..." or "data:audio/..." strings
+    return code.replace(
+        /"data:(image|audio)\/[^"]+"/g,
+        (match) => {
+            // Try to extract original filename from data URL if embedded, otherwise use placeholder
+            // Data URLs don't contain filenames, so just indicate it's an embedded asset
+            const type = match.includes('image') ? 'image' : 'audio';
+            return `"[embedded ${type}]"`;
+        }
+    );
 }
 
 // ProjectNameModal and ResizeDivider have been moved to their own files
@@ -305,6 +320,7 @@ export default function CodeEditor() {
         // Register language
         monacoRef.languages.register({ id: "scratchSyntax" });
         monacoRef.languages.setMonarchTokensProvider("scratchSyntax", languageDef);
+        monacoRef.languages.setLanguageConfiguration("scratchSyntax", languageConfiguration);
         monacoRef.languages.registerCompletionItemProvider("scratchSyntax", languageSelector(monacoRef));
         
         // Register the custom Scratch theme with official colors
@@ -317,6 +333,7 @@ export default function CodeEditor() {
             // Re-register to ensure everything is set up
             monacoInstance.languages.register({ id: "scratchSyntax" });
             monacoInstance.languages.setMonarchTokensProvider("scratchSyntax", languageDef);
+            monacoInstance.languages.setLanguageConfiguration("scratchSyntax", languageConfiguration);
             monacoInstance.languages.registerCompletionItemProvider("scratchSyntax", languageSelector(monacoInstance));
             monacoInstance.languages.register({ id: "javascript" });
             monacoInstance.languages.register({ id: "html" });
@@ -697,8 +714,9 @@ export default function CodeEditor() {
             }
             
             if (data.success) {
-                // Use userCode for display (without runtime), but use full js for execution
-                setCompiledJsCode(data.userCode || data.js);
+                // Use userCode for display (without runtime), sanitize to hide long data URLs
+                const displayCode = sanitizeCodeForDisplay(data.userCode || data.js);
+                setCompiledJsCode(displayCode);
                 setHtmlContent(data.html || null);
                 retValue = { js: data.js, html: data.html, success: true };
             } else {

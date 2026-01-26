@@ -6,6 +6,7 @@ export {
     scratchTheme,
     registerScratchTheme,
     languageDef,
+    languageConfiguration,
     languageSelector,
     toolboxCategories,
     initialCode,

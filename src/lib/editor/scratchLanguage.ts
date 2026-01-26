@@ -1,5 +1,70 @@
 import type { languages } from "monaco-editor";
 
+// Language configuration for auto-indent and bracket matching
+export const languageConfiguration: languages.LanguageConfiguration = {
+    // Words that trigger indent after Enter
+    indentationRules: {
+        // Increase indent after these patterns (blocks that have bodies)
+        increaseIndentPattern: /^\s*(when\s.*|repeat\s+\d+|repeat\s+until.*|forever|if\s.*then|if\s.*|else|define\s.*|when\s+flag\s+clicked|when\s+flagClicked|when\s+I\s+receive.*|when\s+I\s+start\s+as\s+a\s+clone|when\s+this\s+sprite\s+clicked|when\s+backdrop\s+switches\s+to.*|when\s+key\s+.*\s+pressed)\s*$/,
+        // Decrease indent patterns (typically "else" or "end" type blocks)
+        decreaseIndentPattern: /^\s*(else)\s*$/,
+    },
+    // Auto-closing pairs
+    autoClosingPairs: [
+        { open: "(", close: ")" },
+        { open: '"', close: '"' },
+        { open: "[", close: "]" },
+    ],
+    // Surrounding pairs (for selection wrapping)
+    surroundingPairs: [
+        { open: "(", close: ")" },
+        { open: '"', close: '"' },
+        { open: "[", close: "]" },
+    ],
+    // Brackets for matching
+    brackets: [
+        ["(", ")"],
+        ["[", "]"],
+    ],
+    // Comments
+    comments: {
+        lineComment: "//",
+    },
+    // On Enter rules for better indentation
+    onEnterRules: [
+        {
+            // After 'repeat X' or 'repeat until'
+            beforeText: /^\s*(repeat\s+\d+|repeat\s+until.*)\s*$/,
+            action: { indentAction: 1 }, // IndentAction.Indent
+        },
+        {
+            // After 'forever'
+            beforeText: /^\s*forever\s*$/,
+            action: { indentAction: 1 },
+        },
+        {
+            // After 'if ... then' or just 'if ...'
+            beforeText: /^\s*if\s+.*(then)?\s*$/,
+            action: { indentAction: 1 },
+        },
+        {
+            // After 'else'
+            beforeText: /^\s*else\s*$/,
+            action: { indentAction: 1 },
+        },
+        {
+            // After 'define ...'
+            beforeText: /^\s*define\s+.+$/,
+            action: { indentAction: 1 },
+        },
+        {
+            // After any 'when ...' event handler
+            beforeText: /^\s*when\s+.+$/,
+            action: { indentAction: 1 },
+        },
+    ],
+};
+
 // Monarch language definition for syntax highlighting
 export const languageDef: languages.IMonarchLanguage = {
     ignoreCase: false,

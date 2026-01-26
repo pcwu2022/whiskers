@@ -15,11 +15,14 @@ const scratchRuntime = {
     },
     currentSprite: 'Sprite1',
     variables: {},
+    initialVariables: {},  // Store initial variable values for reset
     variableDisplays: {},  // Track variable display elements and their positions
     lists: {},
+    initialLists: {},  // Store initial list values for reset
     procedures: {},
     events: {},
     greenFlagHandlers: [],
+    onStopAllCallback: null,  // Callback for when stopAll is called from code
     answer: '',
     broadcasts: {},
     running: false,
@@ -720,6 +723,55 @@ const scratchRuntime = {
         const self = this;
         this.running = true;
         this.timer = Date.now();
+        
+        // Reset variables to initial values
+        for (const varName in this.initialVariables) {
+            this.variables[varName] = this.initialVariables[varName];
+            this.updateVariableDisplay(varName);
+        }
+        
+        // Reset lists to initial values (deep copy)
+        for (const listName in this.initialLists) {
+            this.lists[listName] = this.initialLists[listName].slice();
+        }
+        
+        // Delete all existing clones
+        this.clones.slice().forEach(function(clone) {
+            self.deleteClone(clone);
+        });
+        
+        // Reset sprite positions and properties to initial state
+        for (const spriteName in this.sprites) {
+            const sprite = this.sprites[spriteName];
+            if (sprite.isClone) continue;  // Skip clones (they were deleted above)
+            if (sprite.initialState) {
+                sprite.x = sprite.initialState.x;
+                sprite.y = sprite.initialState.y;
+                sprite.direction = sprite.initialState.direction;
+                sprite.visible = sprite.initialState.visible;
+                sprite.size = sprite.initialState.size;
+                sprite.currentCostume = sprite.initialState.currentCostume;
+                // Reset effects
+                for (const effect in sprite.effects) {
+                    sprite.effects[effect] = 0;
+                }
+                self.updateSpritePosition(spriteName);
+                self.updateSpriteTransform(spriteName);
+                self.updateSpriteEffects(spriteName);
+                self.updateSpriteCostume(spriteName);
+                // Show sprite if it was visible initially
+                const spriteDiv = document.getElementById('sprite-' + spriteName);
+                if (spriteDiv) {
+                    spriteDiv.style.display = sprite.visible ? 'flex' : 'none';
+                }
+            }
+        }
+        
+        // Remove all speech bubbles
+        document.querySelectorAll('[id^="speech-"]').forEach(function(el) {
+            el.remove();
+        });
+        
         console.log('🚩 Green flag clicked!');
         this.greenFlagHandlers.forEach(function(handler) {
             try {
@@ -739,6 +791,10 @@ const scratchRuntime = {
             self.deleteClone(clone);
         });
         console.log('🛑 All scripts stopped');
+        // Notify UI to update button states
+        if (this.onStopAllCallback) {
+            this.onStopAllCallback();
+        }
     },
 
     // Timer functions

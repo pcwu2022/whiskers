@@ -466,6 +466,14 @@ export function generateHTMLTemplate(jsCode: string): string {
             updateStageScale();
             // Initialize flag button state
             updateFlagButton();
+            
+            // Register callback for when stopAll is called from code
+            if (typeof scratchRuntime !== 'undefined') {
+                scratchRuntime.onStopAllCallback = function() {
+                    isRunning = false;
+                    updateFlagButton();
+                };
+            }
         });
         
         // Generated program code

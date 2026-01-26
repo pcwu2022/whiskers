@@ -9,6 +9,21 @@ import { Lexer } from "./lexer";
 
 // const d: SimpleDebugger = new SimpleDebugger();
 
+// Built-in reporter names that cannot be used as user-defined variables
+// These are reserved because they are Scratch's built-in reporter blocks
+export const BUILTIN_REPORTERS = new Set([
+    // Motion reporters
+    "x", "y", "x position", "y position", "direction",
+    // Looks reporters
+    "size", "costume number", "costume name", "backdrop number", "backdrop name",
+    // Sound reporters
+    "volume",
+    // Sensing reporters
+    "timer", "answer", "mouse x", "mouse y", "loudness", "username",
+    "current year", "current month", "current date", "current day of week",
+    "current hour", "current minute", "current second", "days since 2000"
+]);
+
 export class Parser {
     // Array of tokens to be parsed.
     private tokens: Token[];
@@ -121,12 +136,8 @@ export class Parser {
         this.declaredLists.clear();
         
         // Add built-in variables (sensing reporters, etc.)
-        const builtInVariables = [
-            "x", "y", "direction", "size", "volume", "timer", "answer",
-            "mouse x", "mouse y", "loudness", "username",
-            "costume number", "costume name", "backdrop number", "backdrop name"
-        ];
-        builtInVariables.forEach(v => this.declaredVariables.add(v));
+        // These are reserved and cannot be used as user-defined variable names
+        BUILTIN_REPORTERS.forEach(v => this.declaredVariables.add(v));
 
         // Skip any initial newlines or comments
         this.skipIrrelevant();
@@ -141,7 +152,12 @@ export class Parser {
                 const keyword = this.current.value;
                 if (keyword === "var" || keyword === "variable") {
                     this.advance(); // Skip 'var'
+                    // Check for identifier OR keyword (for cases like "var timer")
                     if (this.match(TokenType.IDENTIFIER)) {
+                        this.declaredVariables.add(this.current.value);
+                    } else if (this.match(TokenType.KEYWORD)) {
+                        // If it's a keyword that's a built-in reporter, we'll error later
+                        // Otherwise it could be a user variable with a keyword name
                         this.declaredVariables.add(this.current.value);
                     }
                 } else if (keyword === "list") {
@@ -411,6 +427,8 @@ export class Parser {
             "reset",
             
             // Variables
+            "var",
+            "variable",
             "add",
             "insert",
             "replace",
@@ -682,6 +700,9 @@ export class Parser {
                         blockKeyword = "changeVariable";
                     }
                 }
+            } else if (!this.isAtEnd() && this.match(TokenType.IDENTIFIER)) {
+                // change <variableName> by <value> - the variable name is an IDENTIFIER
+                blockKeyword = "changeVariable";
             }
         } else if (blockKeyword === "repeat") {
             // support 'repeat until' as a combined keyword
@@ -808,6 +829,14 @@ export class Parser {
                     // Support old syntax "when flagClicked" 
                     this.advance();
                     blockKeyword = "whenFlagClicked";
+                } else if (nextWord === "flag") {
+                    // Support shorthand "when flag clicked" (without "green")
+                    this.advance(); // Consume 'flag'
+                    this.skipIrrelevant();
+                    if (!this.isAtEnd() && this.matchKeyword("clicked")) {
+                        this.advance(); // Consume 'clicked'
+                    }
+                    blockKeyword = "whenFlagClicked";
                 } else if (nextWord === "spriteClicked") {
                     // Support old syntax "when spriteClicked"
                     this.advance();
@@ -871,6 +900,9 @@ export class Parser {
         if (keyPressedKey !== null) {
             // Key was already captured during "when X key pressed" parsing
             args = [keyPressedKey];
+        } else if (blockKeyword === "var" || blockKeyword === "variable") {
+            // Check for built-in reporter names and raise error
+            args = this.parseVarBlockArguments();
         } else if (blockKeyword === "goToXY") {
             // Parse "x: N y: N" format
             args = this.parseGoToXYArguments();
@@ -1066,6 +1098,52 @@ export class Parser {
         return args;
     }
 
+    // Parse arguments for var/variable block and check for built-in reporter conflicts
+    private parseVarBlockArguments(): (string | number | BlockNode)[] {
+        const args: (string | number | BlockNode)[] = [];
+        
+        this.skipIrrelevant();
+        
+        // Get the variable name
+        let varName: string | null = null;
+        if (this.match(TokenType.IDENTIFIER) || this.match(TokenType.KEYWORD)) {
+            const nameToken = this.advance();
+            varName = nameToken.value;
+            args.push(varName);
+            
+            // Check if the variable name is a built-in reporter
+            if (BUILTIN_REPORTERS.has(varName)) {
+                this.addError(
+                    ErrorCodes.RESERVED_KEYWORD,
+                    `'${varName}' is a built-in reporter and cannot be used as a variable name.`,
+                    nameToken,
+                    `Choose a different name for your variable. Built-in reporters include: x position, y position, direction, size, volume, timer, answer, etc.`
+                );
+            }
+        }
+        
+        this.skipIrrelevant();
+        
+        // Parse initial value if present (var name = value)
+        if (!this.isAtEnd() && this.match(TokenType.OPERATOR) && this.current.value === "=") {
+            this.advance(); // Skip '='
+            this.skipIrrelevant();
+            
+            // Get the value
+            if (this.match(TokenType.NUMBER)) {
+                args.push(parseFloat(this.advance().value));
+            } else if (this.match(TokenType.STRING)) {
+                args.push(this.advance().value);
+            } else if (this.match(TokenType.IDENTIFIER)) {
+                args.push(this.advance().value);
+            } else if (this.match(TokenType.PARENTHESIS_OPEN)) {
+                args.push(this.parseExpression());
+            }
+        }
+        
+        return args;
+    }
+
     // determineBlockType: Determine the type of block based on its keyword
     private determineBlockType(keyword: string): BlockType {
         // Maps common Scratch block keywords to their respective types
@@ -1104,9 +1182,13 @@ export class Parser {
                 const identifierName = this.advance().value;
                 
                 // Check if it's a known variable or list
-                if (!this.declaredVariables.has(identifierName) && 
-                    !this.declaredLists.has(identifierName) &&
-                    !Lexer.RESERVED_KEYWORDS.has(identifierName)) {
+                if (this.declaredVariables.has(identifierName)) {
+                    // It's a declared variable - prefix with $ for code generator
+                    args.push(`$${identifierName}`);
+                } else if (this.declaredLists.has(identifierName)) {
+                    // It's a declared list - prefix with # for code generator
+                    args.push(`#${identifierName}`);
+                } else if (!Lexer.RESERVED_KEYWORDS.has(identifierName)) {
                     // Unknown identifier - could be undeclared variable
                     this.addError(
                         ErrorCodes.UNDECLARED_VARIABLE,
@@ -1114,8 +1196,12 @@ export class Parser {
                         token,
                         `Add 'var ${identifierName} = 0' or 'list ${identifierName} = []' at the top of your code.`
                     );
+                    // Still push it as a variable reference (with $) in case they want to run anyway
+                    args.push(`$${identifierName}`);
+                } else {
+                    // It's a reserved keyword used as identifier, just push as-is
+                    args.push(identifierName);
                 }
-                args.push(identifierName);
             } else if (this.match(TokenType.PARENTHESIS_OPEN)) {
                 // Nested expression in parentheses
                 args.push(this.parseExpression());
@@ -1160,6 +1246,9 @@ export class Parser {
 
         const args: (string | number | BlockNode)[] = [];
 
+        // Keywords that act as operators inside expressions
+        const operatorKeywords = ["mod", "and", "or", "not"];
+
         // Parse the expression until we hit the closing parenthesis
         while (!this.isAtEnd() && !this.match(TokenType.PARENTHESIS_CLOSE)) {
             if (this.match(TokenType.STRING)) {
@@ -1167,9 +1256,43 @@ export class Parser {
             } else if (this.match(TokenType.NUMBER)) {
                 args.push(parseFloat(this.advance().value));
             } else if (this.match(TokenType.IDENTIFIER)) {
-                args.push(this.advance().value);
+                const identifierName = this.advance().value;
+                // Check if it's a variable or list and prefix accordingly
+                if (this.declaredVariables.has(identifierName)) {
+                    args.push(`$${identifierName}`);
+                } else if (this.declaredLists.has(identifierName)) {
+                    args.push(`#${identifierName}`);
+                } else {
+                    // Unknown identifier - treat as variable reference anyway
+                    args.push(`$${identifierName}`);
+                }
             } else if (this.match(TokenType.OPERATOR)) {
                 args.push(this.advance().value);
+            } else if (this.match(TokenType.KEYWORD)) {
+                // Handle keywords inside expressions
+                const keyword = this.current.value;
+                
+                // Try to match multi-word built-in reporters
+                const multiWordReporter = this.tryMatchMultiWordReporter();
+                if (multiWordReporter) {
+                    args.push(`$${multiWordReporter}`);
+                } else if (operatorKeywords.includes(keyword)) {
+                    // Keywords that act as operators (mod, and, or, not)
+                    args.push(this.advance().value);
+                } else if (this.declaredVariables.has(keyword)) {
+                    // Keywords that match declared variable names - treat as variable
+                    this.advance();
+                    args.push(`$${keyword}`);
+                } else if (this.declaredLists.has(keyword)) {
+                    // Keywords that match declared list names - treat as list
+                    this.advance();
+                    args.push(`#${keyword}`);
+                } else {
+                    // Other keywords in expressions - might be a variable reference
+                    // (user might use keywords as variable names before declaration check)
+                    this.advance();
+                    args.push(`$${keyword}`);
+                }
             } else if (this.match(TokenType.PARENTHESIS_OPEN)) {
                 args.push(this.parseExpression());
             } else {
@@ -1186,6 +1309,56 @@ export class Parser {
             name: "expression",
             args,
         };
+    }
+
+    // Multi-word built-in reporter patterns
+    // Order matters - longer patterns should be first to match greedily
+    private static MULTI_WORD_REPORTERS = [
+        // 4-word patterns
+        ["current", "day", "of", "week"],
+        ["days", "since", "2000"],
+        // 2-word patterns
+        ["x", "position"],
+        ["y", "position"],
+        ["costume", "number"],
+        ["costume", "name"],
+        ["backdrop", "number"],
+        ["backdrop", "name"],
+        ["mouse", "x"],
+        ["mouse", "y"],
+        ["current", "year"],
+        ["current", "month"],
+        ["current", "date"],
+        ["current", "hour"],
+        ["current", "minute"],
+        ["current", "second"],
+    ];
+
+    // Try to match a multi-word built-in reporter starting at current position
+    // Returns the full reporter name if matched, null otherwise
+    private tryMatchMultiWordReporter(): string | null {
+        for (const pattern of Parser.MULTI_WORD_REPORTERS) {
+            if (this.matchesMultiWordPattern(pattern)) {
+                // Consume all tokens in the pattern
+                const words: string[] = [];
+                for (let i = 0; i < pattern.length; i++) {
+                    words.push(this.advance().value);
+                }
+                return words.join(" ");
+            }
+        }
+        return null;
+    }
+
+    // Check if the tokens at current position match a multi-word pattern
+    private matchesMultiWordPattern(pattern: string[]): boolean {
+        for (let i = 0; i < pattern.length; i++) {
+            const lookAhead = i === 0 ? this.current : this.peek(i);
+            if (!lookAhead || lookAhead.value !== pattern[i]) {
+                return false;
+            }
+        }
+        return true;
     }
 
     // parseListLiteral: Parse a list literal [value1, value2, ...]
@@ -1228,8 +1401,8 @@ export class Parser {
         // Skip 'var' or 'variable' keyword
         const varKeywordToken = this.advance();
 
-        // Expect a variable name (identifier)
-        if (!this.match(TokenType.IDENTIFIER)) {
+        // Expect a variable name (identifier or keyword that could be used as a name)
+        if (!this.match(TokenType.IDENTIFIER) && !this.match(TokenType.KEYWORD)) {
             this.addError(
                 ErrorCodes.INVALID_SYNTAX,
                 "Expected variable name after 'var'.",
@@ -1242,6 +1415,18 @@ export class Parser {
         
         const nameToken = this.advance();
         const variableName = nameToken.value;
+
+        // Check if the variable name is a built-in reporter (check this FIRST)
+        if (BUILTIN_REPORTERS.has(variableName)) {
+            this.addError(
+                ErrorCodes.RESERVED_KEYWORD,
+                `'${variableName}' is a built-in reporter and cannot be used as a variable name.`,
+                nameToken,
+                `Choose a different name for your variable. Built-in reporters include: x position, y position, direction, size, volume, timer, answer, etc.`
+            );
+            this.synchronize();
+            return;
+        }
 
         // Check if the variable name is a reserved keyword
         if (Lexer.RESERVED_KEYWORDS.has(variableName)) {

@@ -113,18 +113,24 @@ export class CodeGenerator {
         this.output += `// Variables\n`;
         if (this.program.variables.size > 0) {
             this.program.variables.forEach((value, name) => {
+                // Strip $ prefix from variable name
+                const cleanName = this.stripVarPrefix(name);
                 if (typeof value === "number") {
-                    this.output += `scratchRuntime.variables["${name}"] = ${value};\n`;
+                    this.output += `scratchRuntime.variables["${cleanName}"] = ${value};\n`;
+                    this.output += `scratchRuntime.initialVariables["${cleanName}"] = ${value};\n`;
                 } else if (typeof value === "string") {
-                    this.output += `scratchRuntime.variables["${name}"] = "${value}";\n`;
+                    this.output += `scratchRuntime.variables["${cleanName}"] = "${value}";\n`;
+                    this.output += `scratchRuntime.initialVariables["${cleanName}"] = "${value}";\n`;
                 } else {
-                    this.output += `scratchRuntime.variables["${name}"] = ${JSON.stringify(value)};\n`;
+                    this.output += `scratchRuntime.variables["${cleanName}"] = ${JSON.stringify(value)};\n`;
+                    this.output += `scratchRuntime.initialVariables["${cleanName}"] = ${JSON.stringify(value)};\n`;
                 }
             });
             // Create variable displays for all declared variables
             this.output += `// Create variable displays\n`;
             this.program.variables.forEach((_, name) => {
-                this.output += `scratchRuntime.createVariableDisplay("${name}");\n`;
+                const cleanName = this.stripVarPrefix(name);
+                this.output += `scratchRuntime.createVariableDisplay("${cleanName}");\n`;
             });
         } else {
             this.output += `// No variables defined\n`;
@@ -141,6 +147,7 @@ export class CodeGenerator {
             this.program.lists.forEach((values, name) => {
                 const formattedValues = values.map((v) => (typeof v === "number" ? v : `"${v}"`)).join(", ");
                 this.output += `scratchRuntime.lists["${name}"] = [${formattedValues}];\n`;
+                this.output += `scratchRuntime.initialLists["${name}"] = [${formattedValues}];\n`;
             });
         } else {
             this.output += `// No lists defined\n`;
@@ -728,7 +735,7 @@ export class CodeGenerator {
             case "stop":
                 const target = block.args[0];
                 if (target === "all") {
-                    this.write(`// Stop all (simplified implementation - just returns from current execution)\n`);
+                    this.write(`scratchRuntime.stopAll();\n`);
                     this.write(`return;\n`);
                 } else if (target === "thisScript") {
                     this.write(`// Stop this script\n`);
@@ -978,6 +985,19 @@ export class CodeGenerator {
     }
 
     /**
+     * Helper method to strip $ or # prefix from variable/list names
+     */
+    private stripVarPrefix(name: string | number | object): string {
+        if (typeof name === "string") {
+            if (name.startsWith("$") || name.startsWith("#")) {
+                return name.substring(1);
+            }
+            return name;
+        }
+        return String(name);
+    }
+
+    /**
      * Generates code for variables blocks (set, change, etc.)
      */
     private generateVariablesBlock(block: BlockNode): void {
@@ -986,7 +1006,7 @@ export class CodeGenerator {
             case "setVariable": {
                 // For setVariable, args are: [varName, "to", expression]
                 // For set, args are: [varName, expression]
-                const varName = block.args[0];
+                const varName = this.stripVarPrefix(block.args[0]);
                 // Find the actual value (skip "to" keyword if present)
                 let varValue: string | number | BlockNode = block.args[1] as string | number | BlockNode;
                 if (varValue === "to" && block.args.length > 2) {
@@ -999,7 +1019,7 @@ export class CodeGenerator {
             case "changeVariable": {
                 // For changeVariable, args are: [varName, "by", expression]
                 // For change, args are: [varName, expression]
-                const changeVarName = block.args[0];
+                const changeVarName = this.stripVarPrefix(block.args[0]);
                 // Find the actual value (skip "by" keyword if present)
                 let changeValue: string | number | BlockNode = block.args[1] as string | number | BlockNode;
                 if (changeValue === "by" && block.args.length > 2) {
@@ -1009,11 +1029,11 @@ export class CodeGenerator {
                 break;
             }
             case "showVariable":
-                const showVarName = block.args[0];
+                const showVarName = this.stripVarPrefix(block.args[0]);
                 this.write(`scratchRuntime.showVariableDisplay("${showVarName}");\n`);
                 break;
             case "hideVariable":
-                const hideVarName = block.args[0];
+                const hideVarName = this.stripVarPrefix(block.args[0]);
                 this.write(`scratchRuntime.hideVariableDisplay("${hideVarName}");\n`);
                 break;
             case "addToList":
@@ -1354,7 +1374,15 @@ export class CodeGenerator {
         if (typeof arg === "string") {
             // If it's a variable reference
             if (arg.startsWith("$")) {
-                return `scratchRuntime.variables["${arg.substring(1)}"]`;
+                const varName = arg.substring(1);
+                
+                // Handle built-in reporters specially
+                const builtInCode = this.getBuiltInReporterCode(varName);
+                if (builtInCode) {
+                    return builtInCode;
+                }
+                
+                return `scratchRuntime.variables["${varName}"]`;
             }
             // If it's a list reference
             else if (arg.startsWith("#")) {
@@ -1377,6 +1405,72 @@ export class CodeGenerator {
             }
         } else {
             return JSON.stringify(arg);
+        }
+    }
+
+    // Get JavaScript code for built-in reporter names
+    private getBuiltInReporterCode(name: string): string | null {
+        const spriteRef = "scratchRuntime.sprites[scratchRuntime.currentSprite]";
+        
+        switch (name) {
+            // Motion reporters
+            case "x":
+            case "x position":
+                return `${spriteRef}.x`;
+            case "y":
+            case "y position":
+                return `${spriteRef}.y`;
+            case "direction":
+                return `${spriteRef}.direction`;
+            
+            // Looks reporters
+            case "size":
+                return `${spriteRef}.size`;
+            case "costume number":
+                return `${spriteRef}.currentCostume + 1`;  // Scratch uses 1-based index
+            case "costume name":
+                return `${spriteRef}.costumes[${spriteRef}.currentCostume]`;
+            case "backdrop number":
+                return `scratchRuntime.stage.currentBackdrop + 1`;  // Scratch uses 1-based index
+            case "backdrop name":
+                return `scratchRuntime.stage.backdrops[scratchRuntime.stage.currentBackdrop]`;
+            
+            // Sound reporters
+            case "volume":
+                return `scratchRuntime.stage.volume`;
+            
+            // Sensing reporters
+            case "answer":
+                return `scratchRuntime.answer`;
+            case "mouse x":
+                return `scratchRuntime.mouse.x`;
+            case "mouse y":
+                return `scratchRuntime.mouse.y`;
+            case "loudness":
+                return `0`;  // Placeholder - microphone not implemented
+            case "timer":
+                return `scratchRuntime.getTimer()`;
+            case "username":
+                return `scratchRuntime.getUsername()`;
+            case "current year":
+                return `new Date().getFullYear()`;
+            case "current month":
+                return `new Date().getMonth() + 1`;  // JS months are 0-indexed
+            case "current date":
+                return `new Date().getDate()`;
+            case "current day of week":
+                return `new Date().getDay() + 1`;  // Scratch is 1-indexed (1=Sun)
+            case "current hour":
+                return `new Date().getHours()`;
+            case "current minute":
+                return `new Date().getMinutes()`;
+            case "current second":
+                return `new Date().getSeconds()`;
+            case "days since 2000":
+                return `Math.floor((Date.now() - new Date(2000, 0, 1).getTime()) / 86400000)`;
+            
+            default:
+                return null;  // Not a built-in reporter
         }
     }
 
@@ -1420,6 +1514,16 @@ export class MultiSpriteCodeGenerator {
         soundUrls?: string[];
     }[]) {
         this.sprites = sprites;
+    }
+
+    /**
+     * Helper method to strip $ or # prefix from variable/list names
+     */
+    private stripVarPrefix(name: string): string {
+        if (name.startsWith("$") || name.startsWith("#")) {
+            return name.substring(1);
+        }
+        return name;
     }
 
     generate(): { js: string; html: string; userCode: string } {
@@ -1496,12 +1600,17 @@ export class MultiSpriteCodeGenerator {
         }
         if (allVars.size > 0) {
             allVars.forEach((value, name) => {
+                // Strip $ prefix from variable name
+                const cleanName = this.stripVarPrefix(name);
                 if (typeof value === "number") {
-                    this.output += `scratchRuntime.variables["${name}"] = ${value};\n`;
+                    this.output += `scratchRuntime.variables["${cleanName}"] = ${value};\n`;
+                    this.output += `scratchRuntime.initialVariables["${cleanName}"] = ${value};\n`;
                 } else if (typeof value === "string") {
-                    this.output += `scratchRuntime.variables["${name}"] = "${value}";\n`;
+                    this.output += `scratchRuntime.variables["${cleanName}"] = "${value}";\n`;
+                    this.output += `scratchRuntime.initialVariables["${cleanName}"] = "${value}";\n`;
                 } else {
-                    this.output += `scratchRuntime.variables["${name}"] = ${JSON.stringify(value)};\n`;
+                    this.output += `scratchRuntime.variables["${cleanName}"] = ${JSON.stringify(value)};\n`;
+                    this.output += `scratchRuntime.initialVariables["${cleanName}"] = ${JSON.stringify(value)};\n`;
                 }
             });
         } else {
@@ -1521,6 +1630,7 @@ export class MultiSpriteCodeGenerator {
         if (allLists.size > 0) {
             allLists.forEach((value, name) => {
                 this.output += `scratchRuntime.lists["${name}"] = ${JSON.stringify(value)};\n`;
+                this.output += `scratchRuntime.initialLists["${name}"] = ${JSON.stringify(value)};\n`;
             });
         } else {
             this.output += `// No lists defined\n`;
@@ -2343,21 +2453,28 @@ export class MultiSpriteCodeGenerator {
      * Handles both "varName" and {type: "operators", name: "list", args: ["varName"]}
      */
     private extractName(arg: unknown): string {
+        let name: string;
         if (typeof arg === "string") {
-            return arg;
-        }
-        if (typeof arg === "object" && arg !== null && "args" in arg) {
+            name = arg;
+        } else if (typeof arg === "object" && arg !== null && "args" in arg) {
             const block = arg as BlockNode;
             // Handle bracket notation parsed as list block: {type: "operators", name: "list", args: ["varName"]}
             if (block.name === "list" && block.args && block.args.length > 0) {
-                return String(block.args[0]);
-            }
+                name = String(block.args[0]);
             // Handle expression block: {type: "operators", name: "expression", args: ["varName"]}
-            if (block.name === "expression" && block.args && block.args.length > 0) {
-                return String(block.args[0]);
+            } else if (block.name === "expression" && block.args && block.args.length > 0) {
+                name = String(block.args[0]);
+            } else {
+                name = String(arg);
             }
+        } else {
+            name = String(arg);
         }
-        return String(arg);
+        // Strip $ or # prefix if present (variable/list markers from parser)
+        if (name.startsWith("$") || name.startsWith("#")) {
+            return name.substring(1);
+        }
+        return name;
     }
 
     /**
@@ -2568,6 +2685,13 @@ export class MultiSpriteCodeGenerator {
             // Check if it's a variable reference
             if (arg.startsWith("var:") || arg.startsWith("$")) {
                 const varName = arg.startsWith("var:") ? arg.slice(4) : arg.slice(1);
+                
+                // Handle built-in reporters specially
+                const builtInCode = this.getBuiltInReporterCode(varName);
+                if (builtInCode) {
+                    return builtInCode;
+                }
+                
                 return `scratchRuntime.variables["${varName}"]`;
             }
             // Check if it's a list reference
@@ -2586,6 +2710,72 @@ export class MultiSpriteCodeGenerator {
             return this.formatExpression(block);
         }
         return JSON.stringify(arg);
+    }
+
+    // Get JavaScript code for built-in reporter names
+    private getBuiltInReporterCode(name: string): string | null {
+        const spriteRef = "scratchRuntime.sprites[scratchRuntime.currentSprite]";
+        
+        switch (name) {
+            // Motion reporters
+            case "x":
+            case "x position":
+                return `${spriteRef}.x`;
+            case "y":
+            case "y position":
+                return `${spriteRef}.y`;
+            case "direction":
+                return `${spriteRef}.direction`;
+            
+            // Looks reporters
+            case "size":
+                return `${spriteRef}.size`;
+            case "costume number":
+                return `${spriteRef}.currentCostume + 1`;  // Scratch uses 1-based index
+            case "costume name":
+                return `${spriteRef}.costumes[${spriteRef}.currentCostume]`;
+            case "backdrop number":
+                return `scratchRuntime.stage.currentBackdrop + 1`;  // Scratch uses 1-based index
+            case "backdrop name":
+                return `scratchRuntime.stage.backdrops[scratchRuntime.stage.currentBackdrop]`;
+            
+            // Sound reporters
+            case "volume":
+                return `scratchRuntime.stage.volume`;
+            
+            // Sensing reporters
+            case "answer":
+                return `scratchRuntime.answer`;
+            case "mouse x":
+                return `scratchRuntime.mouse.x`;
+            case "mouse y":
+                return `scratchRuntime.mouse.y`;
+            case "loudness":
+                return `0`;  // Placeholder - microphone not implemented
+            case "timer":
+                return `scratchRuntime.getTimer()`;
+            case "username":
+                return `scratchRuntime.getUsername()`;
+            case "current year":
+                return `new Date().getFullYear()`;
+            case "current month":
+                return `new Date().getMonth() + 1`;  // JS months are 0-indexed
+            case "current date":
+                return `new Date().getDate()`;
+            case "current day of week":
+                return `new Date().getDay() + 1`;  // Scratch is 1-indexed (1=Sun)
+            case "current hour":
+                return `new Date().getHours()`;
+            case "current minute":
+                return `new Date().getMinutes()`;
+            case "current second":
+                return `new Date().getSeconds()`;
+            case "days since 2000":
+                return `Math.floor((Date.now() - new Date(2000, 0, 1).getTime()) / 86400000)`;
+            
+            default:
+                return null;  // Not a built-in reporter
+        }
     }
 
     private formatExpression(block: BlockNode): string {
@@ -2680,12 +2870,33 @@ export class MultiSpriteCodeGenerator {
             case "10^":
                 return `Math.pow(10, Number(${this.formatArg(block.args[0])}))`;
             case "expression":
-                // Expression block wraps a variable name - (variableName) syntax
-                // The arg is the variable name as a string
-                if (typeof block.args[0] === "string") {
-                    return `scratchRuntime.variables["${block.args[0]}"]`;
+                // Expression block can be:
+                // 1. Simple: (variableName) - just wraps a variable
+                // 2. Complex: [value, operator, value, operator, value, ...] - arithmetic expression
+                if (block.args.length === 1) {
+                    const singleArg = block.args[0];
+                    if (typeof singleArg === "string" && singleArg.startsWith("$")) {
+                        return `scratchRuntime.variables["${singleArg.substring(1)}"]`;
+                    }
+                    return `(${this.formatArg(singleArg)})`;
                 }
-                return `(${this.formatArg(block.args[0])})`;
+                // Build the expression from all args
+                let expr = "";
+                for (let i = 0; i < block.args.length; i++) {
+                    const arg = block.args[i];
+                    if (typeof arg === "string" && ["+", "-", "*", "/", "%", "mod", ">", "<", "=", "==", "===", "and", "or", "&&", "||"].includes(arg)) {
+                        // It's an operator
+                        let op = arg;
+                        if (op === "mod") op = "%";
+                        if (op === "and") op = "&&";
+                        if (op === "or") op = "||";
+                        if (op === "=") op = "==";
+                        expr += ` ${op} `;
+                    } else {
+                        expr += this.formatArg(arg);
+                    }
+                }
+                return `(${expr})`;
             case "list":
                 // List name block, just return the name for use elsewhere
                 return String(block.args[0]);
