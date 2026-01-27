@@ -30,7 +30,7 @@ when flagClicked
         // Use dynamic import for ES modules
         const { Lexer } = await import('../src/lib/lexer.js');
         const { Parser } = await import('../src/lib/parser.js');
-        const { CodeGenerator } = await import('../src/lib/codeGenerator.js');
+        const { MultiSpriteCodeGenerator } = await import('../src/lib/codeGenerator.js');
         
         const lexer = new Lexer(testCode);
         const tokens = lexer.tokenize();
@@ -42,7 +42,19 @@ when flagClicked
         console.log("✅ Parser: AST generated successfully");
         console.log(`   Block count: ${ast.blocks.length}`);
         
-        const generator = new CodeGenerator(ast);
+        // Wrap in sprite format for MultiSpriteCodeGenerator
+        const parsedSprites = [{
+            name: "Sprite1",
+            isStage: false,
+            program: ast,
+            costumeNames: [],
+            costumeUrls: [],
+            currentCostume: 0,
+            soundNames: [],
+            soundUrls: [],
+        }];
+        
+        const generator = new MultiSpriteCodeGenerator(parsedSprites);
         const output = generator.generate();
         console.log("✅ Generator: JavaScript generated successfully");
         console.log(`   Output length: ${output.js.length} chars`);

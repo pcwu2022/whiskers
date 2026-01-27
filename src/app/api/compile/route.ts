@@ -70,10 +70,11 @@ export async function POST(request: Request) {
             success: false,
             errors: [{
                 code: "E999",
-                message: error instanceof Error ? error.message : "API route failed.",
+                message: "Oops! Something went wrong on our end while running your code.",
                 line: 1,
                 column: 1,
                 severity: "error" as const,
+                suggestion: "💡 This might be a temporary problem. Try clicking the green flag again, or refresh the page.",
             }],
         }, { status: 500 });
     }

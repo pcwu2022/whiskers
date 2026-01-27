@@ -41,50 +41,137 @@ export default function SoundSidebar({
     // Handle file upload
     const handleFileUpload = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
         const files = event.target.files;
+        console.log('[SoundUpload] Files selected:', files?.length);
         if (!files || files.length === 0) return;
 
+        // Store total count before any async operations
+        // (the file input will be reset, making files.length = 0 later)
+        const totalFiles = files.length;
+        const fileArray = Array.from(files);
+        
         const newSounds: Sound[] = [];
         let processedCount = 0;
 
-        Array.from(files).forEach((file) => {
-            // Validate file type
-            if (!file.type.startsWith("audio/")) {
-                alert(`"${file.name}" is not an audio file.`);
+        // Audio file extensions we accept
+        const audioExtensions = ['.mp3', '.wav', '.ogg', '.m4a', '.aac', '.flac', '.webm', '.aiff', '.wma'];
+
+        fileArray.forEach((file) => {
+            console.log('[SoundUpload] Processing file:', file.name, 'type:', file.type, 'size:', file.size);
+            
+            // Validate file type by MIME type or extension
+            const fileExt = '.' + file.name.split('.').pop()?.toLowerCase();
+            const isAudioByType = file.type.startsWith("audio/");
+            const isAudioByExtension = audioExtensions.includes(fileExt);
+            
+            console.log('[SoundUpload] Extension:', fileExt, 'isAudioByType:', isAudioByType, 'isAudioByExtension:', isAudioByExtension);
+            
+            if (!isAudioByType && !isAudioByExtension) {
+                alert(`"${file.name}" is not a recognized audio file.`);
                 processedCount++;
                 return;
+            }
+            
+            // Determine MIME type (use file.type if available, otherwise guess from extension)
+            let mimeType = file.type;
+            if (!mimeType || !mimeType.startsWith('audio/')) {
+                const mimeMap: Record<string, string> = {
+                    '.mp3': 'audio/mpeg',
+                    '.wav': 'audio/wav',
+                    '.ogg': 'audio/ogg',
+                    '.m4a': 'audio/mp4',
+                    '.aac': 'audio/aac',
+                    '.flac': 'audio/flac',
+                    '.webm': 'audio/webm',
+                    '.aiff': 'audio/aiff',
+                    '.wma': 'audio/x-ms-wma',
+                };
+                mimeType = mimeMap[fileExt] || 'audio/mpeg';
             }
 
             const reader = new FileReader();
             reader.onload = (e) => {
                 const dataUrl = e.target?.result as string;
+                console.log('[SoundUpload] FileReader loaded, dataUrl length:', dataUrl?.length);
+                
+                // Extract name from filename (without extension)
+                const name = file.name.replace(/\.[^/.]+$/, "");
                 
                 // Create an audio element to get duration
-                const audio = new Audio(dataUrl);
-                audio.addEventListener("loadedmetadata", () => {
-                    // Extract name from filename (without extension)
-                    const name = file.name.replace(/\.[^/.]+$/, "");
+                const audio = new Audio();
+                let handled = false;
+                
+                const handleSuccess = () => {
+                    if (handled) return;  // Prevent duplicate handling
+                    handled = true;
+                    console.log('[SoundUpload] handleSuccess called for:', name, 'duration:', audio.duration);
                     
-                    const newSound = createSound(name, dataUrl, file.type);
-                    newSound.duration = audio.duration;
+                    const newSound = createSound(name, dataUrl, mimeType);
+                    newSound.duration = audio.duration || 0;
                     
                     newSounds.push(newSound);
                     processedCount++;
+                    console.log('[SoundUpload] processedCount:', processedCount, 'total:', totalFiles, 'newSounds:', newSounds.length);
                     
                     // Once all files are processed, update
-                    if (processedCount === files.length && newSounds.length > 0) {
+                    if (processedCount === totalFiles && newSounds.length > 0) {
+                        console.log('[SoundUpload] Calling onSoundsChange with', newSounds.length, 'new sounds');
                         onSoundsChange([...sounds, ...newSounds]);
                     }
+                };
+                
+                const handleError = () => {
+                    if (handled) return;  // Prevent duplicate handling
+                    handled = true;
+                    
+                    console.error(`[SoundUpload] Failed to load audio metadata for: ${file.name}`);
+                    // Still add the sound even if metadata fails
+                    const newSound = createSound(name, dataUrl, mimeType);
+                    newSound.duration = 0;
+                    
+                    newSounds.push(newSound);
+                    processedCount++;
+                    console.log('[SoundUpload] Error recovery - processedCount:', processedCount, 'total:', totalFiles);
+                    
+                    if (processedCount === totalFiles && newSounds.length > 0) {
+                        console.log('[SoundUpload] Calling onSoundsChange after error recovery');
+                        onSoundsChange([...sounds, ...newSounds]);
+                    }
+                };
+                
+                // Timeout fallback - if metadata doesn't load in 3 seconds, proceed anyway
+                const timeoutId = setTimeout(() => {
+                    if (!handled) {
+                        console.warn(`Audio metadata timeout for: ${file.name}, proceeding without duration`);
+                        handleSuccess();
+                    }
+                }, 3000);
+                
+                audio.addEventListener("loadedmetadata", () => {
+                    clearTimeout(timeoutId);
+                    handleSuccess();
+                });
+                audio.addEventListener("canplaythrough", () => {
+                    clearTimeout(timeoutId);
+                    handleSuccess();
+                });
+                audio.addEventListener("error", () => {
+                    clearTimeout(timeoutId);
+                    handleError();
                 });
                 
-                audio.addEventListener("error", () => {
-                    processedCount++;
-                    // Check if all files processed
-                    if (processedCount === files.length && newSounds.length > 0) {
-                        onSoundsChange([...sounds, ...newSounds]);
-                    }
-                });
+                // Set source and load
+                audio.src = dataUrl;
+                audio.load();
+                console.log('[SoundUpload] Audio element created, src set, load() called');
             };
+            
+            reader.onerror = () => {
+                console.error(`[SoundUpload] FileReader error for: ${file.name}`);
+                processedCount++;
+            };
+            
             reader.readAsDataURL(file);
+            console.log('[SoundUpload] Started reading file:', file.name);
         });
 
         // Reset input

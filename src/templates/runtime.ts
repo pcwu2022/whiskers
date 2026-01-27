@@ -31,6 +31,7 @@ const scratchRuntime = {
     mouse: { x: 0, y: 0, down: false },
     pressedKeys: {},
     dragMode: 'not draggable',
+    activeSounds: [],  // Track currently playing audio elements
 
     // Initialize a sprite with full Scratch capabilities
     initSprite: function(name, options) {
@@ -48,6 +49,8 @@ const scratchRuntime = {
             costumes: options.costumes || ['costume1'],
             costumeUrls: options.costumeUrls || [],
             currentCostume: options.currentCostume || 0,
+            sounds: options.sounds || [],
+            soundUrls: options.soundUrls || [],
             effects: {
                 color: 0,
                 fisheye: 0,
@@ -1091,28 +1094,110 @@ const scratchRuntime = {
         return this.lists[listName] ? this.lists[listName].includes(item) : false;
     },
     
-    // Sound (placeholder implementations)
+    // Sound - find sound URL by name across all sprites
+    findSoundUrl: function(soundName) {
+        const lowerName = soundName.toLowerCase();
+        // Check current sprite first
+        const currentSprite = this.sprites[this.currentSprite];
+        if (currentSprite && currentSprite.sounds) {
+            const idx = currentSprite.sounds.findIndex(s => s.toLowerCase() === lowerName);
+            if (idx !== -1 && currentSprite.soundUrls[idx]) {
+                return currentSprite.soundUrls[idx];
+            }
+        }
+        // Check all sprites
+        for (const spriteName of Object.keys(this.sprites)) {
+            const sprite = this.sprites[spriteName];
+            if (sprite.sounds) {
+                const idx = sprite.sounds.findIndex(s => s.toLowerCase() === lowerName);
+                if (idx !== -1 && sprite.soundUrls[idx]) {
+                    return sprite.soundUrls[idx];
+                }
+            }
+        }
+        return null;
+    },
+    
     playSound: function(soundName) {
-        console.log('🔊 Playing sound: ' + soundName);
+        const url = this.findSoundUrl(soundName);
+        if (url) {
+            try {
+                const audio = new Audio(url);
+                audio.volume = this.stage.volume / 100;
+                this.activeSounds.push(audio);
+                audio.addEventListener('ended', () => {
+                    const idx = this.activeSounds.indexOf(audio);
+                    if (idx !== -1) this.activeSounds.splice(idx, 1);
+                });
+                audio.play().catch(err => console.warn('Could not play sound:', err));
+                console.log('🔊 Playing sound: ' + soundName);
+            } catch (err) {
+                console.warn('Error playing sound:', err);
+            }
+        } else {
+            console.log('🔊 Sound not found: ' + soundName);
+        }
     },
     
     playSoundUntilDone: async function(soundName) {
-        console.log('🔊 Playing sound until done: ' + soundName);
-        // Placeholder - in real implementation, would wait for audio to finish
-        await this.wait(1);
+        const url = this.findSoundUrl(soundName);
+        if (url) {
+            try {
+                const audio = new Audio(url);
+                audio.volume = this.stage.volume / 100;
+                this.activeSounds.push(audio);
+                
+                return new Promise((resolve) => {
+                    audio.addEventListener('ended', () => {
+                        const idx = this.activeSounds.indexOf(audio);
+                        if (idx !== -1) this.activeSounds.splice(idx, 1);
+                        resolve();
+                    });
+                    audio.addEventListener('error', () => {
+                        const idx = this.activeSounds.indexOf(audio);
+                        if (idx !== -1) this.activeSounds.splice(idx, 1);
+                        resolve();
+                    });
+                    audio.play().catch(err => {
+                        console.warn('Could not play sound:', err);
+                        resolve();
+                    });
+                    console.log('🔊 Playing sound until done: ' + soundName);
+                });
+            } catch (err) {
+                console.warn('Error playing sound:', err);
+            }
+        } else {
+            console.log('🔊 Sound not found: ' + soundName);
+        }
     },
     
     stopAllSounds: function() {
+        for (const audio of this.activeSounds) {
+            try {
+                audio.pause();
+                audio.currentTime = 0;
+            } catch (e) {}
+        }
+        this.activeSounds = [];
         console.log('🔇 Stopping all sounds');
     },
     
     setVolume: function(volume) {
         this.stage.volume = Math.max(0, Math.min(100, volume));
+        // Update volume for all playing sounds
+        for (const audio of this.activeSounds) {
+            audio.volume = this.stage.volume / 100;
+        }
         console.log('🔊 Volume set to: ' + this.stage.volume + '%');
     },
     
     changeVolume: function(change) {
         this.stage.volume = Math.max(0, Math.min(100, this.stage.volume + change));
+        // Update volume for all playing sounds
+        for (const audio of this.activeSounds) {
+            audio.volume = this.stage.volume / 100;
+        }
         console.log('🔊 Volume changed to: ' + this.stage.volume + '%');
     },
     

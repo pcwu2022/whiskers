@@ -711,6 +711,13 @@ export class Parser {
                 this.advance();
                 blockKeyword = "repeatUntil";
             }
+        } else if (blockKeyword === "wait") {
+            // support 'wait until' as a combined keyword
+            this.skipIrrelevant();
+            if (!this.isAtEnd() && this.matchKeyword("until")) {
+                this.advance();
+                blockKeyword = "waitUntil";
+            }
         } else if (blockKeyword === "switch") {
             // Handle "switch costume to <name>" or "switch backdrop to <name>"
             this.skipIrrelevant();
@@ -768,6 +775,48 @@ export class Parser {
                     this.advance(); // consume "clone"
                     blockKeyword = "deleteThisClone";
                 }
+            }
+        } else if (blockKeyword === "stop") {
+            // Handle "stop all", "stop all sounds", "stop this script", "stop other scripts in sprite"
+            this.skipIrrelevant();
+            if (!this.isAtEnd() && this.matchKeyword("all")) {
+                this.advance(); // consume "all"
+                this.skipIrrelevant();
+                if (!this.isAtEnd() && this.matchKeyword("sounds")) {
+                    this.advance(); // consume "sounds"
+                    blockKeyword = "stopAllSounds";
+                } else {
+                    blockKeyword = "stopAll";
+                }
+            } else if (!this.isAtEnd() && this.matchKeyword("this")) {
+                this.advance(); // consume "this"
+                this.skipIrrelevant();
+                if (!this.isAtEnd() && this.matchKeyword("script")) {
+                    this.advance(); // consume "script"
+                }
+                blockKeyword = "stopThisScript";
+            } else if (!this.isAtEnd() && this.matchKeyword("other")) {
+                this.advance(); // consume "other"
+                this.skipIrrelevant();
+                if (!this.isAtEnd() && this.matchKeyword("scripts")) {
+                    this.advance(); // consume "scripts"
+                    this.skipIrrelevant();
+                    if (!this.isAtEnd() && this.matchKeyword("in")) {
+                        this.advance(); // consume "in"
+                        this.skipIrrelevant();
+                        if (!this.isAtEnd() && this.matchKeyword("sprite")) {
+                            this.advance(); // consume "sprite"
+                        }
+                    }
+                }
+                blockKeyword = "stopOtherScripts";
+            }
+        } else if (blockKeyword === "start") {
+            // Handle "start sound <name>"
+            this.skipIrrelevant();
+            if (!this.isAtEnd() && this.matchKeyword("sound")) {
+                this.advance(); // consume "sound"
+                blockKeyword = "playSound";
             }
         } else if (blockKeyword === "when") {
             // Handle multi-word "when" keywords
@@ -851,10 +900,18 @@ export class Parser {
                     blockKeyword = "whenIReceive";
                 } else {
                     // Check for "when X key pressed" pattern
-                    // nextWord could be the key name (space, up arrow, a, etc.)
-                    const keyName = nextWord;
-                    this.advance(); // Consume the key name
+                    // nextWord could be the key name (space, up, left, etc.)
+                    // Also handle "up arrow", "down arrow", "left arrow", "right arrow"
+                    let keyName = nextWord;
+                    this.advance(); // Consume the first key name word
                     this.skipIrrelevant();
+                    
+                    // Check for "arrow" suffix (e.g., "up arrow key pressed")
+                    if (!this.isAtEnd() && this.matchKeyword("arrow")) {
+                        this.advance(); // Consume 'arrow'
+                        keyName = keyName + " arrow"; // e.g., "up arrow"
+                        this.skipIrrelevant();
+                    }
                     
                     if (!this.isAtEnd() && this.matchKeyword("key")) {
                         this.advance(); // Consume 'key'
@@ -1115,9 +1172,9 @@ export class Parser {
             if (BUILTIN_REPORTERS.has(varName)) {
                 this.addError(
                     ErrorCodes.RESERVED_KEYWORD,
-                    `'${varName}' is a built-in reporter and cannot be used as a variable name.`,
+                    `'${varName}' is already a special CatScript value! You can't use it as a variable name.`,
                     nameToken,
-                    `Choose a different name for your variable. Built-in reporters include: x position, y position, direction, size, volume, timer, answer, etc.`
+                    `💡 Names like 'x position', 'timer', and 'answer' are already used by CatScript. Pick a different name for your variable, like 'myScore' or 'playerName'.`
                 );
             }
         }
@@ -1150,9 +1207,199 @@ export class Parser {
         return blockTypeMap[keyword] || "custom";
     }
 
+    /**
+     * Try to parse an inline operator expression starting with the current keyword.
+     * Returns a BlockNode if an operator is recognized, null otherwise.
+     * Handles: join, pick random, length of, letter X of, distance to, contains, abs of, sqrt of, etc.
+     */
+    private tryParseInlineOperator(): BlockNode | null {
+        if (!this.match(TokenType.KEYWORD)) return null;
+        
+        const keyword = this.current.value;
+        
+        // join ARG1 ARG2 (or join ARG1 join ARG2 join ARG3 ...)
+        if (keyword === "join") {
+            this.advance(); // consume 'join'
+            const arg1 = this.parseOperatorArg();
+            const arg2 = this.parseOperatorArg();
+            return { type: "operators", name: "join", args: [arg1, arg2] };
+        }
+        
+        // pick random ARG1 to ARG2
+        if (keyword === "pick") {
+            this.advance(); // consume 'pick'
+            this.skipIrrelevant();
+            if (this.matchKeyword("random")) {
+                this.advance(); // consume 'random'
+                const arg1 = this.parseOperatorArg();
+                // Skip 'to' keyword if present
+                this.skipIrrelevant();
+                if (this.matchKeyword("to")) {
+                    this.advance();
+                }
+                const arg2 = this.parseOperatorArg();
+                return { type: "operators", name: "random", args: [arg1, arg2] };
+            }
+            // Just 'pick' without 'random' - unexpected, backtrack would be needed
+            // For now, return null and let the caller handle it
+            return null;
+        }
+        
+        // length of ARG
+        if (keyword === "length") {
+            this.advance(); // consume 'length'
+            this.skipIrrelevant();
+            if (this.matchKeyword("of")) {
+                this.advance(); // consume 'of'
+            }
+            const arg = this.parseOperatorArg();
+            return { type: "operators", name: "length", args: [arg] };
+        }
+        
+        // letter ARG1 of ARG2
+        if (keyword === "letter") {
+            this.advance(); // consume 'letter'
+            const indexArg = this.parseOperatorArg();
+            this.skipIrrelevant();
+            if (this.matchKeyword("of")) {
+                this.advance(); // consume 'of'
+            }
+            const stringArg = this.parseOperatorArg();
+            return { type: "operators", name: "letter", args: [indexArg, stringArg] };
+        }
+        
+        // distance to ARG
+        if (keyword === "distance") {
+            this.advance(); // consume 'distance'
+            this.skipIrrelevant();
+            if (this.matchKeyword("to")) {
+                this.advance(); // consume 'to'
+            }
+            const arg = this.parseOperatorArg();
+            return { type: "sensing", name: "distanceTo", args: [arg] };
+        }
+        
+        // round ARG
+        if (keyword === "round") {
+            this.advance(); // consume 'round'
+            const arg = this.parseOperatorArg();
+            return { type: "operators", name: "round", args: [arg] };
+        }
+        
+        // abs of ARG, sqrt of ARG, floor of ARG, ceiling of ARG, sin of ARG, cos of ARG, etc.
+        const mathFunctions = ["abs", "floor", "ceiling", "sqrt", "sin", "cos", "tan", "asin", "acos", "atan", "ln", "log"];
+        if (mathFunctions.includes(keyword)) {
+            this.advance(); // consume the function name
+            this.skipIrrelevant();
+            if (this.matchKeyword("of")) {
+                this.advance(); // consume 'of'
+            }
+            const arg = this.parseOperatorArg();
+            return { type: "operators", name: keyword, args: [arg] };
+        }
+        
+        // item ARG1 of ARG2 (list access)
+        if (keyword === "item") {
+            this.advance(); // consume 'item'
+            const indexArg = this.parseOperatorArg();
+            this.skipIrrelevant();
+            if (this.matchKeyword("of")) {
+                this.advance(); // consume 'of'
+            }
+            const listArg = this.parseOperatorArg();
+            return { type: "list", name: "itemOf", args: [indexArg, listArg] };
+        }
+        
+        return null;
+    }
+    
+    /**
+     * Parse a single argument for an inline operator.
+     * Can be: number, string, variable reference, parenthesized expression, or another inline operator.
+     */
+    private parseOperatorArg(): string | number | BlockNode {
+        this.skipIrrelevant();
+        
+        if (this.isAtEnd()) return "";
+        
+        // Number
+        if (this.match(TokenType.NUMBER)) {
+            return parseFloat(this.advance().value);
+        }
+        
+        // String
+        if (this.match(TokenType.STRING)) {
+            return this.advance().value;
+        }
+        
+        // Parenthesized expression
+        if (this.match(TokenType.PARENTHESIS_OPEN)) {
+            return this.parseExpression();
+        }
+        
+        // Identifier (variable reference)
+        if (this.match(TokenType.IDENTIFIER)) {
+            const identifierName = this.advance().value;
+            if (this.declaredVariables.has(identifierName)) {
+                return `$${identifierName}`;
+            } else if (this.declaredLists.has(identifierName)) {
+                return `#${identifierName}`;
+            }
+            return `$${identifierName}`;
+        }
+        
+        // Keyword - could be a variable, built-in reporter, or another inline operator
+        if (this.match(TokenType.KEYWORD)) {
+            // Check for special targets first (these are literal string values, not variable references)
+            const specialTargets = ["mouse-pointer", "random", "edge", "_edge_", "_myself_"];
+            if (specialTargets.includes(this.current.value)) {
+                return this.advance().value;  // Return as literal string, not variable reference
+            }
+            
+            // Check for multi-word built-in reporters first
+            const multiWordReporter = this.tryMatchMultiWordReporter();
+            if (multiWordReporter) {
+                return `$${multiWordReporter}`;
+            }
+            
+            // Check for single-word built-in reporters
+            if (Parser.SINGLE_WORD_REPORTERS.includes(this.current.value)) {
+                return `$${this.advance().value}`;
+            }
+            
+            // Check if this is another inline operator (nested)
+            const nestedOperator = this.tryParseInlineOperator();
+            if (nestedOperator) {
+                return nestedOperator;
+            }
+            
+            // Check if it's a declared variable/list
+            const keyword = this.current.value;
+            if (this.declaredVariables.has(keyword)) {
+                this.advance();
+                return `$${keyword}`;
+            }
+            if (this.declaredLists.has(keyword)) {
+                this.advance();
+                return `#${keyword}`;
+            }
+            
+            // Otherwise just return the keyword value (could be 'to', 'of', etc. - the caller will handle)
+            // Don't consume it - let the caller decide
+            return "";
+        }
+        
+        return "";
+    }
+
     // parseBlockArguments: Parse arguments for a block based on its type
     private parseBlockArguments(): (string | number | BlockNode)[] {
         const args: (string | number | BlockNode)[] = [];
+        
+        // Keywords that can be inline operators (should be parsed as args, not block starts)
+        const inlineOperatorKeywords = ["join", "pick", "length", "letter", "distance", "round", 
+            "abs", "floor", "ceiling", "sqrt", "sin", "cos", "tan", "asin", "acos", "atan", "ln", "log",
+            "item", "contains"];
 
         // Continue parsing arguments until we hit a new block, indentation change, or end of line
         while (!this.isAtEnd()) {
@@ -1160,13 +1407,28 @@ export class Parser {
 
             if (this.isAtEnd()) break;
 
-            // Stop if we encounter a new block start, indent, or dedent
-            if (
-                this.match(TokenType.INDENT) ||
-                this.match(TokenType.DEDENT) ||
-                (this.match(TokenType.KEYWORD) && this.isBlockStart())
-            ) {
+            // Stop if we encounter indent/dedent
+            if (this.match(TokenType.INDENT) || this.match(TokenType.DEDENT)) {
                 break;
+            }
+            
+            // Check for keywords that could be block starts OR inline operators
+            if (this.match(TokenType.KEYWORD)) {
+                const keyword = this.current.value;
+                
+                // If it's an inline operator keyword, try to parse it as such
+                if (inlineOperatorKeywords.includes(keyword)) {
+                    const inlineOp = this.tryParseInlineOperator();
+                    if (inlineOp) {
+                        args.push(inlineOp);
+                        continue;
+                    }
+                }
+                
+                // If it's a block start keyword (and NOT an inline operator), stop parsing args
+                if (this.isBlockStart()) {
+                    break;
+                }
             }
 
             // Parse different types of arguments
@@ -1194,15 +1456,23 @@ export class Parser {
                     // It's a declared variable - prefix with $ for code generator
                     args.push(`$${identifierName}`);
                 } else if (this.declaredLists.has(identifierName)) {
-                    // It's a declared list - prefix with # for code generator
-                    args.push(`#${identifierName}`);
+                    // Check if this is "listName contains item" pattern
+                    this.skipIrrelevant();
+                    if (!this.isAtEnd() && this.matchKeyword("contains")) {
+                        this.advance(); // consume 'contains'
+                        const itemArg = this.parseOperatorArg();
+                        args.push({ type: "list", name: "contains", args: [`#${identifierName}`, itemArg] } as BlockNode);
+                    } else {
+                        // It's a declared list - prefix with # for code generator
+                        args.push(`#${identifierName}`);
+                    }
                 } else if (!Lexer.RESERVED_KEYWORDS.has(identifierName)) {
                     // Unknown identifier - could be undeclared variable
                     this.addError(
                         ErrorCodes.UNDECLARED_VARIABLE,
-                        `'${identifierName}' is not declared. Did you forget to declare it?`,
+                        `I don't know what '${identifierName}' is. Did you forget to create it first?`,
                         token,
-                        `Add 'var ${identifierName} = 0' or 'list ${identifierName} = []' at the top of your code.`
+                        `💡 Before you can use a variable, you need to create it! Add this line at the top of your code:\n   var ${identifierName} = 0\nor for a list:\n   list ${identifierName} = []`
                     );
                     // Still push it as a variable reference (with $) in case they want to run anyway
                     args.push(`$${identifierName}`);
@@ -1218,9 +1488,9 @@ export class Parser {
                 const bracketToken = this.current;
                 this.addError(
                     ErrorCodes.INVALID_BRACKET,
-                    "Square brackets are not allowed here.",
+                    "Square brackets [...] don't work here!",
                     bracketToken,
-                    "Use variable names directly without brackets."
+                    "💡 Just use the variable name directly without brackets. For example, write 'score' instead of '[score]'."
                 );
                 // Skip the bracketed content
                 this.advance(); // Skip '['
@@ -1236,9 +1506,18 @@ export class Parser {
                 if (multiWordReporter) {
                     // It's a built-in reporter like "current date" or "mouse x"
                     args.push(`$${multiWordReporter}`);
+                } else if (Parser.SINGLE_WORD_REPORTERS.includes(this.current.value)) {
+                    // It's a single-word built-in reporter like "answer" or "timer"
+                    args.push(`$${this.advance().value}`);
                 } else {
-                    // Single keyword argument
-                    args.push(this.advance().value);
+                    // Try to parse as an inline operator (join, pick random, length of, etc.)
+                    const inlineOp = this.tryParseInlineOperator();
+                    if (inlineOp) {
+                        args.push(inlineOp);
+                    } else {
+                        // Single keyword argument
+                        args.push(this.advance().value);
+                    }
                 }
             } else if (this.match(TokenType.OPERATOR)) {
                 // Operator
@@ -1263,6 +1542,11 @@ export class Parser {
 
         // Keywords that act as operators inside expressions
         const operatorKeywords = ["mod", "and", "or", "not"];
+        
+        // Keywords that can be inline operators (should be parsed as nested blocks, not variable refs)
+        const inlineOperatorKeywords = ["join", "pick", "length", "letter", "distance", "round", 
+            "abs", "floor", "ceiling", "sqrt", "sin", "cos", "tan", "asin", "acos", "atan", "ln", "log",
+            "item", "contains"];
 
         // Parse the expression until we hit the closing parenthesis
         while (!this.isAtEnd() && !this.match(TokenType.PARENTHESIS_CLOSE)) {
@@ -1287,10 +1571,22 @@ export class Parser {
                 // Handle keywords inside expressions
                 const keyword = this.current.value;
                 
+                // First, try to parse as an inline operator (join, length of, pick random, etc.)
+                if (inlineOperatorKeywords.includes(keyword)) {
+                    const inlineOp = this.tryParseInlineOperator();
+                    if (inlineOp) {
+                        args.push(inlineOp);
+                        continue;
+                    }
+                }
+                
                 // Try to match multi-word built-in reporters
                 const multiWordReporter = this.tryMatchMultiWordReporter();
                 if (multiWordReporter) {
                     args.push(`$${multiWordReporter}`);
+                } else if (Parser.SINGLE_WORD_REPORTERS.includes(keyword)) {
+                    // It's a single-word built-in reporter like "answer" or "timer"
+                    args.push(`$${this.advance().value}`);
                 } else if (operatorKeywords.includes(keyword)) {
                     // Keywords that act as operators (mod, and, or, not)
                     args.push(this.advance().value);
@@ -1325,6 +1621,17 @@ export class Parser {
             args,
         };
     }
+
+    // Single-word built-in reporters that should be recognized as variable references
+    private static SINGLE_WORD_REPORTERS = [
+        "direction",  // Motion
+        "size",       // Looks
+        "volume",     // Sound
+        "answer",     // Sensing
+        "loudness",   // Sensing
+        "timer",      // Sensing
+        "username",   // Sensing
+    ];
 
     // Multi-word built-in reporter patterns
     // Order matters - longer patterns should be first to match greedily
@@ -1420,9 +1727,9 @@ export class Parser {
         if (!this.match(TokenType.IDENTIFIER) && !this.match(TokenType.KEYWORD)) {
             this.addError(
                 ErrorCodes.INVALID_SYNTAX,
-                "Expected variable name after 'var'.",
+                "Hmm, I need a name for this variable!",
                 varKeywordToken,
-                "Variable names must start with a letter and contain only letters, numbers, and underscores."
+                "💡 After 'var', write a name for your variable. Names should start with a letter and can include letters, numbers, and underscores. Example: var myScore = 0"
             );
             this.synchronize();
             return;
@@ -1435,9 +1742,9 @@ export class Parser {
         if (BUILTIN_REPORTERS.has(variableName)) {
             this.addError(
                 ErrorCodes.RESERVED_KEYWORD,
-                `'${variableName}' is a built-in reporter and cannot be used as a variable name.`,
+                `'${variableName}' is already a special CatScript value! You can't use it as a variable name.`,
                 nameToken,
-                `Choose a different name for your variable. Built-in reporters include: x position, y position, direction, size, volume, timer, answer, etc.`
+                `💡 Names like 'x position', 'timer', and 'answer' are already used by CatScript. Pick a different name, like 'myScore' or 'playerName'.`
             );
             this.synchronize();
             return;
@@ -1447,9 +1754,9 @@ export class Parser {
         if (Lexer.RESERVED_KEYWORDS.has(variableName)) {
             this.addError(
                 ErrorCodes.RESERVED_KEYWORD,
-                `'${variableName}' is a reserved keyword and cannot be used as a variable name.`,
+                `'${variableName}' is a special word in CatScript! You can't use it as a variable name.`,
                 nameToken,
-                `Choose a different name for your variable. Reserved keywords include: color, ghost, fisheye, etc.`
+                `💡 Some words like 'color', 'ghost', and 'repeat' have special meanings. Pick a different name for your variable, like 'myColor' or 'count'.`
             );
             this.synchronize();
             return;
@@ -1499,9 +1806,9 @@ export class Parser {
         if (!this.match(TokenType.IDENTIFIER)) {
             this.addError(
                 ErrorCodes.INVALID_SYNTAX,
-                "Expected list name after 'list'.",
+                "Hmm, I need a name for this list!",
                 listKeywordToken,
-                "List names must start with a letter and contain only letters, numbers, and underscores."
+                "💡 After 'list', write a name for your list. Names should start with a letter and can include letters, numbers, and underscores. Example: list myItems = []"
             );
             this.synchronize();
             return;
@@ -1514,9 +1821,9 @@ export class Parser {
         if (Lexer.RESERVED_KEYWORDS.has(listName)) {
             this.addError(
                 ErrorCodes.RESERVED_KEYWORD,
-                `'${listName}' is a reserved keyword and cannot be used as a list name.`,
+                `'${listName}' is a special word in CatScript! You can't use it as a list name.`,
                 nameToken,
-                `Choose a different name for your list. Reserved keywords include: color, ghost, fisheye, etc.`
+                `💡 Some words like 'color', 'ghost', and 'repeat' have special meanings. Pick a different name for your list, like 'myList' or 'items'.`
             );
             this.synchronize();
             return;
@@ -1544,9 +1851,9 @@ export class Parser {
                     // Non-empty brackets - not allowed
                     this.addError(
                         ErrorCodes.INVALID_BRACKET,
-                        "Only empty brackets '[]' are allowed for list initialization.",
+                        "Lists need to start empty! You can add items later.",
                         openBracket,
-                        "Use 'list myList = []' to create an empty list, then use 'add' to add items."
+                        "💡 Create an empty list first with: list myList = []\nThen add items using: add \"apple\" to myList"
                     );
                     // Skip to closing bracket
                     while (!this.isAtEnd() && !this.match(TokenType.BRACKET_CLOSE)) {
@@ -1559,9 +1866,9 @@ export class Parser {
             } else {
                 this.addError(
                     ErrorCodes.INVALID_SYNTAX,
-                    "Lists must be initialized with '[]'.",
+                    "Lists need to be created with empty brackets [].",
                     this.current,
-                    "Use: list myList = []"
+                    "💡 Write it like this: list myList = []"
                 );
             }
         }

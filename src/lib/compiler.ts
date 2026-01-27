@@ -4,7 +4,7 @@
 
 import { Lexer } from "./lexer";
 import { Parser } from "./parser";
-import { CodeGenerator, MultiSpriteCodeGenerator } from "./codeGenerator";
+import { MultiSpriteCodeGenerator } from "./codeGenerator";
 import Debugger from "./debugger";
 import { CompilerError } from "@/types/compilerTypes";
 import { BlockNode, Program } from "@/types/blockTypes";
@@ -83,11 +83,11 @@ export class ScratchTextCompiler {
                         const lineNum = findLineNumber(`switch costume to "${block.args[0]}"`);
                         errors.push({
                             code: "W101",
-                            message: `[${spriteName}] Costume "${block.args[0]}" does not exist`,
+                            message: `[${spriteName}] Oops! I can't find a costume named "${block.args[0]}"`,
                             line: lineNum,
                             column: 1,
                             severity: "warning",
-                            suggestion: `Available costumes: ${costumeNames.join(', ') || 'none'}. Add a costume in the Costumes tab.`,
+                            suggestion: `💡 Check the spelling! Your costumes are: ${costumeNames.join(', ') || 'none'}. You can add new costumes in the Costumes tab on the left.`,
                         });
                     }
                 }
@@ -102,11 +102,11 @@ export class ScratchTextCompiler {
                         const lineNum = findLineNumber(`play sound "${block.args[0]}"`);
                         errors.push({
                             code: "W102",
-                            message: `[${spriteName}] Sound "${block.args[0]}" does not exist`,
+                            message: `[${spriteName}] Oops! I can't find a sound named "${block.args[0]}"`,
                             line: lineNum,
                             column: 1,
                             severity: "warning",
-                            suggestion: `Available sounds: ${soundNames.length > 0 ? soundNames.join(', ') : 'none'}. Add a sound in the Sounds tab.`,
+                            suggestion: `💡 Check the spelling! Your sounds are: ${soundNames.length > 0 ? soundNames.join(', ') : 'none yet'}. You can add new sounds in the Sounds tab on the left.`,
                         });
                     }
                 }
@@ -150,11 +150,11 @@ export class ScratchTextCompiler {
             if (col !== -1) {
                 errors.push({
                     code: "E100",
-                    message: `${prefix}Unfilled value slot (⬤) found - please fill in this blank with a value or reporter`,
+                    message: `${prefix}There's an empty circle (⬤) that needs to be filled in!`,
                     line: lineNum,
                     column: col + 1,
                     severity: "error",
-                    suggestion: "Drag a reporter block or type a value to fill in this slot",
+                    suggestion: "💡 The circle ⬤ is a blank space waiting for a value. Type a number, a word in quotes (like \"hello\"), or drag a round block here.",
                 });
             }
             
@@ -163,11 +163,11 @@ export class ScratchTextCompiler {
             if (col !== -1) {
                 errors.push({
                     code: "E101",
-                    message: `${prefix}Unfilled boolean slot (⯁) found - please fill in this blank with a condition`,
+                    message: `${prefix}There's an empty diamond (⯁) that needs to be filled in!`,
                     line: lineNum,
                     column: col + 1,
                     severity: "error",
-                    suggestion: "Drag a boolean block or type a condition to fill in this slot",
+                    suggestion: "💡 The diamond ⯁ is waiting for a yes/no question. Type something like 'x > 10' or drag a pointy (boolean) block here.",
                 });
             }
         }
@@ -224,8 +224,20 @@ export class ScratchTextCompiler {
                 };
             }
 
-            // Step 3: Generate JavaScript code from the AST using the CodeGenerator.
-            const generator = new CodeGenerator(program);
+            // Step 3: Generate JavaScript code using MultiSpriteCodeGenerator
+            // Wrap single-sprite program in the expected format
+            const parsedSprites = [{
+                name: "Sprite1",
+                isStage: false,
+                program: program,
+                costumeNames: [],
+                costumeUrls: [],
+                currentCostume: 0,
+                soundNames: [],
+                soundUrls: [],
+            }];
+            
+            const generator = new MultiSpriteCodeGenerator(parsedSprites);
             const jsCode = generator.generate();
 
             this.debugger.log("info", "Generator output (jsCode) ", jsCode);
@@ -241,10 +253,11 @@ export class ScratchTextCompiler {
             console.error("Compilation error:", error);
             allErrors.push({
                 code: "E999",
-                message: error instanceof Error ? error.message : String(error),
+                message: `Something went wrong: ${error instanceof Error ? error.message : String(error)}`,
                 line: 1,
                 column: 1,
                 severity: "error",
+                suggestion: "💡 This is an unexpected error. Try checking your code for typos or unusual characters.",
             });
             return {
                 js: "",
@@ -368,10 +381,11 @@ export class ScratchTextCompiler {
             console.error("Multi-sprite compilation error:", error);
             allErrors.push({
                 code: "E999",
-                message: error instanceof Error ? error.message : String(error),
+                message: `Something went wrong: ${error instanceof Error ? error.message : String(error)}`,
                 line: 1,
                 column: 1,
                 severity: "error",
+                suggestion: "💡 This is an unexpected error. Try checking your code for typos or unusual characters.",
             });
             return {
                 js: "",
@@ -403,10 +417,11 @@ export async function compile(code: string): Promise<CompilationResult> {
             userCode: "",
             errors: [{
                 code: "E999",
-                message: "Compilation failed in compiler function.",
+                message: "Oops! Something went wrong while trying to run your code.",
                 line: 1,
                 column: 1,
                 severity: "error",
+                suggestion: "💡 This is an unexpected error. Try checking your code for typos, and make sure all blocks are complete.",
             }],
             success: false,
         };
@@ -432,10 +447,11 @@ export async function compileMultiSprite(sprites: SpriteInput[], debug?: boolean
             userCode: "",
             errors: [{
                 code: "E999",
-                message: "Multi-sprite compilation failed.",
+                message: "Oops! Something went wrong while trying to run your project.",
                 line: 1,
                 column: 1,
                 severity: "error",
+                suggestion: "💡 This is an unexpected error. Check all your sprites for typos and make sure all blocks are complete.",
             }],
             parsedSprites: [],
             success: false,

@@ -334,8 +334,8 @@ export class Lexer {
                 // Curly braces are not allowed
                 this.addError(
                     ErrorCodes.INVALID_CURLY_BRACKET,
-                    `Curly braces '${char}' are not allowed in Scratch syntax.`,
-                    "Remove the curly braces. Use indentation and 'end' to define code blocks."
+                    `Whoops! Curly braces '${char}' don't work in CatScript.`,
+                    "💡 In CatScript, we use indentation (spaces) and the word 'end' to group code together, instead of curly braces { }."
                 );
                 this.advance();
             } else if (char === "<" || char === ">") {
@@ -385,8 +385,8 @@ export class Lexer {
         if (lookAhead < this.code.length && this.code[lookAhead] === ")") {
             this.addError(
                 ErrorCodes.EMPTY_PARENTHESES,
-                "Empty parentheses '()' are not allowed.",
-                "Parentheses should only be used for grouping math expressions, e.g., (a + b) * c"
+                "Empty parentheses '()' aren't needed here!",
+                "💡 Parentheses are only used for math, like (2 + 3) * 4. You can remove these empty ones."
             );
         }
         
@@ -412,8 +412,8 @@ export class Lexer {
             // This is [something] - not allowed
             this.addError(
                 ErrorCodes.INVALID_BRACKET,
-                "Square brackets '[...]' are not allowed except for empty list initialization '[]'.",
-                "Use variable names directly without brackets. For example, use 'score' instead of '[score]'."
+                "Square brackets [...] don't work here!",
+                "💡 In CatScript, just use the variable name directly. For example, write 'score' instead of '[score]'. Square brackets are only for creating empty lists like: list myList = []"
             );
             // Still add the token for parser recovery
             this.addToken(TokenType.BRACKET_OPEN, "[");
@@ -504,8 +504,8 @@ export class Lexer {
             if (this.indentLevels[this.indentLevels.length - 1] !== spaces) {
                 this.addError(
                     ErrorCodes.INCONSISTENT_INDENT,
-                    `Inconsistent indentation. Expected ${this.indentLevels[this.indentLevels.length - 1]} spaces but got ${spaces}.`,
-                    "Make sure your indentation is consistent. Use the same number of spaces for each level."
+                    `Oops! The spacing looks a bit off here. I expected ${this.indentLevels[this.indentLevels.length - 1]} spaces but found ${spaces}.`,
+                    "💡 Indentation (the spaces at the beginning of a line) helps group code together. Make sure each level uses the same number of spaces. Try using 4 spaces for each level."
                 );
             }
         }
@@ -591,8 +591,8 @@ export class Lexer {
         } else {
             this.addError(
                 ErrorCodes.UNTERMINATED_STRING,
-                `Unterminated string. Missing closing quote.`,
-                `Add a closing ${quote} at the end of your string.`
+                `Oops! This text is missing its closing quote mark.`,
+                `💡 When you write text (like "hello"), you need a quote at the start AND at the end. Add a ${quote} at the end to close it.`
             );
         }
 

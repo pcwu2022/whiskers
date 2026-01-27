@@ -802,15 +802,15 @@ export default function CodeEditor() {
             } else {
                 // Compilation failed - show error message but still show preview with working green flag
                 const errorCount = data.errors?.length || 0;
-                setErrorMessage(`Compilation failed with ${errorCount} error${errorCount !== 1 ? 's' : ''}. Fix the errors and try again.`);
+                setErrorMessage(`Found ${errorCount} problem${errorCount !== 1 ? 's' : ''} in your code. Check the red underlines and fix them, then click the green flag! 🚩`);
                 // Generate empty preview so user can still interact with the stage
                 setHtmlContent(generateEmptyPreviewTemplate());
                 retValue = { js: "", html: "", success: false };
             }
         } catch (error) {
             console.error("Error compiling:", error);
-            setCompiledJsCode("Compilation failed.");
-            setErrorMessage(String(error));
+            setCompiledJsCode("Something went wrong!");
+            setErrorMessage("Oops! Something unexpected happened. Try refreshing the page.");
             // Generate empty preview so user can still interact with the stage
             setHtmlContent(generateEmptyPreviewTemplate());
         } finally {
@@ -862,10 +862,7 @@ export default function CodeEditor() {
 
         const result = await handleCompile();
 
-        if (!result || !result.js || !result.html) {
-            setRunning(false);
-            return;
-        }
+        // Always show preview (even on errors - shows empty stage that can recompile)
         setShowPreview(true);
         setRunning(false);
     };

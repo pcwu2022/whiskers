@@ -1,0 +1,524 @@
+// ================================================
+// COMPREHENSIVE CATSCRIPT SYNTAX TEST
+// Tests all blocks and composite operations
+// ================================================
+
+// === VARIABLE AND LIST DECLARATIONS ===
+var score = 0
+var lives = 3
+var message = "Hello"
+var speed = 5
+var gameOver = 0
+list inventory = []
+list highScores = []
+
+// ================================================
+// TEST 1: EVENTS
+// ================================================
+
+when green flag clicked
+    // Test basic say
+    say "🧪 Starting Comprehensive Test!"
+    wait 1 seconds
+    
+    // Test variable assignment
+    set score to 0
+    set lives to 3
+    set gameOver to 0
+    
+    say "✓ Events: Green flag works!" for 1 seconds
+    
+    // Broadcast test
+    broadcast "testMotion"
+end
+
+when I receive "testMotion"
+    say "✓ Events: Broadcast received!" for 1 seconds
+    broadcast "testLooks"
+end
+
+// ================================================
+// TEST 2: MOTION (Sprites Only)
+// ================================================
+
+when I receive "testLooks"
+    // Basic motion
+    go to x: 0 y: 0
+    say "Testing Motion..." for 0.5 seconds
+    
+    // Move steps
+    move 50 steps
+    say join "Moved to x: " x position for 0.5 seconds
+    
+    // Turn
+    turn right 90 degrees
+    say join "Direction: " direction for 0.5 seconds
+    turn left 90 degrees
+    
+    // Go to position
+    go to x: -100 y: 50
+    
+    // Glide
+    glide 0.5 secs to x: 100 y: 50
+    
+    // Change position
+    change x by -50
+    change y by -50
+    
+    // Set position
+    set x to 0
+    set y to 0
+    
+    // Point in direction
+    point in direction 45
+    point in direction 90
+    
+    // Bounce test
+    go to x: 230 y: 0
+    if on edge, bounce
+    
+    // Return to center
+    go to x: 0 y: 0
+    
+    say "✓ Motion: All tests passed!" for 1 seconds
+    broadcast "testLooksBlocks"
+end
+
+// ================================================
+// TEST 3: LOOKS
+// ================================================
+
+when I receive "testLooksBlocks"
+    say "Testing Looks..." for 0.5 seconds
+    
+    // Say variations
+    say "Hello!"
+    wait 0.3 seconds
+    say "Thinking..." for 0.5 seconds
+    think "Hmm..." for 0.5 seconds
+    
+    // Size
+    set size to 150
+    wait 0.3 seconds
+    change size by -25
+    wait 0.3 seconds
+    set size to 100
+    
+    // Effects
+    change ghost effect by 50
+    wait 0.3 seconds
+    set ghost effect to 0
+    
+    // Show/Hide
+    hide
+    wait 0.3 seconds
+    show
+    
+    // Layers
+    go to front layer
+    go to back layer
+    go to front layer
+    
+    // Costume (if exists)
+    next costume
+    
+    say "✓ Looks: All tests passed!" for 1 seconds
+    broadcast "testControl"
+end
+
+// ================================================
+// TEST 4: CONTROL
+// ================================================
+
+when I receive "testControl"
+    say "Testing Control..." for 0.5 seconds
+    
+    // Wait
+    wait 0.2 seconds
+    
+    // Repeat
+    set score to 0
+    repeat 5
+        change score by 1
+    end
+    say join "Repeat count: " score for 0.5 seconds
+    
+    // If-then
+    if score = 5 then
+        say "✓ If-then works!" for 0.5 seconds
+    end
+    
+    // If-else
+    if score > 10 then
+        say "Score is high"
+    else
+        say "✓ If-else works!" for 0.5 seconds
+    end
+    
+    // Repeat until
+    set score to 0
+    repeat until score > 3
+        change score by 1
+    end
+    say join "Repeat until: " score for 0.5 seconds
+    
+    // Wait until (with timeout using forever + if)
+    reset timer
+    wait until timer > 0.1
+    say "✓ Wait until works!" for 0.5 seconds
+    
+    say "✓ Control: All tests passed!" for 1 seconds
+    broadcast "testSensing"
+end
+
+// ================================================
+// TEST 5: SENSING
+// ================================================
+
+when I receive "testSensing"
+    say "Testing Sensing..." for 0.5 seconds
+    
+    // Timer
+    reset timer
+    wait 0.2 seconds
+    say join "Timer: " timer for 0.5 seconds
+    
+    // Mouse position
+    say join "Mouse X: " mouse x for 0.5 seconds
+    say join "Mouse Y: " mouse y for 0.5 seconds
+    
+    // Date/Time reporters
+    say join "Year: " current year for 0.3 seconds
+    say join "Month: " current month for 0.3 seconds
+    say join "Date: " current date for 0.3 seconds
+    say join "Hour: " current hour for 0.3 seconds
+    
+    // Touching (will be false since nothing to touch)
+    if touching edge then
+        say "Touching edge"
+    else
+        say "✓ Edge detection works" for 0.3 seconds
+    end
+    
+    // Distance
+    say join "Distance to mouse: " (distance to mouse-pointer) for 0.5 seconds
+    
+    say "✓ Sensing: All tests passed!" for 1 seconds
+    broadcast "testOperators"
+end
+
+// ================================================
+// TEST 6: OPERATORS
+// ================================================
+
+when I receive "testOperators"
+    say "Testing Operators..." for 0.5 seconds
+    
+    // Arithmetic
+    set score to 10 + 5
+    say join "10 + 5 = " score for 0.3 seconds
+    
+    set score to 20 - 8
+    say join "20 - 8 = " score for 0.3 seconds
+    
+    set score to 6 * 7
+    say join "6 * 7 = " score for 0.3 seconds
+    
+    set score to 100 / 4
+    say join "100 / 4 = " score for 0.3 seconds
+    
+    set score to 17 mod 5
+    say join "17 mod 5 = " score for 0.3 seconds
+    
+    // Random
+    set score to pick random 1 to 100
+    say join "Random: " score for 0.3 seconds
+    
+    // Comparisons
+    if 10 > 5 then
+        say "✓ 10 > 5" for 0.3 seconds
+    end
+    
+    if 3 < 7 then
+        say "✓ 3 < 7" for 0.3 seconds
+    end
+    
+    if 5 = 5 then
+        say "✓ 5 = 5" for 0.3 seconds
+    end
+    
+    // Boolean logic
+    if 10 > 5 and 3 < 7 then
+        say "✓ AND works" for 0.3 seconds
+    end
+    
+    if 10 < 5 or 3 < 7 then
+        say "✓ OR works" for 0.3 seconds
+    end
+    
+    if not 10 < 5 then
+        say "✓ NOT works" for 0.3 seconds
+    end
+    
+    // String operations
+    say join "Hello" " World" for 0.5 seconds
+    say join "Length: " (length of "Hello") for 0.3 seconds
+    say join "Letter 2: " (letter 2 of "Hello") for 0.3 seconds
+    
+    // Math functions
+    say join "Round 3.7: " (round 3.7) for 0.3 seconds
+    say join "Abs -5: " (abs of -5) for 0.3 seconds
+    say join "Floor 3.9: " (floor of 3.9) for 0.3 seconds
+    say join "Ceiling 3.1: " (ceiling of 3.1) for 0.3 seconds
+    say join "Sqrt 16: " (sqrt of 16) for 0.3 seconds
+    
+    say "✓ Operators: All tests passed!" for 1 seconds
+    broadcast "testVariables"
+end
+
+// ================================================
+// TEST 7: VARIABLES AND LISTS
+// ================================================
+
+when I receive "testVariables"
+    say "Testing Variables & Lists..." for 0.5 seconds
+    
+    // Variables
+    set score to 100
+    change score by 50
+    say join "Score: " score for 0.3 seconds
+    
+    show variable score
+    wait 0.5 seconds
+    hide variable score
+    
+    // Lists
+    delete all of inventory
+    add "Sword" to inventory
+    add "Shield" to inventory
+    add "Potion" to inventory
+    
+    say join "List length: " (length of inventory) for 0.3 seconds
+    say join "Item 1: " (item 1 of inventory) for 0.3 seconds
+    
+    // Insert
+    insert "Helmet" at 1 of inventory
+    say join "New item 1: " (item 1 of inventory) for 0.3 seconds
+    
+    // Replace
+    replace item 2 of inventory with "Axe"
+    say join "Replaced item 2: " (item 2 of inventory) for 0.3 seconds
+    
+    // Contains
+    if inventory contains "Shield" then
+        say "✓ List contains Shield" for 0.3 seconds
+    end
+    
+    // Delete
+    delete 1 of inventory
+    say join "After delete, item 1: " (item 1 of inventory) for 0.3 seconds
+    
+    say "✓ Variables & Lists: All tests passed!" for 1 seconds
+    broadcast "testComposite"
+end
+
+// ================================================
+// TEST 8: COMPOSITE OPERATIONS (Nested blocks)
+// ================================================
+
+when I receive "testComposite"
+    say "Testing Composite Operations..." for 0.5 seconds
+    
+    // Join with reporters
+    say join "Position: (" join x position join ", " join y position ")" for 0.5 seconds
+    
+    // Math with reporters
+    set score to x position + y position
+    say join "x + y = " score for 0.3 seconds
+    
+    // Nested math
+    set score to (10 + 5) * 2
+    say join "(10+5)*2 = " score for 0.3 seconds
+    
+    // Random in expression
+    set score to (pick random 1 to 10) + 100
+    say join "Random+100: " score for 0.3 seconds
+    
+    // Reporter in repeat
+    set speed to 3
+    set score to 0
+    repeat speed
+        change score by 1
+    end
+    say join "Repeated " join speed join " times, score=" score for 0.5 seconds
+    
+    // Nested conditions
+    set score to 50
+    set lives to 2
+    if score > 30 and lives > 0 then
+        if score > 40 then
+            say "✓ Nested conditions work!" for 0.5 seconds
+        end
+    end
+    
+    // Math in move
+    go to x: 0 y: 0
+    move (10 + 10) steps
+    say join "After move(10+10): x=" x position for 0.3 seconds
+    
+    // Expression in glide
+    go to x: 0 y: 0
+    glide 0.3 secs to x: (50 + 50) y: (25 * 2)
+    say join "Glided to: " join x position join "," y position for 0.3 seconds
+    
+    // Reporter in wait
+    set speed to 0.2
+    say "Waiting variable seconds..."
+    wait speed seconds
+    say "✓ Variable in wait works!" for 0.3 seconds
+    
+    // Length in condition
+    set message to "Hello World"
+    if (length of message) > 5 then
+        say "✓ Length in condition works!" for 0.3 seconds
+    end
+    
+    // Letter with random
+    say join "Random letter: " (letter (pick random 1 to 5) of "ABCDE") for 0.3 seconds
+    
+    // Distance in condition
+    go to x: 200 y: 0
+    if (distance to mouse-pointer) > 10 then
+        say "✓ Distance in condition works!" for 0.3 seconds
+    end
+    
+    // Timer in condition
+    reset timer
+    wait 0.1 seconds
+    if timer > 0 then
+        say "✓ Timer in condition works!" for 0.3 seconds
+    end
+    
+    // Item of list in say
+    delete all of inventory
+    add "Apple" to inventory
+    say join "From list: " (item 1 of inventory) for 0.3 seconds
+    
+    // Contains in condition
+    if inventory contains "Apple" then
+        say "✓ Contains in condition works!" for 0.3 seconds
+    end
+    
+    go to x: 0 y: 0
+    say "✓ Composite: All tests passed!" for 1 seconds
+    broadcast "testSound"
+end
+
+// ================================================
+// TEST 9: SOUND (placeholders)
+// ================================================
+
+when I receive "testSound"
+    say "Testing Sound (console only)..." for 0.5 seconds
+    
+    // These will log to console
+    set volume to 100
+    change volume by -50
+    say join "Volume: " volume for 0.3 seconds
+    
+    // Sound commands (will show in console)
+    start sound "meow"
+    wait 0.3 seconds
+    stop all sounds
+    
+    say "✓ Sound: Commands sent!" for 1 seconds
+    broadcast "testPen"
+end
+
+// ================================================
+// TEST 10: PEN (if available)
+// ================================================
+
+when I receive "testPen"
+    say "Testing Pen..." for 0.5 seconds
+    
+    // Pen commands
+    erase all
+    pen down
+    go to x: -100 y: 0
+    go to x: 100 y: 0
+    pen up
+    
+    // Pen settings
+    set pen color to "#FF0000"
+    set pen size to 3
+    pen down
+    go to x: 100 y: 100
+    pen up
+    
+    change pen size by 2
+    
+    // Stamp
+    stamp
+    
+    erase all
+    go to x: 0 y: 0
+    
+    say "✓ Pen: Commands executed!" for 1 seconds
+    broadcast "testComplete"
+end
+
+// ================================================
+// TEST COMPLETE
+// ================================================
+
+when I receive "testComplete"
+    go to x: 0 y: 0
+    set size to 100
+    clear graphic effects
+    show
+    
+    say "🎉 ALL TESTS COMPLETED!" for 2 seconds
+    say "Check the console for any errors."
+    
+    // Final stats
+    wait 1 seconds
+    say join "Final score: " score
+end
+
+// ================================================
+// KEYBOARD INPUT TEST (Manual)
+// ================================================
+
+when space key pressed
+    say "Space pressed!" for 0.5 seconds
+end
+
+when up arrow key pressed
+    change y by 20
+    say join "Y: " y position for 0.3 seconds
+end
+
+when down arrow key pressed
+    change y by -20
+    say join "Y: " y position for 0.3 seconds
+end
+
+when left arrow key pressed
+    change x by -20
+    say join "X: " x position for 0.3 seconds
+end
+
+when right arrow key pressed
+    change x by 20
+    say join "X: " x position for 0.3 seconds
+end
+
+// ================================================
+// SPRITE CLICK TEST
+// ================================================
+
+when this sprite clicked
+    say "You clicked me!" for 1 seconds
+    next costume
+end
