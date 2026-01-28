@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
     title: "Whiskers Playground",
-    description: "Program in Scratch like a pro - A text-based Scratch coding environment for kids",
+    description: "Real programming starts here - A text-based Scratch coding environment for kids",
 };
 
 export default function RootLayout({

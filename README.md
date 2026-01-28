@@ -1,6 +1,6 @@
 # Whiskers Playground 🐱
 
-*Program in Scratch like a pro*
+*Real programming starts here*
 
 [https://scratch-compiler.vercel.app/](https://scratch-compiler.vercel.app/)
 
