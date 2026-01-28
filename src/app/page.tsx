@@ -81,7 +81,7 @@ export default function LandingPage() {
                         >
                             <span className="role-icon">🎯</span>
                             <span className="role-label">Student</span>
-                            <span className="role-desc">Ready to learn coding</span>
+                            <span className="role-desc">Ready to write real code</span>
                         </button>
                         <button
                             onClick={() => handleRoleSelection('parent')}
@@ -89,7 +89,7 @@ export default function LandingPage() {
                         >
                             <span className="role-icon">👨‍👩‍👧‍👦</span>
                             <span className="role-label">Parent</span>
-                            <span className="role-desc">Looking for the next step</span>
+                            <span className="role-desc">Helping my child learn</span>
                         </button>
                         <button
                             onClick={() => handleRoleSelection('teacher')}
@@ -108,7 +108,7 @@ export default function LandingPage() {
                 <>
                     {/* Demo Section */}
                     <section id="demo" className="content-section demo-section">
-                        <h2>See it in action</h2>
+                        <h2>Whiskers in action</h2>
                         <div className="demo-container">
                             <div className="demo-placeholder">
                                 <div className="demo-image-placeholder">
@@ -144,11 +144,11 @@ export default function LandingPage() {
                             </div>
                             <div className="bullet-item">
                                 <span className="bullet-icon">✦</span>
-                                <p>Designed for learners transitioning from blocks to real programming</p>
+                                <p>Built for learners moving from blocks to real programming</p>
                             </div>
                             <div className="bullet-item">
                                 <span className="bullet-icon">✦</span>
-                                <p>Provides intelligent guidance and feedback while you type</p>
+                                <p>Guides you with smart hints, structure, and live feedback as you type</p>
                             </div>
                         </div>
                     </section>
@@ -158,26 +158,26 @@ export default function LandingPage() {
                         <h2>How Whiskers guides you</h2>
                         <div className="features-grid">
                             <div className="feature-card">
+                                <div className="feature-icon">🎨</div>
+                                <h3>Familiar Concepts</h3>
+                                <p>
+                                    Bring the masterpiece you built in Scratch to life, 
+                                    but with real code.
+                                </p>
+                            </div>
+                            <div className="feature-card">
                                 <div className="feature-icon">💡</div>
                                 <h3>Smart Editor</h3>
                                 <p>
-                                    Intelligent autocomplete and syntax highlighting help you write code 
-                                    correctly from the start.
+                                    Start by dragging code from the toolbox, 
+                                    then naturally shift to typing as confidence grows.
                                 </p>
                             </div>
                             <div className="feature-card">
                                 <div className="feature-icon">⚡</div>
                                 <h3>Live Feedback</h3>
                                 <p>
-                                    See instant feedback as you type, catching errors before you run your code.
-                                </p>
-                            </div>
-                            <div className="feature-card">
-                                <div className="feature-icon">🎨</div>
-                                <h3>Familiar Concepts</h3>
-                                <p>
-                                    Use the same sprites, costumes, and sounds you know from Scratch, 
-                                    but with real code.
+                                    See how your code works (or doesn't work) in real time. 
                                 </p>
                             </div>
                         </div>
@@ -235,26 +235,26 @@ export default function LandingPage() {
                         <h2>How Whiskers guides you</h2>
                         <div className="features-grid">
                             <div className="feature-card">
+                                <div className="feature-icon">🎨</div>
+                                <h3>Familiar Concepts</h3>
+                                <p>
+                                    Bring the masterpiece you built in Scratch to life, 
+                                    but with real code.
+                                </p>
+                            </div>
+                            <div className="feature-card">
                                 <div className="feature-icon">💡</div>
                                 <h3>Smart Editor</h3>
                                 <p>
-                                    Intelligent autocomplete and syntax highlighting help learners write code 
-                                    correctly from the start.
+                                    Start by dragging code from the toolbox, 
+                                    then naturally shift to typing as confidence grows.
                                 </p>
                             </div>
                             <div className="feature-card">
                                 <div className="feature-icon">⚡</div>
                                 <h3>Live Feedback</h3>
                                 <p>
-                                    Instant feedback as they type, catching errors before running code.
-                                </p>
-                            </div>
-                            <div className="feature-card">
-                                <div className="feature-icon">🎨</div>
-                                <h3>Familiar Concepts</h3>
-                                <p>
-                                    Uses the same sprites, costumes, and sounds from Scratch, 
-                                    but with real code.
+                                    See how your code works (or doesn't work) in real time. 
                                 </p>
                             </div>
                         </div>
@@ -322,7 +322,7 @@ export default function LandingPage() {
             {!userRole && (
                 <>
                     {/* Intro Section */}
-                    <section id="intro" className="content-section intro-section">
+                    <section className="content-section intro-section">
                         <h2>What is Whiskers?</h2>
                         <div className="bullet-points">
                             <div className="bullet-item">
@@ -331,11 +331,11 @@ export default function LandingPage() {
                             </div>
                             <div className="bullet-item">
                                 <span className="bullet-icon">✦</span>
-                                <p>Designed for learners transitioning from blocks to real programming</p>
+                                <p>Built for learners moving from blocks to real programming</p>
                             </div>
                             <div className="bullet-item">
                                 <span className="bullet-icon">✦</span>
-                                <p>Provides intelligent guidance and feedback while you type</p>
+                                <p>Guides you with smart hints, structure, and live feedback as you type</p>
                             </div>
                         </div>
                     </section>
@@ -368,26 +368,26 @@ export default function LandingPage() {
                         <h2>How Whiskers guides you</h2>
                         <div className="features-grid">
                             <div className="feature-card">
+                                <div className="feature-icon">🎨</div>
+                                <h3>Familiar Concepts</h3>
+                                <p>
+                                    Bring the masterpiece you built in Scratch to life, 
+                                    but with real code.
+                                </p>
+                            </div>
+                            <div className="feature-card">
                                 <div className="feature-icon">💡</div>
                                 <h3>Smart Editor</h3>
                                 <p>
-                                    Intelligent autocomplete and syntax highlighting help you write code 
-                                    correctly from the start.
+                                    Start by dragging code from the toolbox, 
+                                    then naturally shift to typing as confidence grows.
                                 </p>
                             </div>
                             <div className="feature-card">
                                 <div className="feature-icon">⚡</div>
                                 <h3>Live Feedback</h3>
                                 <p>
-                                    See instant feedback as you type, catching errors before you run your code.
-                                </p>
-                            </div>
-                            <div className="feature-card">
-                                <div className="feature-icon">🎨</div>
-                                <h3>Familiar Concepts</h3>
-                                <p>
-                                    Use the same sprites, costumes, and sounds you know from Scratch, 
-                                    but with real code.
+                                    See how your code works (or doesn't work) in real time. 
                                 </p>
                             </div>
                         </div>
@@ -454,7 +454,7 @@ export default function LandingPage() {
 
             {/* Footer */}
             <footer className="landing-footer">
-                <p>© 2026 Whiskers. Empowering the next generation of programmers.</p>
+                <p>Developed by <a href='https://pcwu2022.github.io'>Po-Chun Wu</a>. Empowering the next generation of programmers.</p>
             </footer>
 
             {/* Back to Top Button */}
