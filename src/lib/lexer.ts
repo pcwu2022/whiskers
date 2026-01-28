@@ -334,8 +334,8 @@ export class Lexer {
                 // Curly braces are not allowed
                 this.addError(
                     ErrorCodes.INVALID_CURLY_BRACKET,
-                    `Whoops! Curly braces '${char}' don't work in CatScript.`,
-                    "💡 In CatScript, we use indentation (spaces) and the word 'end' to group code together, instead of curly braces { }."
+                    `Whoops! Curly braces '${char}' don't work in Whiskers.`,
+                    "💡 In Whiskers, we use indentation (spaces) and the word 'end' to group code together, instead of curly braces { }."
                 );
                 this.advance();
             } else if (char === "<" || char === ">") {
@@ -413,7 +413,7 @@ export class Lexer {
             this.addError(
                 ErrorCodes.INVALID_BRACKET,
                 "Square brackets [...] don't work here!",
-                "💡 In CatScript, just use the variable name directly. For example, write 'score' instead of '[score]'. Square brackets are only for creating empty lists like: list myList = []"
+                "💡 In Whiskers, just use the variable name directly. For example, write 'score' instead of '[score]'. Square brackets are only for creating empty lists like: list myList = []"
             );
             // Still add the token for parser recovery
             this.addToken(TokenType.BRACKET_OPEN, "[");

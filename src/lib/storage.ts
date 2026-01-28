@@ -1,10 +1,10 @@
-// IndexedDB Storage for CatScript Playground
+// IndexedDB Storage for Whiskers Playground
 // Provides persistent storage for projects, costumes, and sounds
 
 import { ScratchProject, Costume, Sound } from "@/types/projectTypes";
 
 // Database configuration
-const DB_NAME = "catscript-playground";
+const DB_NAME = "whiskers-playground";
 const DB_VERSION = 2;  // Bump version for schema update
 
 // Store names

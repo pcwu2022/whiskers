@@ -1,4 +1,4 @@
-# CatScript Playground 🐱
+# Whiskers Playground 🐱
 
 *Program in Scratch like a pro*
 
@@ -8,7 +8,7 @@ A fun, text-based coding playground for kids who love Scratch! Write Scratch pro
 
 ## 🎯 Overview
 
-CatScript Playground is the perfect next step for kids who've mastered Scratch blocks and want to learn real coding. It uses the same familiar Scratch concepts (sprites, motion, looks, events) but with text-based syntax that feels like \"real\" programming.
+Whiskers Playground is the perfect next step for kids who've mastered Scratch blocks and want to learn real coding. It uses the same familiar Scratch concepts (sprites, motion, looks, events) but with text-based syntax that feels like \"real\" programming.
 
 ### Features
 
@@ -368,10 +368,10 @@ myBlock "Hello" 50
 
 ### Complete Working Example
 
-This example demonstrates motion, speech, loops, and keyboard controls. It's the default code shown when you first open CatScript Playground:
+This example demonstrates motion, speech, loops, and keyboard controls. It's the default code shown when you first open Whiskers Playground:
 
 ```scratch
-// Welcome to CatScript Playground! 🐱
+// Welcome to Whiskers Playground! 🐱
 // Click the green flag to see this code in action
 
 when flagClicked

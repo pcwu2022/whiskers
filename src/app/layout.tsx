@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-    title: "CatScript Playground",
+    title: "Whiskers Playground",
     description: "Program in Scratch like a pro - A text-based Scratch coding environment for kids",
 };
 

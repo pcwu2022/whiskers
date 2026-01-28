@@ -1,5 +1,5 @@
 // Default code shown when creating a new project
-export const initialCode = `// Welcome to CatScript Playground! 🐱
+export const initialCode = `// Welcome to Whiskers Playground! 🐱
 // Click the green flag to see this code in action
 
 when green flag clicked

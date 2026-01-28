@@ -1172,9 +1172,9 @@ export class Parser {
             if (BUILTIN_REPORTERS.has(varName)) {
                 this.addError(
                     ErrorCodes.RESERVED_KEYWORD,
-                    `'${varName}' is already a special CatScript value! You can't use it as a variable name.`,
+                    `'${varName}' is already a special Whiskers value! You can't use it as a variable name.`,
                     nameToken,
-                    `💡 Names like 'x position', 'timer', and 'answer' are already used by CatScript. Pick a different name for your variable, like 'myScore' or 'playerName'.`
+                    `💡 Names like 'x position', 'timer', and 'answer' are already used by Whiskers. Pick a different name for your variable, like 'myScore' or 'playerName'.`
                 );
             }
         }
@@ -1742,9 +1742,9 @@ export class Parser {
         if (BUILTIN_REPORTERS.has(variableName)) {
             this.addError(
                 ErrorCodes.RESERVED_KEYWORD,
-                `'${variableName}' is already a special CatScript value! You can't use it as a variable name.`,
+                `'${variableName}' is already a special Whiskers value! You can't use it as a variable name.`,
                 nameToken,
-                `💡 Names like 'x position', 'timer', and 'answer' are already used by CatScript. Pick a different name, like 'myScore' or 'playerName'.`
+                `💡 Names like 'x position', 'timer', and 'answer' are already used by Whiskers. Pick a different name, like 'myScore' or 'playerName'.`
             );
             this.synchronize();
             return;
@@ -1754,7 +1754,7 @@ export class Parser {
         if (Lexer.RESERVED_KEYWORDS.has(variableName)) {
             this.addError(
                 ErrorCodes.RESERVED_KEYWORD,
-                `'${variableName}' is a special word in CatScript! You can't use it as a variable name.`,
+                `'${variableName}' is a special word in Whiskers! You can't use it as a variable name.`,
                 nameToken,
                 `💡 Some words like 'color', 'ghost', and 'repeat' have special meanings. Pick a different name for your variable, like 'myColor' or 'count'.`
             );
@@ -1821,7 +1821,7 @@ export class Parser {
         if (Lexer.RESERVED_KEYWORDS.has(listName)) {
             this.addError(
                 ErrorCodes.RESERVED_KEYWORD,
-                `'${listName}' is a special word in CatScript! You can't use it as a list name.`,
+                `'${listName}' is a special word in Whiskers! You can't use it as a list name.`,
                 nameToken,
                 `💡 Some words like 'color', 'ghost', and 'repeat' have special meanings. Pick a different name for your list, like 'myList' or 'items'.`
             );

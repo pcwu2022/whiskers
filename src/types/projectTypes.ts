@@ -57,7 +57,7 @@ export const BACKDROP_ID = "backdrop_stage";
 export const BACKDROP_NAME = "Stage";
 
 // Default initial code for new sprites - an engaging demo that moves and talks
-export const DEFAULT_SPRITE_CODE = `// Welcome to CatScript Playground! 🐱
+export const DEFAULT_SPRITE_CODE = `// Welcome to Whiskers Playground! 🐱
 // Click the green flag to see this code in action
 
 when green flag clicked

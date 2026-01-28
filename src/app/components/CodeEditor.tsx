@@ -891,7 +891,7 @@ export default function CodeEditor() {
             {/* First Load Name Modal */}
             <ProjectNameModal
                 isOpen={showFirstLoadNameModal && isFirstLoad}
-                title="Welcome to CatScript Playground!"
+                title="Welcome to Whiskers Playground!"
                 message="Enter a name for your project:"
                 defaultValue="My Project"
                 onConfirm={handleFirstLoadNameConfirm}
@@ -904,11 +904,11 @@ export default function CodeEditor() {
                     <div className="flex items-center gap-2">
                         <img 
                             src="/logo.png" 
-                            alt="CatScript" 
+                            alt="Whiskers" 
                             className="h-9 w-auto"
                         />
                         <div className="flex flex-col justify-center">
-                            <h1 className="text-white font-bold text-lg leading-tight">CatScript Playground</h1>
+                            <h1 className="text-white font-bold text-lg leading-tight">Whiskers Playground</h1>
                             <span className="text-gray-500 text-[10px] leading-tight">Program in Scratch like a pro</span>
                         </div>
                     </div>
