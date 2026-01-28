@@ -939,7 +939,7 @@ export default function CodeEditor() {
                     )}
                     
                     {/* GitHub Logo Link */}
-                    <Tooltip content="View on GitHub">
+                    <Tooltip content="Contribute">
                         <a
                             href="https://github.com/pcwu2022/scratch_compiler"
                             target="_blank"

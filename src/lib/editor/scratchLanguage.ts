@@ -180,7 +180,7 @@ export const languageDef: languages.IMonarchLanguage = {
             [/\bdelete\s+this\s+clone\b/, "keyword.scratch.control"],
             [/\b(wait|repeat|forever|if|else|then|end|stop|myself)\b/, "keyword.scratch.control"],
 
-            // ===== VARIABLES AND LISTS - Orange (#FF8C1A) =====
+            // ===== VARIABLES AND LISTS - Orange (#FFB61A) =====
             [/\bshow\s+variable\b/, "keyword.scratch.variables"],
             [/\bhide\s+variable\b/, "keyword.scratch.variables"],
             [/\badd\s+\S+\s+to\b/, "keyword.scratch.variables"],

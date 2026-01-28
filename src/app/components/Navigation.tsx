@@ -25,7 +25,7 @@ export default function Navigation({ variant = 'landing' }: NavigationProps) {
                 {variant === 'landing' && (
                     <Link
                         href="/playground"
-                        className="px-4 py-2 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-medium text-sm rounded-lg transition-all"
+                        className="px-4 py-2 bg-gradient-to-r from-orange-500 to-orange-700 hover:from-orange-600 hover:to-orange-800 text-white font-medium text-sm rounded-lg transition-all"
                     >
                         Try it now
                     </Link>
@@ -37,7 +37,7 @@ export default function Navigation({ variant = 'landing' }: NavigationProps) {
                     target="_blank"
                     rel="noopener noreferrer"
                     className="flex items-center p-2 hover:bg-gray-700 rounded-lg transition-colors"
-                    title="View on GitHub"
+                    title="Contribute"
                 >
                     <svg
                         xmlns="http://www.w3.org/2000/svg"

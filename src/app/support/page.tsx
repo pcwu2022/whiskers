@@ -247,7 +247,7 @@ export default function SupportPage() {
                             rel="noopener noreferrer"
                             className="text-blue-400 hover:text-blue-300"
                         >
-                            View on GitHub
+                            Contribute
                         </a>
                     </p>
                 </footer>
