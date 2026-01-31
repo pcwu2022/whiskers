@@ -17,7 +17,7 @@ export default function SupportPage() {
                         <span className="font-bold text-lg">Scratch Compiler</span>
                     </Link>
                     <Link 
-                        href="/"
+                        href="/playground"
                         className="px-4 py-2 bg-blue-600 rounded hover:bg-blue-500 transition-colors text-sm"
                     >
                         ← Back to Editor

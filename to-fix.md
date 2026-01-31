@@ -1,2 +1,8 @@
 - Buttons: Undo, Redo
-- Cleaner button interface in playground
+- Cleaner button interface in playground (Confusing UI: upload, download, import, save etc.)
+- crm system (clicks, usage time etc.) -> Google analytics
+- random
+- when "space" key pressed and when space key pressed should all be supported
+- intelliscence: when -> end
+- blocks: generate space, up arrow, ...
+- when blocks should also be inserted in the bottom of the code. Currently, "$0" is inserted afterwards if the user did so

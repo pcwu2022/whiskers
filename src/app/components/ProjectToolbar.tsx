@@ -801,7 +801,7 @@ export default function ProjectToolbar({
                 <Tooltip content="Create a new project">
                     <button
                         onClick={handleNewProject}
-                        className="px-3 py-1.5 text-sm bg-blue-700 text-white rounded hover:bg-blue-600 transition-colors"
+                        className="px-3 py-1.5 text-sm bg-green-700 text-white rounded hover:bg-green-600 transition-colors"
                     >
                         New Project
                     </button>
@@ -811,9 +811,19 @@ export default function ProjectToolbar({
                 <Tooltip content="Open a project (.zip)">
                     <button
                         onClick={handleOpenProjectClick}
-                        className="px-3 py-1.5 text-sm bg-green-700 text-white rounded hover:bg-green-600 transition-colors"
+                        className="px-3 py-1.5 text-sm bg-blue-700 text-white rounded hover:bg-blue-600 transition-colors"
                     >
                         Open Project
+                    </button>
+                </Tooltip>
+
+                {/* Save Project Button */}
+                <Tooltip content="Download your project (.zip)">
+                    <button
+                        onClick={downloadProject}
+                        className="px-3 py-1.5 text-sm bg-indigo-700 text-white rounded hover:bg-indigo-600 transition-colors"
+                    >
+                        Save Project
                     </button>
                 </Tooltip>
 
@@ -821,7 +831,7 @@ export default function ProjectToolbar({
                 <span className="text-gray-600 mx-1">|</span>
 
                 {/* Upload Button (Icon only) */}
-                <Tooltip content="Import sprite (.scratch) or project (.zip)">
+                {/* <Tooltip content="Import sprite (.scratch) or project (.zip)">
                     <button
                         onClick={() => fileInputRef.current?.click()}
                         className="p-2 text-sm bg-gray-700 text-gray-200 rounded hover:bg-gray-600 transition-colors"
@@ -832,10 +842,10 @@ export default function ProjectToolbar({
                             <line x1="12" y1="3" x2="12" y2="15" />
                         </svg>
                     </button>
-                </Tooltip>
+                </Tooltip> */}
 
                 {/* Download Dropdown (Icon only) */}
-                <div className="relative group">
+                {/* <div className="relative group">
                     <Tooltip content="Download project or sprite">
                         <button
                             className="p-2 text-sm bg-gray-700 text-gray-200 rounded hover:bg-gray-600 transition-colors"
@@ -861,7 +871,7 @@ export default function ProjectToolbar({
                             <span>📄</span> Save Current Sprite
                         </button>
                     </div>
-                </div>
+                </div> */}
             </div>
 
             {/* Confirmation Modal */}
