@@ -4,6 +4,12 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import Navigation from './components/Navigation';
 
+import DemoSection from './components/landing/DemoSection';
+import WhySection from './components/landing/WhySection';
+import HowSection from './components/landing/HowSection';
+import WhoSection from './components/landing/WhoSection';
+import WhatsNextSection from './components/landing/WhatsNextSection';
+
 type UserRole = 'student' | 'parent' | 'teacher' | null;
 
 export default function LandingPage() {
@@ -107,177 +113,50 @@ export default function LandingPage() {
             {userRole === 'student' && (
                 <>
                     {/* Demo Section */}
-                    <section id="demo" className="content-section demo-section">
-                        <h2>What is Whiskers?</h2>
-                        <div className="demo-container">
-                            <div className="demo-placeholder">
-                                <div className="demo-image-placeholder">
-                                    <p>🎬 Demo Video/GIF</p>
-                                    <span className="placeholder-text">
-                                        Show: typing code with autocomplete, running a simple animation
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
-                        <div className="demo-cta-container">
-                            <Link 
-                                href="/playground"
-                                className="demo-cta-button"
-                            >
-                                {isMobile ? 'Try it now (Desktop recommended)' : 'Try it now'}
-                            </Link>
-                            {isMobile && (
-                                <p className="mobile-notice">
-                                    💡 For the best experience, we recommend using Whiskers on a desktop or laptop computer.
-                                </p>
-                            )}
-                        </div>
-                    </section>
+                    <DemoSection isMobile={isMobile} />
 
                     {/* How It Works */}
-                    <section className="content-section how-section">
-                        <h2>How Whiskers guides you</h2>
-                        <div className="features-grid">
-                            <div className="feature-card">
-                                <div className="feature-icon">🎨</div>
-                                <h3>Familiar Concepts</h3>
-                                <p>
-                                    Bring the masterpiece you built in Scratch to life, 
-                                    but with <i>real code</i>.
-                                </p>
-                            </div>
-                            <div className="feature-card">
-                                <div className="feature-icon">💡</div>
-                                <h3>Smart Editor</h3>
-                                <p>
-                                    Start by dragging code from the toolbox, 
-                                    then naturally shift to typing as confidence grows.
-                                </p>
-                            </div>
-                            <div className="feature-card">
-                                <div className="feature-icon">⚡</div>
-                                <h3>Live Feedback</h3>
-                                <p>
-                                    See how your code works (or doesn't work) in real time. 
-                                </p>
-                            </div>
-                        </div>
-                    </section>
+                    <HowSection />
                 </>
             )}
 
-            {/* Parent/Teacher Path: Problem → Solution */}
-            {(userRole === 'parent' || userRole === 'teacher') && (
+            {/* Parent Path: Problem → Solution */}
+            {userRole === 'parent' && (
                 <>
-                    {/* The Gap Section */}
-                    <section id="why" className="content-section gap-section">
-                        <h2>Why Whiskers exists</h2>
-                        <div className="gap-content">
-                            <div className="gap-card">
-                                <h3>The Challenge</h3>
-                                <p>
-                                    For many young learners, block-based programming is a great start.
-                                    Platforms such as <b><a href="https://scratch.mit.edu">Scratch</a></b> trains logical thinking and problem-solving skills.
-                                    However, when transitioning to text-based programming languages,
-                                    learners are often overwhelmed by the complexity of syntax and structure.
-                                </p>
-                            </div>
-                            <div className="gap-card highlight">
-                                <h3>The Solution</h3>
-                                <p>
-                                    Whiskers bridges this gap. 
-                                    Starting from drag-and-drop coding, learners can gradually get familiar with real code syntax using concepts they already know from <b><a href="https://scratch.mit.edu">Scratch</a></b>.
-                                    When they are ready, they can naturally shift to typing with the help of intelligent guidance and live feedback.
-                                </p>
-                            </div>
-                        </div>
-                    </section>
+                    {/* Why Section */}
+                    <WhySection />
 
                     {/* What */}
-                    <section id="demo" className="content-section demo-section">
-                        <h2>See it in action</h2>
-                        <div className="demo-container">
-                            <div className="demo-placeholder">
-                                <div className="demo-image-placeholder">
-                                    <p>🎬 Demo Video/GIF</p>
-                                    <span className="placeholder-text">
-                                        Show: typing code with autocomplete, running a simple animation
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
-                        <div className="demo-cta-container">
-                            <Link 
-                                href="/playground"
-                                className="demo-cta-button"
-                            >
-                                {isMobile ? 'Try it now (Desktop recommended)' : 'Try it now'}
-                            </Link>
-                            {isMobile && (
-                                <p className="mobile-notice">
-                                    💡 For the best experience, we recommend using Whiskers on a desktop or laptop computer.
-                                </p>
-                            )}
-                        </div>
-                    </section>
+                    <DemoSection isMobile={isMobile} />
 
                     {/* How It Works */}
-                    <section className="content-section how-section">
-                        <h2>How Whiskers guides you</h2>
-                        <div className="features-grid">
-                            <div className="feature-card">
-                                <div className="feature-icon">🎨</div>
-                                <h3>Familiar Concepts</h3>
-                                <p>
-                                    Bring the masterpiece you built in Scratch to life, 
-                                    but with <i>real code</i>.
-                                </p>
-                            </div>
-                            <div className="feature-card">
-                                <div className="feature-icon">💡</div>
-                                <h3>Smart Editor</h3>
-                                <p>
-                                    Start by dragging code from the toolbox, 
-                                    then naturally shift to typing as confidence grows.
-                                </p>
-                            </div>
-                            <div className="feature-card">
-                                <div className="feature-icon">⚡</div>
-                                <h3>Live Feedback</h3>
-                                <p>
-                                    See how your code works (or doesn't work) in real time. 
-                                </p>
-                            </div>
-                        </div>
-                    </section>
+                    <HowSection />
+
+                    {/* What's Next? */}
+                    <WhatsNextSection role="parent" />
 
                     {/* Who Benefits */}
-                    <section className="content-section audience-section">
-                        <h2>Perfect for</h2>
-                        <div className="audience-grid">
-                            <div className="audience-card">
-                                <div className="audience-icon">🎯</div>
-                                <h3>Learners</h3>
-                                <p>
-                                    Moving beyond Scratch and ready to write real code with guidance and support.
-                                </p>
-                            </div>
-                            <div className="audience-card">
-                                <div className="audience-icon">🏫</div>
-                                <h3>Classrooms</h3>
-                                <p>
-                                    Easy integration into curriculum with familiar concepts and structured progression.
-                                </p>
-                            </div>
-                            <div className="audience-card">
-                                <div className="audience-icon">🏠</div>
-                                <h3>Home Learning</h3>
-                                <p>
-                                    Self-paced learning with clear guidance, perfect for independent exploration.
-                                </p>
-                            </div>
-                        </div>
-                    </section>
+                    <WhoSection />
+                </>
+            )}
+
+            {/* Teacher Path: Problem → Solution */}
+            {userRole === 'teacher' && (
+                <>
+                    {/* Why Section */}
+                    <WhySection />
+
+                    {/* What */}
+                    <DemoSection isMobile={isMobile} />
+
+                    {/* How It Works */}
+                    <HowSection />
+
+                    {/* What's Next? */}
+                    <WhatsNextSection role="teacher" />
+
+                    {/* Who Benefits */}
+                    <WhoSection />
                 </>
             )}
 

@@ -100,7 +100,7 @@ Source Code → Lexer → Tokens → Parser → AST → CodeGenerator → JavaSc
 ```bash
 # Clone the repository
 git clone <repository-url>
-cd scratch_compiler
+cd whiskers
 
 # Install dependencies
 npm install

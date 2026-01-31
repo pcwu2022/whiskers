@@ -329,7 +329,17 @@ body {
   padding-bottom: 1rem;
 }
 
-.content-section h2::after {
+.section-title {
+  font-size: clamp(2rem, 5vw, 3rem);
+  font-weight: 700;
+  text-align: center;
+  margin-bottom: 3rem;
+  color: var(--foreground);
+  position: relative;
+  padding-bottom: 1rem;
+}
+
+.section-title::after {
   content: '';
   position: absolute;
   bottom: 0;
@@ -731,5 +741,110 @@ body {
   .role-label {
     font-size: 1.5rem;
   }
+}
+
+/* Section Title */
+.section-title {
+  font-size: clamp(2rem, 5vw, 3rem);
+  font-weight: 700;
+  text-align: center;
+  margin-bottom: 3rem;
+  color: var(--foreground);
+  position: relative;
+  padding-bottom: 1rem;
+}
+
+.section-title::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 80px;
+  height: 4px;
+  background: linear-gradient(90deg, var(--accent-primary), var(--accent-secondary));
+  border-radius: 2px;
+}
+
+/* Card Title */
+.card-title {
+  font-size: clamp(1.25rem, 3vw, 1.5rem);
+  font-weight: 600;
+  margin-bottom: 1rem;
+}
+
+/* Styled List */
+.styled-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  counter-reset: list-counter;
+}
+
+.styled-list li {
+  position: relative;
+  padding-left: 2rem;
+  margin-bottom: 1.5rem;
+}
+
+.styled-list li::before {
+  content: counter(list-counter) ".";
+  counter-increment: list-counter;
+  position: absolute;
+  left: 0;
+  top: 0;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--accent-primary);
+}
+
+/* Styled Sublist */
+.styled-sublist {
+  list-style: disc;
+  padding-left: 1.5rem;
+  margin-top: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.styled-sublist li {
+  margin-bottom: 0.5rem;
+}
+
+/* Tips */
+.tip {
+  font-style: italic;
+  color: var(--accent-secondary);
+  margin-top: 0.5rem;
+}
+
+/* Card Footer */
+.card-footer {
+  margin-top: 2rem;
+  font-size: 1rem;
+  color: var(--foreground);
+  opacity: 0.8;
+}
+
+/* Parent Card */
+.parent-card {
+  border-left: 4px solid var(--accent-green);
+}
+
+/* Teacher Card */
+.teacher-card {
+  border-left: 4px solid var(--accent-orange);
+}
+
+/* List Item */
+.list-item {
+  margin-bottom: 2rem;
+}
+
+/* List Title */
+.list-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--foreground);
+  margin-bottom: 0.5rem;
 }
 
