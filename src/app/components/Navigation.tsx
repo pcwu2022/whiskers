@@ -9,7 +9,7 @@ export default function Navigation({ variant = 'landing' }: NavigationProps) {
         <nav className="bg-gray-800 px-4 py-2 flex justify-between items-center border-b border-gray-700">
             <Link href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
                 <img 
-                    src="/logo.png" 
+                    src="/ip/logo.png" 
                     alt="Whiskers" 
                     className="h-9 w-auto"
                 />

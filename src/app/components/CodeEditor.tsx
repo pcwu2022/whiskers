@@ -904,7 +904,7 @@ export default function CodeEditor() {
                 <div className="flex items-center gap-4">
                     <Link href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
                         <img 
-                            src="/logo.png" 
+                            src="/ip/logo.png" 
                             alt="Whiskers" 
                             className="h-9 w-auto"
                         />

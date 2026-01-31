@@ -108,7 +108,15 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #1e1e1e 0%, #2d2d2d 100%);
+  /* background: linear-gradient(135deg, #1e1e1e 0%, #2d2d2d 100%); */
+  background:
+    linear-gradient(
+          rgba(0, 0, 0, 0.7), 
+          rgba(0, 0, 0, 0.7)
+        ),
+    url("/demo_bg.png");
+  background-size: cover;
+  background-blend-mode: darken;
   position: relative;
   overflow: hidden;
   color: white;
