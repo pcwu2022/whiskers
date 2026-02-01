@@ -808,7 +808,7 @@ export class MultiSpriteCodeGenerator {
                 this.output += `${spaces}await scratchRuntime.wait(${this.formatArg(block.args[0])});\n`;
                 break;
             case "repeat": {
-                this.output += `${spaces}for (let _i = 0; _i < ${this.formatArg(block.args[0])}; _i++) {\n`;
+                this.output += `${spaces}for (let _i = 0; _i < ${this.formatArg(block.args[0])} && scratchRuntime.running; _i++) {\n`;
                 // Handle body from args[1], block.body, or block.next (parser may attach body to next)
                 if (block.args.length > 1 && typeof block.args[1] === "object") {
                     this.generateBlock(block.args[1] as BlockNode, indent + 1, spriteName, isStage, inCloneContext);
@@ -902,12 +902,12 @@ export class MultiSpriteCodeGenerator {
                 break;
             }
             case "waitUntil":
-                this.output += `${spaces}while (!(${this.buildConditionFromArgs(block.args)})) {\n`;
+                this.output += `${spaces}while (scratchRuntime.running && !(${this.buildConditionFromArgs(block.args)})) {\n`;
                 this.output += `${spaces}    await scratchRuntime.wait(0.05);\n`;
                 this.output += `${spaces}}\n`;
                 break;
             case "repeatUntil": {
-                this.output += `${spaces}while (!(${this.buildConditionFromArgs(block.args)})) {\n`;
+                this.output += `${spaces}while (scratchRuntime.running && !(${this.buildConditionFromArgs(block.args)})) {\n`;
                 if (block.args.length > 1 && typeof block.args[1] === "object") {
                     this.generateBlock(block.args[1] as BlockNode, indent + 1, spriteName, isStage, inCloneContext);
                 } else if (block.body && block.body.length > 0) {

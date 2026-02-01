@@ -1050,10 +1050,25 @@ window.scratchRuntime = {
         this.updateVariableDisplay(varName);
     },
 
-    // Wait for seconds
+    // Wait for seconds (interruptible - resolves early if stopped)
     wait: function(seconds) {
-        return new Promise(function(resolve) {
-            setTimeout(resolve, seconds * 1000);
+        const self = this;
+        return new Promise(function(resolve, reject) {
+            const startTime = Date.now();
+            const endTime = startTime + seconds * 1000;
+            
+            function checkStop() {
+                if (!self.running) {
+                    resolve(); // Resolve early when stopped
+                    return;
+                }
+                if (Date.now() >= endTime) {
+                    resolve();
+                    return;
+                }
+                setTimeout(checkStop, 10); // Check every 10ms
+            }
+            checkStop();
         });
     },
 

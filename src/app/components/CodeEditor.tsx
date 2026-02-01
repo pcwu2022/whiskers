@@ -1481,6 +1481,7 @@ export default function CodeEditor() {
                 <div className="fixed inset-0 z-50 bg-gray-900 flex items-center justify-center">
                     <div className="w-full h-full max-w-[calc(100vh*4/3)] max-h-[calc(100vw*3/4)]">
                         <iframe
+                            key={`preview-fullscreen-${compileCounter}`}
                             ref={previewIframeRef}
                             srcDoc={htmlContent.replace('const IS_FULLSCREEN = false;', 'const IS_FULLSCREEN = true;')}
                             className="w-full h-full border-0"
