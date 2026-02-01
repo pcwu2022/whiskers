@@ -6,7 +6,6 @@
 
 ## Features to Modify
 - Green flag needs to be run twice -> Occurs when deployed but not when test running
-- Indentation rules: Indent is needed -> If no indent between C-shaped blocks with a top line and an end block, in the error message, tell them to push the tab button to indent (to let the program know that this part of the code is in this function or statement) -> Foster a good programming style practice for future programming
 
 ## Intelliscence Bug
 - the repeat intelliscence would auto assume "repeat until" when I type repeat 10 -> add autocomplete only when I type "repeat u..."

@@ -116,6 +116,132 @@ export class Parser {
         this.position = savedPosition;
     }
 
+    /**
+     * Parse the body of an else block
+     * Handles nested if-else structures by recursively parsing blocks
+     * Returns an array of parsed blocks
+     */
+    private parseElseBody(): BlockNode[] {
+        const blocks: BlockNode[] = [];
+        const startIndent = this.indentLevel;
+        let currentBlock: BlockNode | null = null;
+        
+        // Track blocks at this indent level for nested if-else handling
+        const localBlockStack: { block: BlockNode; indent: number }[] = [];
+        
+        while (!this.isAtEnd()) {
+            this.skipIrrelevant();
+            if (this.isAtEnd()) break;
+            
+            // Check if we've dedented out of the else body
+            if (this.match(TokenType.DEDENT)) {
+                this.advance();
+                this.indentLevel = Math.max(0, this.indentLevel - 1);
+                
+                // Pop blocks from local stack that were deeper
+                while (localBlockStack.length && localBlockStack[localBlockStack.length - 1].indent > this.indentLevel) {
+                    localBlockStack.pop();
+                }
+                
+                // Check for nested 'else' keyword after DEDENT
+                this.skipIrrelevant();
+                if (!this.isAtEnd() && this.matchKeyword("else")) {
+                    // Find the parent 'if' block in our local stack
+                    const parentEntry = localBlockStack.length > 0 ? localBlockStack[localBlockStack.length - 1] : null;
+                    if (parentEntry && parentEntry.block.name === "if") {
+                        this.advance(); // Consume 'else'
+                        parentEntry.block.name = "ifElse";
+                        parentEntry.block.elseBody = [];
+                        
+                        // Check for INDENT (nested else body)
+                        this.skipIrrelevant();
+                        if (!this.isAtEnd() && this.match(TokenType.INDENT)) {
+                            this.indentLevel++;
+                            this.advance();
+                            // Recursively parse nested else body
+                            parentEntry.block.elseBody = this.parseElseBody();
+                        }
+                        continue;
+                    }
+                }
+                
+                // If we've dedented below the starting indent, we're done
+                if (this.indentLevel < startIndent) {
+                    break;
+                }
+                continue;
+            }
+            
+            // Handle INDENT - parse nested blocks
+            if (this.match(TokenType.INDENT)) {
+                this.indentLevel++;
+                this.advance();
+                
+                // Attach nested blocks to the current block
+                if (localBlockStack.length > 0) {
+                    const parent = localBlockStack[localBlockStack.length - 1].block;
+                    const nestedBlock = this.parseBlock();
+                    if (nestedBlock) {
+                        // Check for nested C-block empty body
+                        this.checkCBlockHasBody(nestedBlock);
+                        
+                        // Attach as body (in args for C-blocks)
+                        parent.args.push(nestedBlock);
+                        
+                        // Track this nested block for potential if-else
+                        localBlockStack.push({ block: nestedBlock, indent: this.indentLevel });
+                        
+                        // Parse sibling blocks at this level
+                        let siblingBlock = nestedBlock;
+                        while (!this.isAtEnd() && !this.match(TokenType.DEDENT) && !this.match(TokenType.INDENT)) {
+                            this.skipIrrelevant();
+                            if (this.isAtEnd() || this.match(TokenType.DEDENT) || this.match(TokenType.INDENT)) break;
+                            
+                            if (this.isBlockStart()) {
+                                const nextSibling = this.parseBlock();
+                                if (nextSibling) {
+                                    this.checkCBlockHasBody(nextSibling);
+                                    siblingBlock.next = nextSibling;
+                                    siblingBlock = nextSibling;
+                                    localBlockStack.push({ block: nextSibling, indent: this.indentLevel });
+                                }
+                            } else {
+                                this.advance();
+                            }
+                        }
+                    }
+                }
+                continue;
+            }
+            
+            // Parse a block at the current level
+            if (this.isBlockStart()) {
+                const block = this.parseBlock();
+                if (block) {
+                    this.checkCBlockHasBody(block);
+                    
+                    if (currentBlock) {
+                        currentBlock.next = block;
+                    } else {
+                        blocks.push(block);
+                    }
+                    currentBlock = block;
+                    
+                    // Track for potential if-else handling
+                    localBlockStack.push({ block, indent: this.indentLevel });
+                }
+            } else if (this.matchKeyword("end")) {
+                // 'end' keyword - just skip it
+                this.advance();
+            } else {
+                // Skip unknown tokens
+                this.advance();
+            }
+        }
+        
+        return blocks;
+    }
+
     // Get the current token
     private get current(): Token {
         return this.tokens[this.position];
@@ -400,6 +526,34 @@ export class Parser {
                 // Clear lastAtIndent entries deeper than current indent
                 for (let i = this.lastAtIndent.length - 1; i > this.indentLevel; i--) {
                     this.lastAtIndent[i] = null;
+                }
+                
+                // Check for 'else' keyword after DEDENT - this handles if-else blocks
+                this.skipIrrelevant();
+                if (!this.isAtEnd() && this.matchKeyword("else")) {
+                    // Find the parent 'if' block on the stack
+                    const parentEntry = this.blockStack.length > 0 ? this.blockStack[this.blockStack.length - 1] : null;
+                    if (parentEntry && parentEntry.block.name === "if") {
+                        this.advance(); // Consume 'else'
+                        
+                        // Change the block type to ifElse
+                        parentEntry.block.name = "ifElse";
+                        
+                        // Initialize else body
+                        parentEntry.block.elseBody = [];
+                        
+                        // Check for INDENT (else body)
+                        this.skipIrrelevant();
+                        if (!this.isAtEnd() && this.match(TokenType.INDENT)) {
+                            this.indentLevel++;
+                            this.advance();
+                            
+                            // Parse else body blocks using recursive approach
+                            const elseBodyBlocks = this.parseElseBody();
+                            parentEntry.block.elseBody = elseBodyBlocks;
+                        }
+                        continue; // Continue the main loop
+                    }
                 }
 
                 // If we've reduced indentation below our starting level, we're done with this script
@@ -1038,22 +1192,8 @@ export class Parser {
             args,
         };
 
-        // Handle special case for if-else blocks
-        if (blockKeyword === "if") {
-            // Check for an else clause
-            this.skipIrrelevant();
-            if (!this.isAtEnd() && this.matchKeyword("else")) {
-                this.advance(); // Consume 'else'
-
-                // Parse the else block
-                const elseBlock = this.parseBlock();
-                if (elseBlock) {
-                    // Add the else block as a special argument
-                    block.args.push("else");
-                    block.args.push(elseBlock);
-                }
-            }
-        }
+        // Note: if-else is handled in parseScript when DEDENT is followed by 'else'
+        // The else body gets attached when we encounter the 'else' keyword after the if body
 
         return block;
     }

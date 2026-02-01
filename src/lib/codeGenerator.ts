@@ -868,21 +868,27 @@ export class MultiSpriteCodeGenerator {
                 this.output += `${spaces}}\n`;
                 break;
             }
-            case "ifElse":
-                this.output += `${spaces}if (${this.buildConditionFromArgs(block.args)}) {\n`;
-                if (block.body) {
+            case "ifElse": {
+                const condition = this.buildConditionFromArgs(block.args);
+                const bodyBlock = this.findBodyBlockFromArgs(block.args);
+                
+                this.output += `${spaces}if (${condition}) {\n`;
+                if (bodyBlock) {
+                    this.generateBlock(bodyBlock, indent + 1, spriteName, isStage);
+                } else if (block.body && block.body.length > 0) {
                     for (const child of block.body) {
                         this.generateBlock(child, indent + 1, spriteName, isStage);
                     }
                 }
                 this.output += `${spaces}} else {\n`;
-                if (block.elseBody) {
+                if (block.elseBody && block.elseBody.length > 0) {
                     for (const child of block.elseBody) {
                         this.generateBlock(child, indent + 1, spriteName, isStage);
                     }
                 }
                 this.output += `${spaces}}\n`;
                 break;
+            }
             case "waitUntil":
                 this.output += `${spaces}while (!(${this.buildConditionFromArgs(block.args)})) {\n`;
                 this.output += `${spaces}    await scratchRuntime.wait(0.05);\n`;
@@ -1014,14 +1020,55 @@ export class MultiSpriteCodeGenerator {
      */
     private extractValueArg(args: (string | number | BlockNode)[], startIndex: number = 1): unknown {
         // Skip keywords like "to", "by"
+        let valueIndex = startIndex;
         for (let i = startIndex; i < args.length; i++) {
             const arg = args[i];
             if (typeof arg === "string" && (arg === "to" || arg === "by")) {
                 continue;
             }
-            return arg;
+            valueIndex = i;
+            break;
         }
-        return args[startIndex];
+        
+        const value = args[valueIndex];
+        
+        // Check if there are trailing arithmetic operators after the value
+        // This handles cases like: [expr, "/", 2] -> should be (expr / 2)
+        const arithmeticOps = ["+", "-", "*", "/", "mod", "%"];
+        if (valueIndex + 2 <= args.length) {
+            const nextArg = args[valueIndex + 1];
+            if (typeof nextArg === "string" && arithmeticOps.includes(nextArg)) {
+                // Build an expression from the value and remaining arithmetic operations
+                const exprArgs: (string | number | BlockNode)[] = [value];
+                for (let i = valueIndex + 1; i < args.length; i++) {
+                    const arg = args[i];
+                    // Stop at non-arithmetic tokens (like "then" or body blocks)
+                    if (typeof arg === "object" && arg !== null && "type" in arg) {
+                        const block = arg as BlockNode;
+                        if (block.type !== "operators" && block.name !== "expression") {
+                            break;
+                        }
+                    }
+                    if (typeof arg === "string" && !arithmeticOps.includes(arg) && 
+                        !["$", "#"].some(p => arg.startsWith(p)) && 
+                        isNaN(Number(arg))) {
+                        break;
+                    }
+                    exprArgs.push(arg);
+                }
+                
+                if (exprArgs.length > 1) {
+                    // Return a synthetic expression block
+                    return {
+                        type: "operators",
+                        name: "expression",
+                        args: exprArgs
+                    } as BlockNode;
+                }
+            }
+        }
+        
+        return value;
     }
 
     private generateVariableBlock(block: BlockNode, indent: number): void {
@@ -1416,8 +1463,17 @@ export class MultiSpriteCodeGenerator {
             case "letter":
                 return `String(${this.formatArg(block.args[1])}).charAt(${this.formatArg(block.args[0])} - 1)`;
             case "length":
-            case "lengthOf":
-                return `String(${this.formatArg(block.args[0])}).length`;
+            case "lengthOf": {
+                // Check if the arg is a list (starts with #) or a string
+                const arg = block.args[0];
+                if (typeof arg === "string" && arg.startsWith("#")) {
+                    // It's a list - use list length
+                    const listName = arg.substring(1);
+                    return `scratchRuntime.lengthOfList("${listName}")`;
+                }
+                // It's a string - use string length
+                return `String(${this.formatArg(arg)}).length`;
+            }
             case "contains":
                 return `String(${this.formatArg(block.args[0])}).includes(String(${this.formatArg(block.args[1])}))`;
             case "round":
@@ -1600,6 +1656,7 @@ export class MultiSpriteCodeGenerator {
     /**
      * Build a complete condition from args array
      * Handles patterns like: [{expr}, "=", value, "then", {body}] or [{expr}, ">", value, "then", {body}]
+     * Also handles complex expressions like: [var, "mod", 2, "=", 0, "then", {body}]
      * Also handles simple conditions like: [{cond}]
      */
     private buildConditionFromArgs(args: (string | number | BlockNode)[]): string {
@@ -1607,12 +1664,38 @@ export class MultiSpriteCodeGenerator {
             return "true";
         }
 
-        // Find the comparison operator index
+        // First, check for logical operators (and/or) - these have LOWEST precedence
+        // Split on "and" / "or" first, then recursively handle each sub-condition
+        const logicalOps = ["and", "or"];
+        for (let i = 0; i < args.length; i++) {
+            const arg = args[i];
+            if (typeof arg === "string" && logicalOps.includes(arg)) {
+                // Found a logical operator - split here
+                const leftArgs = args.slice(0, i);
+                const rightArgs = args.slice(i + 1);
+                
+                // Filter out "then" from rightArgs if present
+                const thenIdx = rightArgs.findIndex(a => a === "then");
+                const filteredRightArgs = thenIdx >= 0 ? rightArgs.slice(0, thenIdx) : rightArgs;
+                
+                const leftCond = this.buildConditionFromArgs(leftArgs);
+                const rightCond = this.buildConditionFromArgs(filteredRightArgs);
+                const jsOp = arg === "and" ? "&&" : "||";
+                return `(${leftCond} ${jsOp} ${rightCond})`;
+            }
+        }
+
+        // Comparison operators (split on these next)
+        const comparisonOps = ["=", ">", "<", ">=", "<=", "!="];
+        // Arithmetic operators (highest precedence - group these together)
+        const arithmeticOps = ["+", "-", "*", "/", "mod", "%"];
+
+        // Find the comparison operator index (first one found)
         let opIndex = -1;
         let op = "";
         for (let i = 0; i < args.length; i++) {
             const arg = args[i];
-            if (typeof arg === "string" && ["=", ">", "<", ">=", "<=", "!="].includes(arg)) {
+            if (typeof arg === "string" && comparisonOps.includes(arg)) {
                 opIndex = i;
                 op = arg;
                 break;
@@ -1621,27 +1704,35 @@ export class MultiSpriteCodeGenerator {
 
         if (opIndex > 0 && opIndex < args.length - 1) {
             // Found a comparison operator - build the comparison expression
-            const leftArg = args[opIndex - 1] || args[0];
-            // Find the right argument (skip "then" keyword if present)
-            let rightArg = args[opIndex + 1];
-            if (rightArg === "then" && args.length > opIndex + 2) {
-                rightArg = args[opIndex + 2];
-            }
+            // The left side is everything before the comparison operator
+            const leftArgs = args.slice(0, opIndex);
             
-            // Skip if rightArg is a body block
-            if (typeof rightArg === "object" && rightArg !== null && "type" in rightArg) {
-                const rightBlock = rightArg as BlockNode;
-                if (rightBlock.type !== "operators" && rightBlock.name !== "expression" && rightBlock.name !== "list") {
-                    // rightArg is a body block, use the value before "then"
-                    rightArg = args[opIndex + 1];
-                    if (rightArg === "then") {
-                        rightArg = 0; // fallback
+            // Find the right argument (skip "then" keyword if present)
+            // The right side is everything after the comparison operator until "then" or a body block
+            let rightEnd = args.length;
+            for (let i = opIndex + 1; i < args.length; i++) {
+                const arg = args[i];
+                if (arg === "then") {
+                    rightEnd = i;
+                    break;
+                }
+                // Check if it's a body block (not an expression block)
+                if (typeof arg === "object" && arg !== null && "type" in arg) {
+                    const block = arg as BlockNode;
+                    if (block.type !== "operators" && block.name !== "expression" && block.name !== "list" && block.name !== "mod") {
+                        rightEnd = i;
+                        break;
                     }
                 }
             }
-
-            const left = this.formatConditionArg(leftArg);
-            const right = this.formatArg(rightArg);
+            const rightArgs = args.slice(opIndex + 1, rightEnd);
+            
+            // Build left expression
+            const left = this.buildExpressionFromArgs(leftArgs);
+            // Build right expression  
+            const right = rightArgs.length === 1 
+                ? this.formatArg(rightArgs[0])
+                : this.buildExpressionFromArgs(rightArgs);
             
             // Map operator to JS
             const jsOp = op === "=" ? "==" : op;
@@ -1650,6 +1741,36 @@ export class MultiSpriteCodeGenerator {
 
         // No comparison operator - just format the first argument as a condition
         return this.formatCondition(args[0]);
+    }
+
+    /**
+     * Build an expression string from an array of args
+     * Handles arithmetic expressions like: [var, "mod", 2] or [a, "+", b, "*", c]
+     */
+    private buildExpressionFromArgs(args: (string | number | BlockNode)[]): string {
+        if (args.length === 0) {
+            return "0";
+        }
+        if (args.length === 1) {
+            return this.formatArg(args[0]);
+        }
+        
+        // Build the expression from all args
+        let expr = "";
+        for (let i = 0; i < args.length; i++) {
+            const arg = args[i];
+            if (typeof arg === "string" && ["+", "-", "*", "/", "%", "mod", "and", "or"].includes(arg)) {
+                // It's an operator
+                let op = arg;
+                if (op === "mod") op = "%";
+                if (op === "and") op = "&&";
+                if (op === "or") op = "||";
+                expr += ` ${op} `;
+            } else {
+                expr += this.formatArg(arg);
+            }
+        }
+        return `(${expr})`;
     }
 
     /**
