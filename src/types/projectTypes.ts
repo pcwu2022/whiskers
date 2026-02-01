@@ -61,7 +61,6 @@ export const DEFAULT_SPRITE_CODE = `// Welcome to Whiskers Playground! 🐱
 
 when green flag clicked
     // 👇 Drag blocks here 👇
-    move 10 steps
 end
 `;
 

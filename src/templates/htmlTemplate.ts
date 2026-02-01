@@ -490,8 +490,47 @@ export function generateHTMLTemplate(jsCode: string): string {
             }
         });
         
+        // Global error handler - catches runtime errors from generated code
+        window.onerror = function(message, source, lineno, colno, error) {
+            console.error('Runtime error:', message);
+            // Notify parent IDE about the runtime error
+            if (window.parent !== window) {
+                window.parent.postMessage({ 
+                    type: 'scratch-runtime-error', 
+                    message: String(message),
+                    details: error ? error.stack : null
+                }, '*');
+            }
+            // Prevent the error from showing in browser console popup
+            return true;
+        };
+        
+        // Also catch unhandled promise rejections
+        window.addEventListener('unhandledrejection', function(event) {
+            console.error('Unhandled promise rejection:', event.reason);
+            if (window.parent !== window) {
+                window.parent.postMessage({ 
+                    type: 'scratch-runtime-error', 
+                    message: String(event.reason),
+                    details: event.reason && event.reason.stack ? event.reason.stack : null
+                }, '*');
+            }
+        });
+        
+        // Wrap the generated code execution in try-catch
+        try {
         // Generated program code
         ${jsCode}
+        } catch (e) {
+            console.error('Script initialization error:', e);
+            if (window.parent !== window) {
+                window.parent.postMessage({ 
+                    type: 'scratch-runtime-error', 
+                    message: e.message || String(e),
+                    details: e.stack || null
+                }, '*');
+            }
+        }
     </script>
 </body>
 </html>`;

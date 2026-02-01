@@ -404,6 +404,15 @@ export default function CodeEditor() {
                 } else {
                     document.exitFullscreen?.().catch(() => {});
                 }
+            } else if (event.data && event.data.type === 'scratch-runtime-error') {
+                // Runtime error occurred in the generated code
+                // This is likely a bug in our compiler, show a friendly message
+                console.error('Runtime error from preview:', event.data.message, event.data.details);
+                notify.error(
+                    "Oops! Something went wrong while running your code. " +
+                    "This might be a bug on our end — we're sorry about that! " +
+                    "Try simplifying your code or check for any unusual syntax."
+                );
             }
         };
 
