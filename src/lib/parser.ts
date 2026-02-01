@@ -1788,6 +1788,13 @@ export class Parser {
             return { type: "list", name: "itemOf", args: [indexArg, listArg] };
         }
         
+        // touching ARG (sensing boolean: touching edge, touching mouse-pointer, touching "Sprite1")
+        if (keyword === "touching") {
+            this.advance(); // consume 'touching'
+            const arg = this.parseOperatorArg();
+            return { type: "sensing", name: "touching", args: [arg] };
+        }
+        
         return null;
     }
     
@@ -1877,7 +1884,7 @@ export class Parser {
         // Keywords that can be inline operators (should be parsed as args, not block starts)
         const inlineOperatorKeywords = ["join", "pick", "length", "letter", "distance", "round", 
             "abs", "floor", "ceiling", "sqrt", "sin", "cos", "tan", "asin", "acos", "atan", "ln", "log",
-            "item", "contains"];
+            "item", "contains", "touching"];
 
         // Continue parsing arguments until we hit a new block, indentation change, or end of line
         while (!this.isAtEnd()) {

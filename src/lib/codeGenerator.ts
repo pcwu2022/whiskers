@@ -1552,6 +1552,28 @@ export class MultiSpriteCodeGenerator {
                     return `(${this.formatArg(singleArg)})`;
                 }
                 // Build the expression from all args
+                // First, check if this is a "not" expression - not is a prefix operator
+                // Args like ["not", 10, "<", 5] should become !(10 < 5)
+                if (block.args.length > 0 && block.args[0] === "not") {
+                    // Build the rest of the expression and negate it
+                    const restArgs = block.args.slice(1);
+                    let restExpr = "";
+                    for (let i = 0; i < restArgs.length; i++) {
+                        const arg = restArgs[i];
+                        if (typeof arg === "string" && ["+", "-", "*", "/", "%", "mod", ">", "<", "=", "==", "===", "and", "or", "&&", "||"].includes(arg)) {
+                            let op = arg;
+                            if (op === "mod") op = "%";
+                            if (op === "and") op = "&&";
+                            if (op === "or") op = "||";
+                            if (op === "=") op = "==";
+                            restExpr += ` ${op} `;
+                        } else {
+                            restExpr += this.formatArg(arg);
+                        }
+                    }
+                    return `!(${restExpr})`;
+                }
+                
                 let expr = "";
                 for (let i = 0; i < block.args.length; i++) {
                     const arg = block.args[i];
@@ -1723,7 +1745,18 @@ export class MultiSpriteCodeGenerator {
             }
         }
 
-        // First, check for logical operators (and/or) - these have LOWEST precedence
+        // First, handle "not" as a prefix operator - it negates the entire following expression
+        // Pattern: ["not", 10, "<", 5] should become !(10 < 5)
+        if (args.length > 0 && args[0] === "not") {
+            const restArgs = args.slice(1);
+            // Filter out "then" if present
+            const thenIdx = restArgs.findIndex(a => a === "then");
+            const filteredArgs = thenIdx >= 0 ? restArgs.slice(0, thenIdx) : restArgs;
+            const innerCond = this.buildConditionFromArgs(filteredArgs);
+            return `!(${innerCond})`;
+        }
+
+        // Next, check for logical operators (and/or) - these have LOWEST precedence
         // Split on "and" / "or" first, then recursively handle each sub-condition
         const logicalOps = ["and", "or"];
         for (let i = 0; i < args.length; i++) {
@@ -1812,6 +1845,13 @@ export class MultiSpriteCodeGenerator {
         }
         if (args.length === 1) {
             return this.formatArg(args[0]);
+        }
+        
+        // Handle "not" as a prefix operator
+        if (args[0] === "not") {
+            const restArgs = args.slice(1);
+            const innerExpr = this.buildExpressionFromArgs(restArgs);
+            return `!(${innerExpr})`;
         }
         
         // Build the expression from all args

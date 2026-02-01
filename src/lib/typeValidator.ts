@@ -278,6 +278,23 @@ function isComparisonExpression(arg: string | number | BlockNode | undefined | n
     return false;
 }
 
+/**
+ * Check if an array of args contains a comparison operator (for inline comparisons like "score > 10")
+ */
+function argsContainComparison(args: (string | number | BlockNode)[]): boolean {
+    const comparisonOperators = [">", "<", "=", "==", "!=", ">=", "<="];
+    for (const arg of args) {
+        if (typeof arg === "string" && comparisonOperators.includes(arg)) {
+            return true;
+        }
+        // Also check if any arg is a comparison BlockNode
+        if (isComparisonExpression(arg)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 // ============================================================================
 // MAIN VALIDATION FUNCTIONS
 // ============================================================================
@@ -302,9 +319,21 @@ export function validateTypes(
     const findLineForBlock = (blockName: string, startLine: number = 0): number => {
         const searchPatterns = getSearchPatterns(blockName);
         for (let i = startLine; i < codeLines.length; i++) {
-            const lineLower = codeLines[i].toLowerCase();
+            const lineTrimmed = codeLines[i].trim();
+            const lineLower = lineTrimmed.toLowerCase();
+            
+            // Skip comment lines
+            if (lineTrimmed.startsWith("//")) {
+                continue;
+            }
+            
             for (const pattern of searchPatterns) {
                 if (lineLower.includes(pattern)) {
+                    // Special case: don't match "if on edge, bounce" when searching for "if" control blocks
+                    if ((blockName === "if" || blockName === "ifElse") && 
+                        lineLower.includes("if on edge")) {
+                        continue;
+                    }
                     return i + 1;
                 }
             }
@@ -367,7 +396,8 @@ export function validateTypes(
                 
                 if (expectedType === "boolean") {
                     // Check if a literal number/string is used where boolean expected
-                    if (isLiteralValue(actualArg) && !isComparisonExpression(actualArg)) {
+                    // Skip this check if the block's args contain a comparison operator (inline comparison like "score > 10")
+                    if (isLiteralValue(actualArg) && !isComparisonExpression(actualArg) && !argsContainComparison(block.args)) {
                         const argValue = typeof actualArg === "string" ? actualArg : String(actualArg);
                         errors.push({
                             code: ErrorCodes.BOOLEAN_REQUIRED,

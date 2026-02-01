@@ -99,6 +99,7 @@ export class Lexer {
         "y",
         "position",
         "edge",
+        "on",      // For "if on edge, bounce"
         "bounce",
         "rotation",
         "style",
