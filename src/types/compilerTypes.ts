@@ -46,6 +46,7 @@ export const ErrorCodes = {
     UNEXPECTED_TOKEN: "E104",
     MISSING_END: "E105",
     INVALID_SYNTAX: "E106",
+    MISSING_INDENT: "E107",
     
     // Type errors (E2xx)
     TYPE_MISMATCH: "E201",

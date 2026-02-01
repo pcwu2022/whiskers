@@ -11,6 +11,7 @@ when green flag clicked
         move 50 steps
         turn right 90 degrees
         wait 0.3 seconds
+    end
     
     say "Now watch me spin!"
     wait 1 seconds
@@ -19,24 +20,31 @@ when green flag clicked
     repeat 12
         turn right 30 degrees
         wait 0.1 seconds
+    end
     
     say "Try editing this code!"
     wait 2 seconds
     say ""
+end
 
 // You can also use keyboard controls!
 when space key pressed
     say "You pressed space!" for 1 seconds
+end
 
 when up arrow key pressed
     move 20 steps
+end
 
 when down arrow key pressed
     move -20 steps
+end
 
 when left arrow key pressed
     turn left 15 degrees
+end
 
 when right arrow key pressed
     turn right 15 degrees
+end
 `;

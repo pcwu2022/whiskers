@@ -54,7 +54,7 @@ export class Parser {
     }
 
     // Add an error
-    private addError(code: string, message: string, token?: Token, suggestion?: string): void {
+    private addError(code: string, message: string, token?: Token, suggestion?: string, endColumn?: number): void {
         const line = token?.line || this.current?.line || 1;
         const column = token?.column || this.current?.column || 1;
         this.errors.push({
@@ -62,9 +62,58 @@ export class Parser {
             message,
             line,
             column,
+            endColumn: endColumn,
             severity: "error",
             suggestion,
         });
+    }
+
+    // Check if a C-block has an empty body (no INDENT follows it)
+    // If so, emit an error pointing to the 'end' or next token
+    private checkCBlockHasBody(block: BlockNode): void {
+        if (!this.isCBlock(block.name)) return;
+        
+        // Save position to look ahead
+        const savedPosition = this.position;
+        this.skipIrrelevant();
+        
+        // If next token is not INDENT, the C-block has an empty body
+        if (!this.isAtEnd() && !this.match(TokenType.INDENT)) {
+            // Find the token to point the error at (usually 'end' keyword)
+            let errorToken = this.current;
+            
+            // Skip any DEDENT tokens to find the actual 'end' or next meaningful token
+            const scanPosition = this.position;
+            while (!this.isAtEnd() && this.match(TokenType.DEDENT)) {
+                this.advance();
+            }
+            if (!this.isAtEnd() && this.current.type === TokenType.KEYWORD) {
+                errorToken = this.current;
+            }
+            // Restore scan position
+            this.position = scanPosition;
+            
+            // Special message for empty body (usually followed by 'end')
+            const isEndKeyword = errorToken.type === TokenType.KEYWORD && errorToken.value === "end";
+            const message = isEndKeyword
+                ? `Oops! '${block.name}' has nothing inside it. Every block like 'repeat', 'forever', and 'if' needs some code inside to tell the computer what to do.`
+                : "This block needs to be one step to the right! Click the start of the line and press 'Tab' to move it. This is called an <i>indent</i>, and it tells the computer that this code belongs inside the block above it.";
+            
+            const suggestion = isEndKeyword
+                ? `Add some code between '${block.name}' and 'end'. For example:\n   ${block.name}${block.args.length ? ' ' + block.args[0] : ''}\n       say "Hello!"\n   end`
+                : `The code after '${block.name}' should be indented (moved to the right) so the computer knows it belongs inside this block.`;
+            
+            this.addError(
+                ErrorCodes.MISSING_INDENT,
+                message,
+                errorToken,
+                suggestion,
+                (errorToken.column || 1) + 1  // Underline just the first character
+            );
+        }
+        
+        // Restore position
+        this.position = savedPosition;
     }
 
     // Get the current token
@@ -301,6 +350,9 @@ export class Parser {
                     continue;
                 }
 
+                // Check if this is a C-block with an empty body
+                this.checkCBlockHasBody(firstNestedBlock);
+
                 // Attach the nested sequence to the parent block
                 // For event blocks (e.g., 'when') attach as `next` so handlers execute sequentially
                 if (parentBlock.type === "event" || parentBlock.name === "when") {
@@ -323,6 +375,9 @@ export class Parser {
                     if (this.isBlockStart()) {
                         const nextBlock = this.parseBlock();
                         if (nextBlock) {
+                            // Check if this is a C-block with an empty body
+                            this.checkCBlockHasBody(nextBlock);
+                            
                             currentBlock.next = nextBlock;
                             currentBlock = nextBlock;
                             // update the last block at this indent and push onto stack
@@ -357,6 +412,9 @@ export class Parser {
                 // Parse a new block at the current indentation level
                 const block = this.parseBlock();
                 if (block) {
+                    // Check if this is a C-block with an empty body
+                    this.checkCBlockHasBody(block);
+                    
                     // If there is an existing block at this indent, connect as `.next`
                     const last = this.lastAtIndent[this.indentLevel];
                     if (last) {
@@ -1207,6 +1265,27 @@ export class Parser {
         return blockTypeMap[keyword] || "custom";
     }
 
+    // isCBlock: Check if a block keyword represents a C-block (needs indented body)
+    private isCBlock(keyword: string): boolean {
+        // C-blocks are control structures that wrap other blocks
+        const cBlockKeywords = [
+            "repeat",
+            "repeatUntil",
+            "forever",
+            "if",
+            "ifElse",
+            // Hat blocks (events) also need indentation but are handled differently
+            "whenFlagClicked",
+            "whenKeyPressed",
+            "whenSpriteClicked",
+            "whenIReceive",
+            "whenIStartAsClone",
+            // Custom block definitions
+            "define",
+        ];
+        return cBlockKeywords.includes(keyword);
+    }
+
     /**
      * Try to parse an inline operator expression starting with the current keyword.
      * Returns a BlockNode if an operator is recognized, null otherwise.
@@ -1409,6 +1488,11 @@ export class Parser {
 
             // Stop if we encounter indent/dedent
             if (this.match(TokenType.INDENT) || this.match(TokenType.DEDENT)) {
+                break;
+            }
+            
+            // Stop if we encounter the 'end' keyword - it terminates blocks, not an argument
+            if (this.matchKeyword("end")) {
                 break;
             }
             

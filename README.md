@@ -8,7 +8,7 @@ A fun, text-based coding playground for kids who love Scratch! Write Scratch pro
 
 ## 🎯 Overview
 
-Whiskers Playground is the perfect next step for kids who've mastered Scratch blocks and want to learn real coding. It uses the same familiar Scratch concepts (sprites, motion, looks, events) but with text-based syntax that feels like \"real\" programming.
+Whiskers Playground is the perfect next step for kids who've mastered Scratch blocks and want to learn real coding. It uses the same familiar Scratch concepts (sprites, motion, looks, events) but with text-based syntax that feels like "real" programming.
 
 ### Features
 
@@ -141,11 +141,13 @@ Create a quick test file:
 import { ScratchTextCompiler } from './src/lib/compiler';
 
 const code = `
-when flagClicked
+when green flag clicked
     say "Hello World!"
     repeat 3
         move 10
         turn 15
+    end
+end
 `;
 
 const compiler = new ScratchTextCompiler();
@@ -173,16 +175,16 @@ import { ScratchTextCompiler } from './src/lib/compiler';
 const sprites = [
     {
         name: "Stage",
-        code: `when flagClicked\\n    switch backdrop to "night"`,
+        code: `when green flag clicked\\n    switch backdrop to "night"\\nend`,
         isStage: true
     },
     {
         name: "Cat",
-        code: `when flagClicked\\n    say "Meow!"\\n    move 50`
+        code: `when green flag clicked\\n    say "Meow!"\\n    move 50\\nend`
     },
     {
         name: "Dog", 
-        code: `when I receive "bark"\\n    say "Woof!"`
+        code: `when I receive "bark"\\n    say "Woof!"\\nend`
     }
 ];
 
@@ -219,8 +221,8 @@ curl -X POST http://localhost:3000/api/compile \\
   -H "Content-Type: application/json" \\
   -d '{
     "sprites": [
-      {"name": "Stage", "code": "when flagClicked", "isStage": true},
-      {"name": "Sprite1", "code": "when flagClicked\\n    say \\"Hello\\""}
+      {"name": "Stage", "code": "when green flag clicked\\nend", "isStage": true},
+      {"name": "Sprite1", "code": "when green flag clicked\\n    say \"Hello\"\\nend"}
     ]
   }' | jq .
 ```
@@ -232,7 +234,7 @@ import { Lexer } from './src/lib/lexer';
 import { Parser } from './src/lib/parser';
 import { CodeGenerator } from './src/lib/codeGenerator';
 
-const code = `when flagClicked\\n    move 10`;
+const code = `when green flag clicked\\n    move 10\\nend`;
 
 // Step 1: Tokenize
 const lexer = new Lexer(code);
@@ -297,10 +299,22 @@ See [SCRATCH_SYNTAX.md](./SCRATCH_SYNTAX.md) for complete syntax documentation.
 
 ```scratch
 // Events
-when flagClicked
-when [space] key pressed
+when green flag clicked
+    // code here
+end
+
+when space key pressed
+    // code here
+end
+
 when this sprite clicked
+    // code here
+end
+
 when I receive "message"
+    // code here
+end
+
 broadcast "message"
 
 // Motion
@@ -319,49 +333,57 @@ hide
 show
 switch costume to "costume2"
 next costume
-change [color] effect by 25
+change color effect by 25
 set size to 150 %
 
 // Control
 wait 1
 repeat 10
     move 5
+end
+
 forever
-    if <touching "edge"> then
+    if touching "edge" then
         turn 180
     else
         move 1
-wait until <key "space" pressed>
+    end
+end
+
+wait until key "space" pressed
 create clone of "myself"
+
 when I start as a clone
     show
-delete this clone
+    delete this clone
+end
 
 // Variables
-set [score] to 0
-change [score] by 1
-show variable [score]
+set score to 0
+change score by 1
+show variable score
 
 // Lists
-add "item" to [myList]
-delete 1 of [myList]
-insert "item" at 1 of [myList]
-replace item 1 of [myList] with "new"
-item 1 of [myList]
-length of [myList]
+add "item" to myList
+delete 1 of myList
+insert "item" at 1 of myList
+replace item 1 of myList with "new"
+item 1 of myList
+length of myList
 
 // Operators
-(pick random 1 to 10)
-((2) + (3))
-<(score) > (10)>
-(join "Hello " "World")
-(letter 1 of "Hello")
-<"Hello" contains "ell">
+pick random 1 to 10
+2 + 3
+score > 10
+join "Hello " "World"
+letter 1 of "Hello"
+"Hello" contains "ell"
 
 // Custom Blocks
-define myBlock (param1) (param2)
-    say (param1)
-    move (param2)
+define myBlock param1 param2
+    say param1
+    move param2
+end
 
 myBlock "Hello" 50
 ```
@@ -374,38 +396,45 @@ This example demonstrates motion, speech, loops, and keyboard controls. It's the
 // Welcome to Whiskers Playground! 🐱
 // Click the green flag to see this code in action
 
-when flagClicked
-    say \"Hello! Watch me dance!\"
+when green flag clicked
+    say "Hello! Watch me dance!"
     wait 1
     repeat 4
         move 50
         turn right 90
         wait 0.3
+    end
+end
 
 // Keyboard controls - try pressing these keys!
-when keyPressed space
+when space key pressed
     say "You pressed space!"
+end
 
-when keyPressed up
+when up arrow key pressed
     move 20
+end
 
-when keyPressed down
+when down arrow key pressed
     move -20
+end
 
-when keyPressed left
+when left arrow key pressed
     turn left 15
+end
 
-when keyPressed right
+when right arrow key pressed
     turn right 15
+end
 ```
 
 **What this example demonstrates:**
-- `when flagClicked` - Main program entry point
+- `when green flag clicked` - Main program entry point
 - `say` - Display speech bubbles
 - `wait` - Pause execution
-- `repeat` - Loop a block of code
+- `repeat` / `end` - Loop a block of code
 - `move` / `turn` - Sprite motion
-- `when keyPressed` - Keyboard event handlers
+- `when space key pressed` - Keyboard event handlers
 - Comments with `//`
 
 ## 📦 Project Structure

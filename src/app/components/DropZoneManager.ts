@@ -401,7 +401,24 @@ export class DropZoneManager {
         // Clean up any snippet placeholders like $0, $1, etc.
         const cleanCode = code.replace(/\$\d+/g, "");
         
-        let insertText = zone.indent + cleanCode;
+        // For multi-line code, indent all lines relative to the drop zone's indentation
+        const indentAllLines = (text: string, baseIndent: string): string => {
+            const lines = text.split("\n");
+            return lines.map((line, index) => {
+                if (index === 0) {
+                    // First line gets the base indent
+                    return baseIndent + line;
+                } else if (line.trim() === "") {
+                    // Empty lines: preserve relative indentation from template
+                    return baseIndent + line;
+                } else {
+                    // Subsequent non-empty lines: add base indent to preserve relative structure
+                    return baseIndent + line;
+                }
+            }).join("\n");
+        };
+        
+        let insertText: string;
         let range: monaco.IRange;
 
         switch (zone.type) {
@@ -409,14 +426,14 @@ export class DropZoneManager {
             case "top-of-file":
             case "indent-start":
                 // Insert before the line
-                insertText = zone.indent + cleanCode + (needsIndent ? "\n" + zone.indent + "    " : "") + "\n";
+                insertText = indentAllLines(cleanCode, zone.indent) + "\n";
                 range = createRange(zone.line, 1, zone.line, 1);
                 break;
 
             case "line-after":
                 // Insert after the line
                 const lineContent = model.getLineContent(zone.line);
-                insertText = "\n" + zone.indent + cleanCode + (needsIndent ? "\n" + zone.indent + "    " : "");
+                insertText = "\n" + indentAllLines(cleanCode, zone.indent);
                 range = createRange(zone.line, lineContent.length + 1, zone.line, lineContent.length + 1);
                 break;
 

@@ -56,33 +56,13 @@ export interface ScratchProject {
 export const BACKDROP_ID = "backdrop_stage";
 export const BACKDROP_NAME = "Stage";
 
-// Default initial code for new sprites - an engaging demo that moves and talks
+// Default initial code for new sprites
 export const DEFAULT_SPRITE_CODE = `// Welcome to Whiskers Playground! 🐱
-// Click the green flag to see this code in action
 
 when green flag clicked
-    say "Hello! Watch me dance!"
-    wait 1 seconds
-    repeat 4
-        move 50 steps
-        turn right 90 degrees
-        wait 0.3 seconds
-
-// Keyboard controls - try pressing these keys!
-when space key pressed
-    say "You pressed space!"
-
-when up arrow key pressed
-    move 20 steps
-
-when down arrow key pressed
-    move -20 steps
-
-when left arrow key pressed
-    turn left 15 degrees
-
-when right arrow key pressed
-    turn right 15 degrees
+    // 👇 Drag blocks here 👇
+    move 10 steps
+end
 `;
 
 // Default initial code for backdrop/stage

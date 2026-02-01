@@ -62,6 +62,7 @@ export class Lexer {
         "if",
         "else",
         "then",
+        "end",  // End block marker
         "repeat",
         "until",
         "wait",

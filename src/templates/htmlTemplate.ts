@@ -483,6 +483,11 @@ export function generateHTMLTemplate(jsCode: string): string {
                     updateFlagButton();
                 };
             }
+            
+            // Notify parent that runtime is ready
+            if (window.parent !== window) {
+                window.parent.postMessage({ type: 'scratch-ready' }, '*');
+            }
         });
         
         // Generated program code

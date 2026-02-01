@@ -122,7 +122,6 @@ export default function CodeEditor() {
     const [showPreview, setShowPreview] = useState(true);
     const [showCode, setShowCode] = useState(false);
     const [showErrors, setShowErrors] = useState(false);
-    const [autoStart, setAutoStart] = useState(false);
     const [isFullscreen, setIsFullscreen] = useState(false);
     const previewIframeRef = useRef<HTMLIFrameElement>(null);
     const mainContentRef = useRef<HTMLDivElement>(null);
@@ -268,17 +267,21 @@ export default function CodeEditor() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isLoaded, compiled]); // Also re-run when compiled changes (e.g., new project)
 
-    // Handle auto-start after recompile - send message to iframe when new content is loaded
-    useEffect(() => {
-        if (autoStart && htmlContent && previewIframeRef.current) {
-            // Small delay to ensure iframe has loaded the new content
-            const timer = setTimeout(() => {
-                previewIframeRef.current?.contentWindow?.postMessage({ type: 'scratch-autostart' }, '*');
-                setAutoStart(false);
-            }, 150);
-            return () => clearTimeout(timer);
+    // Handle auto-start after recompile - use both timer and message for reliability
+    const pendingAutoStartRef = useRef(false);
+    const autoStartTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+    // Send autostart message to iframe
+    const sendAutoStart = useCallback(() => {
+        if (pendingAutoStartRef.current && previewIframeRef.current?.contentWindow) {
+            pendingAutoStartRef.current = false;
+            if (autoStartTimerRef.current) {
+                clearTimeout(autoStartTimerRef.current);
+                autoStartTimerRef.current = null;
+            }
+            previewIframeRef.current.contentWindow.postMessage({ type: 'scratch-autostart' }, '*');
         }
-    }, [autoStart, htmlContent]);
+    }, []);
 
     // Handle Ctrl+S to show save notification instead of browser save dialog
     useEffect(() => {
@@ -298,10 +301,21 @@ export default function CodeEditor() {
     useEffect(() => {
         const handleMessage = (event: MessageEvent) => {
             if (event.data && event.data.type === 'scratch-recompile') {
-                // Set autoStart so the new iframe will auto-run
-                setAutoStart(true);
+                // Set pending flag and start fallback timer
+                pendingAutoStartRef.current = true;
+                // Clear any existing timer
+                if (autoStartTimerRef.current) {
+                    clearTimeout(autoStartTimerRef.current);
+                }
+                // Fallback timer in case scratch-ready message doesn't arrive
+                autoStartTimerRef.current = setTimeout(() => {
+                    sendAutoStart();
+                }, 300);
                 // Trigger recompile using ref to get latest function
                 handleRunRef.current();
+            } else if (event.data && event.data.type === 'scratch-ready') {
+                // Iframe is ready - send autostart immediately if pending
+                sendAutoStart();
             } else if (event.data && event.data.type === 'scratch-fullscreen') {
                 setIsFullscreen(event.data.enabled);
                 // Try to use browser fullscreen API
@@ -325,8 +339,11 @@ export default function CodeEditor() {
         return () => {
             window.removeEventListener('message', handleMessage);
             document.removeEventListener('fullscreenchange', handleFullscreenChange);
+            if (autoStartTimerRef.current) {
+                clearTimeout(autoStartTimerRef.current);
+            }
         };
-    }, [isFullscreen]); // Include isFullscreen to get latest value
+    }, [isFullscreen, sendAutoStart]); // Include isFullscreen to get latest value
 
     // Setup Monaco language and theme before mount
     const handleEditorWillMount = (monacoRef: monacoType) => {
@@ -393,25 +410,32 @@ export default function CodeEditor() {
         const currentLineContent = model.getLineContent(position.lineNumber);
         const currentIndent = currentLineContent.match(/^(\s*)/)?.[1] || "";
         
-        // Prepare the code to insert
-        let codeToInsert = command.code;
+        // Helper to indent all lines of multi-line code
+        const indentAllLines = (text: string, baseIndent: string): string => {
+            const lines = text.split("\n");
+            return lines.map((line, index) => {
+                if (index === 0) {
+                    return baseIndent + line;
+                } else {
+                    return baseIndent + line;
+                }
+            }).join("\n");
+        };
         
-        // If the command needs indent (like when/repeat/forever), add newline with indent
-        if (command.needsIndent) {
-            codeToInsert = command.code + "\n" + currentIndent + "    ";
-        }
+        // Prepare the code to insert (already has proper relative indentation in template)
+        const codeToInsert = command.code;
         
         // If we're inserting at the beginning of an empty line, use current indent
         const isEmptyLine = currentLineContent.trim() === "";
         
-        // Build the full text to insert
+        // Build the full text to insert with proper indentation on all lines
         let fullInsert = "";
         if (isEmptyLine) {
-            // Replace the line entirely
-            fullInsert = currentIndent + codeToInsert;
+            // Replace the line entirely - indent all lines
+            fullInsert = indentAllLines(codeToInsert, currentIndent);
         } else {
-            // Insert at cursor with newline
-            fullInsert = "\n" + currentIndent + codeToInsert;
+            // Insert at cursor with newline - indent all lines
+            fullInsert = "\n" + indentAllLines(codeToInsert, currentIndent);
         }
         
         // Calculate the range to replace
@@ -1255,6 +1279,7 @@ export default function CodeEditor() {
                                     className="w-full h-full border-0"
                                     title="Preview"
                                     sandbox="allow-scripts"
+                                    onLoad={() => sendAutoStart()}
                                 />
                             ) : (
                                 <div className="w-full h-full flex items-center justify-center text-gray-500 bg-white">
@@ -1279,6 +1304,7 @@ export default function CodeEditor() {
                             className="w-full h-full border-0"
                             title="Preview Fullscreen"
                             sandbox="allow-scripts"
+                            onLoad={() => sendAutoStart()}
                         />
                     </div>
                 </div>
