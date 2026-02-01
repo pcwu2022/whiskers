@@ -40,15 +40,17 @@ src/
 │   │                           #   - CodeGenerator (single sprite)
 │   │                           #   - MultiSpriteCodeGenerator (full projects)
 │   ├── compiler.ts             # Orchestrates compilation pipeline
+│   ├── typeValidator.ts        # Type checking & semantic validation
 │   ├── codeEditorConfig.ts     # Monaco syntax highlighting & autocomplete
 │   └── debugger.ts             # Debug logging utilities
 ├── templates/
-│   └── runtime.ts              # Scratch runtime (~700 lines)
-│                               #   - Sprite management & cloning
-│                               #   - Event system (broadcast, key press, etc.)
-│                               #   - Motion, Looks, Sound, Sensing methods
-│                               #   - Variable & List operations
-│                               #   - Timer, Mouse, Keyboard tracking
+│   ├── runtime.ts              # Scratch runtime (~1300 lines)
+│   │                           #   - Sprite management & cloning
+│   │                           #   - Event system (broadcast, key press, etc.)
+│   │                           #   - Motion, Looks, Sound, Sensing methods
+│   │                           #   - Variable & List operations
+│   │                           #   - Timer, Mouse, Keyboard tracking
+│   └── htmlTemplate.ts         # HTML wrapper for preview iframe
 ├── types/
 │   ├── compilerTypes.ts        # Block type mappings (~150 block types)
 │   └── projectTypes.ts         # Project/sprite/costume interfaces
@@ -59,17 +61,22 @@ src/
 ### Compilation Pipeline
 
 ```
-Source Code → Lexer → Tokens → Parser → AST → CodeGenerator → JavaScript + HTML
+Source Code → Lexer → Tokens → Parser → AST → TypeValidator → CodeGenerator → JavaScript + HTML
 ```
 
 1. **Lexer** (`lexer.ts`): Tokenizes input into keywords, identifiers, numbers, strings, operators
 2. **Parser** (`parser.ts`): Builds an Abstract Syntax Tree (AST) representing program structure
-3. **CodeGenerator** (`codeGenerator.ts`): 
+3. **TypeValidator** (`typeValidator.ts`):
+   - Validates type correctness (numbers vs strings vs booleans)
+   - Detects typos with Levenshtein distance suggestions
+   - Checks for missing required values
+   - Reports semantic errors with helpful suggestions
+4. **CodeGenerator** (`codeGenerator.ts`): 
    - Traverses AST and generates JavaScript
    - `MultiSpriteCodeGenerator` handles multiple sprites with backdrop
    - Generates sprite initializations, event handlers, and block code
-4. **Runtime** (`runtime.ts`): 
-   - Provides `scratchRuntime` object injected into generated code
+5. **Runtime** (`runtime.ts`): 
+   - Provides `window.scratchRuntime` object injected into generated code
    - Manages sprites, clones, events, variables, lists
    - Implements all Scratch-like methods (move, say, broadcast, etc.)
 

@@ -8,6 +8,12 @@ import { MultiSpriteCodeGenerator } from "./codeGenerator";
 import Debugger from "./debugger";
 import { CompilerError } from "@/types/compilerTypes";
 import { BlockNode, Program } from "@/types/blockTypes";
+import { 
+    validateTypes, 
+    checkMissingCoordinateValue, 
+    checkAssignmentInExpression,
+    findClosestKeyword 
+} from "./typeValidator";
 
 // Sprite input for multi-sprite compilation
 interface SpriteInput {
@@ -170,9 +176,73 @@ export class ScratchTextCompiler {
                     suggestion: "💡 The diamond ⯁ is waiting for a yes/no question. Type something like 'x > 10' or drag a pointy (boolean) block here.",
                 });
             }
+            
+            // Check for missing coordinate values (e.g., "go to x: y: 50")
+            const missingValueError = checkMissingCoordinateValue(line, lineNum);
+            if (missingValueError) {
+                errors.push({
+                    ...missingValueError,
+                    message: prefix + missingValueError.message,
+                });
+            }
+            
+            // Check for assignment operator in expression (e.g., "set x to x = 5")
+            const assignmentError = checkAssignmentInExpression(line, lineNum);
+            if (assignmentError) {
+                errors.push({
+                    ...assignmentError,
+                    message: prefix + assignmentError.message,
+                });
+            }
         }
         
         return errors;
+    }
+    
+    // Extract procedure definitions from a program for validation
+    private extractProcedureDefinitions(program: Program): Map<string, string[]> {
+        const procedures = new Map<string, string[]>();
+        
+        const findProcedures = (block: BlockNode) => {
+            if ((block.type === "procedure" || block.type === "custom") && block.name === "define") {
+                const procName = String(block.args[0]);
+                const params = block.args.slice(1).map((a) => String(a));
+                procedures.set(procName, params);
+            }
+            if (block.body) {
+                for (const child of block.body) {
+                    findProcedures(child);
+                }
+            }
+            if (block.next) {
+                findProcedures(block.next);
+            }
+        };
+        
+        for (const script of program.scripts) {
+            for (const block of script.blocks) {
+                findProcedures(block);
+            }
+        }
+        
+        return procedures;
+    }
+    
+    // Perform type validation on parsed program
+    private performTypeValidation(
+        code: string, 
+        program: Program, 
+        procedureDefinitions: Map<string, string[]>,
+        spriteName?: string
+    ): CompilerError[] {
+        const prefix = spriteName ? `[${spriteName}] ` : '';
+        const result = validateTypes(program, code, procedureDefinitions);
+        
+        // Add sprite prefix to all error messages
+        return result.errors.map(err => ({
+            ...err,
+            message: prefix + err.message,
+        }));
     }
     
     // List of motion block names that are not allowed on Stage
@@ -285,6 +355,11 @@ export class ScratchTextCompiler {
             allErrors.push(...parser.getErrors());
 
             this.debugger.log("info", "Parser output (program) ", program);
+            
+            // Step 2.5: Type validation (after parsing, before code generation)
+            const procedureDefinitions = this.extractProcedureDefinitions(program);
+            const typeErrors = this.performTypeValidation(code, program, procedureDefinitions);
+            allErrors.push(...typeErrors);
 
             // If there are errors, don't generate code
             if (allErrors.some(e => e.severity === "error")) {
@@ -421,6 +496,16 @@ export class ScratchTextCompiler {
                     );
                     allErrors.push(...motionErrors);
                 }
+                
+                // Type validation for this sprite
+                const procedureDefinitions = this.extractProcedureDefinitions(program);
+                const typeErrors = this.performTypeValidation(
+                    sprite.code, 
+                    program, 
+                    procedureDefinitions, 
+                    sprite.name
+                );
+                allErrors.push(...typeErrors);
 
                 this.debugger.log("info", `Parsed sprite: ${sprite.name}`, program);
 

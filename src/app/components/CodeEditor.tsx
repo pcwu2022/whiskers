@@ -193,6 +193,7 @@ export default function CodeEditor() {
     const [_loading, setLoading] = useState(false);
     const [compiled, setCompiled] = useState(false);
     const [_running, setRunning] = useState(false);
+    const [compileCounter, setCompileCounter] = useState(0); // Force iframe refresh;
     const [isRunning, setIsRunning] = useState(false);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
     const [compilerErrors, setCompilerErrors] = useState<CompilerError[]>([]);
@@ -378,23 +379,22 @@ export default function CodeEditor() {
     // Listen for messages from the preview iframe
     useEffect(() => {
         const handleMessage = (event: MessageEvent) => {
-            if (event.data && event.data.type === 'scratch-recompile') {
-                // Set pending flag and start fallback timer
+            // Ignore messages that don't have data.type (like Grammarly, etc.)
+            if (!event.data || !event.data.type) return;
+            if (event.data.type === 'scratch-recompile') {
+                // Set pending flag - autostart will be sent when iframe reports ready
                 pendingAutoStartRef.current = true;
                 // Clear any existing timer
                 if (autoStartTimerRef.current) {
                     clearTimeout(autoStartTimerRef.current);
+                    autoStartTimerRef.current = null;
                 }
-                // Fallback timer in case scratch-ready message doesn't arrive
-                autoStartTimerRef.current = setTimeout(() => {
-                    sendAutoStart();
-                }, 300);
                 // Trigger recompile using ref to get latest function
                 handleRunRef.current();
-            } else if (event.data && event.data.type === 'scratch-ready') {
+            } else if (event.data.type === 'scratch-ready') {
                 // Iframe is ready - send autostart immediately if pending
                 sendAutoStart();
-            } else if (event.data && event.data.type === 'scratch-running') {
+            } else if (event.data.type === 'scratch-running') {
                 setIsRunning(event.data.running);
             } else if (event.data && event.data.type === 'scratch-fullscreen') {
                 setIsFullscreen(event.data.enabled);
@@ -949,6 +949,7 @@ export default function CodeEditor() {
                 const displayCode = sanitizeCodeForDisplay(data.userCode || data.js);
                 setCompiledJsCode(displayCode);
                 setHtmlContent(data.html || null);
+                setCompileCounter(c => c + 1); // Force iframe to remount
                 retValue = { js: data.js, html: data.html, success: true };
             } else {
                 // Compilation failed - show error message but still show preview with working green flag
@@ -1455,12 +1456,12 @@ export default function CodeEditor() {
                         <div className="flex-1 bg-gray-100">
                             {htmlContent ? (
                                 <iframe
+                                    key={`preview-${compileCounter}`}
                                     ref={previewIframeRef}
-                                    srcDoc={htmlContent.replace('__IS_FULLSCREEN__', 'false')}
+                                    srcDoc={htmlContent.replace('const IS_FULLSCREEN = false;', 'const IS_FULLSCREEN = false;')}
                                     className="w-full h-full border-0"
                                     title="Preview"
-                                    sandbox="allow-scripts"
-                                    onLoad={() => sendAutoStart()}
+                                    sandbox="allow-scripts allow-same-origin"
                                 />
                             ) : (
                                 <div className="w-full h-full flex items-center justify-center text-gray-500 bg-white">
@@ -1481,11 +1482,10 @@ export default function CodeEditor() {
                     <div className="w-full h-full max-w-[calc(100vh*4/3)] max-h-[calc(100vw*3/4)]">
                         <iframe
                             ref={previewIframeRef}
-                            srcDoc={htmlContent.replace('__IS_FULLSCREEN__', 'true')}
+                            srcDoc={htmlContent.replace('const IS_FULLSCREEN = false;', 'const IS_FULLSCREEN = true;')}
                             className="w-full h-full border-0"
                             title="Preview Fullscreen"
-                            sandbox="allow-scripts"
-                            onLoad={() => sendAutoStart()}
+                            sandbox="allow-scripts allow-same-origin"
                         />
                     </div>
                 </div>

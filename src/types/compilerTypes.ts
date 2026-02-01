@@ -47,6 +47,8 @@ export const ErrorCodes = {
     MISSING_END: "E105",
     INVALID_SYNTAX: "E106",
     MISSING_INDENT: "E107",
+    UNKNOWN_BLOCK: "E108",
+    PROCEDURE_ARG_MISMATCH: "E109",
     
     // Type errors (E2xx)
     TYPE_MISMATCH: "E201",

@@ -5,6 +5,7 @@
 
 import { Program, BlockNode, Script, BlockType, Token, TokenType, blockTypeMap, CompilerError, ErrorCodes } from "@/types/compilerTypes";
 import { Lexer } from "./lexer";
+import { findClosestKeyword } from "./typeValidator";
 // import { SimpleDebugger } from "./debugger";
 
 // const d: SimpleDebugger = new SimpleDebugger();
@@ -376,8 +377,21 @@ export class Parser {
                     } else if (keyword === "define") {
                         // Parse custom block definition
                         this.parseCustomBlockDefinition(program);
+                    } else if (keyword === "end") {
+                        // 'end' keyword at top level - just skip it (it's used to close blocks)
+                        this.advance();
                     } else {
                         // Unknown keyword or statement at top level
+                        // Check if it's a typo and suggest correction
+                        const suggestion = findClosestKeyword(keyword);
+                        if (suggestion) {
+                            this.addError(
+                                ErrorCodes.UNKNOWN_BLOCK,
+                                `Unknown command '${keyword}'. Did you mean '${suggestion}'?`,
+                                this.current,
+                                `💡 Did you mean '${suggestion}'? Check the spelling and try again.`
+                            );
+                        }
                         this.advance();
                     }
                 } else {
@@ -680,11 +694,23 @@ export class Parser {
         // Get the block name - could be a keyword or identifier (procedure call)
         let blockKeyword: string;
         let isProcedureCall = false;
+        const identifierToken = this.match(TokenType.IDENTIFIER) ? this.current : null;
         
         if (this.match(TokenType.IDENTIFIER)) {
-            // This is a procedure call (e.g., "check threshold value")
+            // This might be a procedure call or a typo
             blockKeyword = this.advance().value;
             isProcedureCall = true;
+            
+            // Check if this looks like a misspelled keyword
+            const suggestion = findClosestKeyword(blockKeyword);
+            if (suggestion) {
+                this.addError(
+                    ErrorCodes.UNKNOWN_BLOCK,
+                    `Unknown command '${blockKeyword}'. Did you mean '${suggestion}'?`,
+                    identifierToken || undefined,
+                    `💡 Did you mean '${suggestion}'? Check the spelling and try again.`
+                );
+            }
         } else {
             blockKeyword = this.consume(TokenType.KEYWORD, "Expected block keyword").value;
         }

@@ -3,7 +3,8 @@
 
 export const SCRATCH_RUNTIME = `// Generated Scratch-like JavaScript code
 // Runtime support functions
-const scratchRuntime = {
+// Use window.scratchRuntime to make it globally accessible (needed for message handlers outside try block)
+window.scratchRuntime = {
     sprites: {},
     stage: { 
         width: 480, 
@@ -1289,6 +1290,9 @@ const scratchRuntime = {
         return 'ScratchUser';
     }
 };
+
+// Create local alias for convenience (all generated code uses scratchRuntime)
+const scratchRuntime = window.scratchRuntime;
 
 // Initialize the runtime
 scratchRuntime.init();

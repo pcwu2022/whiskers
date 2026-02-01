@@ -296,7 +296,8 @@ export function generateHTMLTemplate(jsCode: string): string {
         // State
         let outputCollapsed = false;
         let isRunning = false;
-        const IS_FULLSCREEN = __IS_FULLSCREEN__;
+        // This placeholder gets replaced by CodeEditor.tsx when rendering the iframe
+        const IS_FULLSCREEN = false; // __FULLSCREEN_PLACEHOLDER__
         
         // Scale the stage content to fit the actual stage size while maintaining 480:360 aspect ratio
         function updateStageScale() {
@@ -421,10 +422,10 @@ export function generateHTMLTemplate(jsCode: string): string {
                 if (overlay) overlay.classList.add('hidden');
                 const consoleEl = document.getElementById('console');
                 if (consoleEl) consoleEl.innerHTML = '';
-                if (typeof scratchRuntime !== 'undefined') {
+                if (window.scratchRuntime) {
                     isRunning = true;
                     updateFlagButton();
-                    scratchRuntime.greenFlag();
+                    window.scratchRuntime.greenFlag();
                 }
             }
         });
@@ -450,18 +451,18 @@ export function generateHTMLTemplate(jsCode: string): string {
                 window.parent.postMessage({ type: 'scratch-recompile' }, '*');
             } else {
                 // Standalone mode - just restart
-                if (typeof scratchRuntime !== 'undefined') {
+                if (window.scratchRuntime) {
                     isRunning = true;
                     updateFlagButton();
-                    scratchRuntime.greenFlag();
+                    window.scratchRuntime.greenFlag();
                 }
             }
         });
         
         // Stop button - stops animation but keeps sprites visible for debugging
         document.getElementById('stop-btn').addEventListener('click', function() {
-            if (typeof scratchRuntime !== 'undefined') {
-                scratchRuntime.stopAll();
+            if (window.scratchRuntime) {
+                window.scratchRuntime.stopAll();
             }
             isRunning = false;
             updateFlagButton();
@@ -477,8 +478,8 @@ export function generateHTMLTemplate(jsCode: string): string {
             updateFlagButton();
             
             // Register callback for when stopAll is called from code
-            if (typeof scratchRuntime !== 'undefined') {
-                scratchRuntime.onStopAllCallback = function() {
+            if (window.scratchRuntime) {
+                window.scratchRuntime.onStopAllCallback = function() {
                     isRunning = false;
                     updateFlagButton();
                 };

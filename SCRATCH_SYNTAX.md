@@ -484,24 +484,50 @@ end
 
 ## Error Messages
 
-The compiler will show helpful error messages:
+The compiler performs **type validation** and **semantic analysis** to catch errors early. Here are the types of errors it detects:
+
+### Type Errors
+
+| Error | Example | Message |
+|-------|---------|---------|
+| Number expected | `wait "hello" seconds` | "'wait' requires a number, but got a string." |
+| String expected | `say 123` | "'say' expects a string message." |
+| Boolean expected | `if 50 then` | "'if' requires a boolean condition, but got a number." |
+| Boolean operand | `50 and score > 10` | "Cannot use 'and' with a number. Expected a boolean condition." |
+
+### Semantic Errors
 
 | Error | Example | Message |
 |-------|---------|---------|
 | Undeclared variable | `set foo to 5` | "Variable 'foo' is not declared. Add `var foo = 0` at the top." |
-| Reserved keyword | `var ghost = 5` | "'ghost' is a reserved keyword (effect name) and cannot be used as a variable name." |
+| Reserved keyword | `var ghost = 5` | "'ghost' is a reserved keyword (effect name)." |
 | Empty parentheses | `set x to ()` | "Empty parentheses are not allowed." |
 | Missing value | `go to x: y: 0` | "Missing value after 'x:'." |
-| Type error | `wait "hello" seconds` | "'wait' requires a number, but got a string." |
-| Type mismatch | `50 and score > 10` | "Cannot use 'and' with a number. Expected a boolean condition." |
-| Invalid brackets | `set [score] to 5` | "Square brackets are not allowed except for list initialization. Use: `set score to 5`" |
+| Invalid brackets | `set [score] to 5` | "Square brackets are not allowed. Use: `set score to 5`" |
+
+### Typo Detection
+
+The compiler uses **Levenshtein distance** to suggest corrections for misspelled commands:
+
+| Typo | Suggestion |
+|------|------------|
+| `mve 10 steps` | Did you mean 'move'? |
+| `chagne x by 5` | Did you mean 'change'? |
+| `brodcast "msg"` | Did you mean 'broadcast'? |
+| `forver` | Did you mean 'forever'? |
+
+### Error Severity Levels
+
+- **Error** (red): Code will not compile correctly
+- **Warning** (yellow): Code may not work as expected
+- **Info** (blue): Suggestions for improvement
 
 ---
 
 ## Tips for Scratch Users
 
-1. **No brackets around variable names** - Just write the name directly
-2. **Quotes for text** - Use `"double quotes"` for strings
-3. **Indentation matters for readability** - Indent code inside blocks
-4. **End your blocks** - Every `if`, `repeat`, `forever`, `when`, and `define` needs an `end`
-5. **Declare first** - Variables and lists must be declared before use
+1. **Quotes for text** - Use `"double quotes"` for strings
+2. **Indentation matters for readability** - Indent code inside blocks
+3. **End your blocks** - Every `if`, `repeat`, `forever`, `when`, and `define` needs an `end`
+4. **Declare first** - Variables and lists must be declared before use
+5. **Check red underlines** - Hover over errors to see suggestions
