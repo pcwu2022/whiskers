@@ -25,6 +25,7 @@ export class MultiSpriteCodeGenerator {
     private userCode: string = "";
     private htmlOutput: string = "";
     private procedures: Map<string, string[]> = new Map();
+    private currentProcedureParams: Set<string> = new Set(); // Track parameters in current procedure scope
 
     constructor(sprites: { 
         name: string; 
@@ -253,9 +254,11 @@ export class MultiSpriteCodeGenerator {
         }
     }
 
-    private generateBlock(block: BlockNode, indent: number, spriteName: string, isStage: boolean = false): void {
+    private generateBlock(block: BlockNode, indent: number, spriteName: string, isStage: boolean = false, inCloneContext: boolean = false): void {
         const spaces = "    ".repeat(indent);
-        const spriteRef = isStage ? `null` : `scratchRuntime.sprites["${spriteName}"]`;
+        // In clone context, use dynamic sprite reference since currentSprite is set by createClone
+        const spriteRef = isStage ? `null` : 
+            (inCloneContext ? `scratchRuntime.sprites[scratchRuntime.currentSprite]` : `scratchRuntime.sprites["${spriteName}"]`);
         
         // Track if the block handler consumed block.next internally
         let nextHandled = false;
@@ -266,20 +269,20 @@ export class MultiSpriteCodeGenerator {
                 break;
             case "motion":
                 if (!isStage) {
-                    this.generateMotionBlock(block, indent, spriteRef, spriteName);
+                    this.generateMotionBlock(block, indent, spriteRef, spriteName, inCloneContext);
                 }
                 break;
             case "looks":
-                this.generateLooksBlock(block, indent, spriteRef, spriteName, isStage);
+                this.generateLooksBlock(block, indent, spriteRef, spriteName, isStage, inCloneContext);
                 break;
             case "control":
-                nextHandled = this.generateControlBlock(block, indent, spriteName, isStage);
+                nextHandled = this.generateControlBlock(block, indent, spriteName, isStage, inCloneContext);
                 break;
             case "sound":
                 this.generateSoundBlock(block, indent);
                 break;
             case "sensing":
-                this.generateSensingBlock(block, indent, spriteName, isStage);
+                this.generateSensingBlock(block, indent, spriteName, isStage, inCloneContext);
                 break;
             case "operators":
             case "operator":
@@ -307,7 +310,7 @@ export class MultiSpriteCodeGenerator {
 
         // Only process block.next if the handler didn't already consume it
         if (block.next && !nextHandled) {
-            this.generateBlock(block.next, indent, spriteName, isStage);
+            this.generateBlock(block.next, indent, spriteName, isStage, inCloneContext);
         }
     }
 
@@ -387,8 +390,10 @@ export class MultiSpriteCodeGenerator {
         ) {
             this.output += `${spaces}// When I start as a clone\n`;
             this.output += `${spaces}scratchRuntime.onEvent("cloneStart_${spriteName}", async function() {\n`;
+            // In clone context, scratchRuntime.currentSprite is set by createClone callback
+            // Pass true for inCloneContext so motion blocks use dynamic sprite reference
             if (block.next) {
-                this.generateBlock(block.next, indent + 1, spriteName, isStage);
+                this.generateBlock(block.next, indent + 1, spriteName, isStage, true);
             }
             this.output += `${spaces}});\n\n`;
             eventHandled = true;
@@ -429,7 +434,7 @@ export class MultiSpriteCodeGenerator {
         return eventHandled;
     }
 
-    private generateMotionBlock(block: BlockNode, indent: number, spriteRef: string, _spriteName: string): void {
+    private generateMotionBlock(block: BlockNode, indent: number, spriteRef: string, _spriteName: string, _inCloneContext: boolean = false): void {
         const spaces = "    ".repeat(indent);
         
         switch (block.name) {
@@ -537,7 +542,7 @@ export class MultiSpriteCodeGenerator {
         }
     }
 
-    private generateLooksBlock(block: BlockNode, indent: number, spriteRef: string, spriteName: string, isStage: boolean): void {
+    private generateLooksBlock(block: BlockNode, indent: number, spriteRef: string, spriteName: string, isStage: boolean, _inCloneContext: boolean = false): void {
         const spaces = "    ".repeat(indent);
         
         switch (block.name) {
@@ -790,7 +795,7 @@ export class MultiSpriteCodeGenerator {
         }
     }
 
-    private generateControlBlock(block: BlockNode, indent: number, spriteName: string, isStage: boolean): boolean {
+    private generateControlBlock(block: BlockNode, indent: number, spriteName: string, isStage: boolean, inCloneContext: boolean = false): boolean {
         const spaces = "    ".repeat(indent);
         // Note: spriteRef could be used for clone-specific behavior
         // const spriteRef = isStage ? `null` : `scratchRuntime.sprites["${spriteName}"]`;
@@ -806,34 +811,39 @@ export class MultiSpriteCodeGenerator {
                 this.output += `${spaces}for (let _i = 0; _i < ${this.formatArg(block.args[0])}; _i++) {\n`;
                 // Handle body from args[1], block.body, or block.next (parser may attach body to next)
                 if (block.args.length > 1 && typeof block.args[1] === "object") {
-                    this.generateBlock(block.args[1] as BlockNode, indent + 1, spriteName, isStage);
+                    this.generateBlock(block.args[1] as BlockNode, indent + 1, spriteName, isStage, inCloneContext);
                 } else if (block.body && block.body.length > 0) {
                     for (const child of block.body) {
-                        this.generateBlock(child, indent + 1, spriteName, isStage);
+                        this.generateBlock(child, indent + 1, spriteName, isStage, inCloneContext);
                     }
                 } else if (block.next) {
                     // Parser attached body to block.next - generate the entire chain inside the loop
-                    this.generateBlock(block.next, indent + 1, spriteName, isStage);
+                    this.generateBlock(block.next, indent + 1, spriteName, isStage, inCloneContext);
                     consumedNext = true;
                 }
                 this.output += `${spaces}}\n`;
                 break;
             }
             case "forever": {
+                this.output += `${spaces}scratchRuntime.startForeverLoop();\n`;
                 this.output += `${spaces}(async function _forever() {\n`;
-                this.output += `${spaces}    while (scratchRuntime.running) {\n`;
+                this.output += `${spaces}    try {\n`;
+                this.output += `${spaces}        while (scratchRuntime.running) {\n`;
                 if (block.args.length > 0 && typeof block.args[0] === "object") {
-                    this.generateBlock(block.args[0] as BlockNode, indent + 2, spriteName, isStage);
+                    this.generateBlock(block.args[0] as BlockNode, indent + 3, spriteName, isStage, inCloneContext);
                 } else if (block.body && block.body.length > 0) {
                     for (const child of block.body) {
-                        this.generateBlock(child, indent + 2, spriteName, isStage);
+                        this.generateBlock(child, indent + 3, spriteName, isStage, inCloneContext);
                     }
                 } else if (block.next) {
                     // Parser attached body to block.next
-                    this.generateBlock(block.next, indent + 2, spriteName, isStage);
+                    this.generateBlock(block.next, indent + 3, spriteName, isStage, inCloneContext);
                     consumedNext = true;
                 }
-                this.output += `${spaces}        await scratchRuntime.wait(0.01);\n`;
+                this.output += `${spaces}            await scratchRuntime.wait(0.01);\n`;
+                this.output += `${spaces}        }\n`;
+                this.output += `${spaces}    } finally {\n`;
+                this.output += `${spaces}        scratchRuntime.endForeverLoop();\n`;
                 this.output += `${spaces}    }\n`;
                 this.output += `${spaces}})();\n`;
                 break;
@@ -842,7 +852,9 @@ export class MultiSpriteCodeGenerator {
                 // Check for special case: "if on edge, bounce" which gets parsed as if with args ["on", "edge", "bounce"] or similar
                 if (block.args[0] === "on" && block.args[1] === "edge" && (block.args[2] === "bounce" || block.args.includes("bounce"))) {
                     if (!isStage) {
-                        const spriteRef = `scratchRuntime.sprites["${spriteName}"]`;
+                        const spriteRef = inCloneContext 
+                            ? `scratchRuntime.sprites[scratchRuntime.currentSprite]`
+                            : `scratchRuntime.sprites["${spriteName}"]`;
                         this.output += `${spaces}${spriteRef}.ifOnEdgeBounce();\n`;
                     }
                     break;
@@ -855,14 +867,14 @@ export class MultiSpriteCodeGenerator {
                 
                 this.output += `${spaces}if (${condition}) {\n`;
                 if (bodyBlock) {
-                    this.generateBlock(bodyBlock, indent + 1, spriteName, isStage);
+                    this.generateBlock(bodyBlock, indent + 1, spriteName, isStage, inCloneContext);
                 } else if (block.body && block.body.length > 0) {
                     for (const child of block.body) {
-                        this.generateBlock(child, indent + 1, spriteName, isStage);
+                        this.generateBlock(child, indent + 1, spriteName, isStage, inCloneContext);
                     }
                 } else if (block.next) {
                     // Parser attached body to block.next
-                    this.generateBlock(block.next, indent + 1, spriteName, isStage);
+                    this.generateBlock(block.next, indent + 1, spriteName, isStage, inCloneContext);
                     consumedNext = true;
                 }
                 this.output += `${spaces}}\n`;
@@ -874,16 +886,16 @@ export class MultiSpriteCodeGenerator {
                 
                 this.output += `${spaces}if (${condition}) {\n`;
                 if (bodyBlock) {
-                    this.generateBlock(bodyBlock, indent + 1, spriteName, isStage);
+                    this.generateBlock(bodyBlock, indent + 1, spriteName, isStage, inCloneContext);
                 } else if (block.body && block.body.length > 0) {
                     for (const child of block.body) {
-                        this.generateBlock(child, indent + 1, spriteName, isStage);
+                        this.generateBlock(child, indent + 1, spriteName, isStage, inCloneContext);
                     }
                 }
                 this.output += `${spaces}} else {\n`;
                 if (block.elseBody && block.elseBody.length > 0) {
                     for (const child of block.elseBody) {
-                        this.generateBlock(child, indent + 1, spriteName, isStage);
+                        this.generateBlock(child, indent + 1, spriteName, isStage, inCloneContext);
                     }
                 }
                 this.output += `${spaces}}\n`;
@@ -897,19 +909,25 @@ export class MultiSpriteCodeGenerator {
             case "repeatUntil": {
                 this.output += `${spaces}while (!(${this.buildConditionFromArgs(block.args)})) {\n`;
                 if (block.args.length > 1 && typeof block.args[1] === "object") {
-                    this.generateBlock(block.args[1] as BlockNode, indent + 1, spriteName, isStage);
+                    this.generateBlock(block.args[1] as BlockNode, indent + 1, spriteName, isStage, inCloneContext);
                 } else if (block.body && block.body.length > 0) {
                     for (const child of block.body) {
-                        this.generateBlock(child, indent + 1, spriteName, isStage);
+                        this.generateBlock(child, indent + 1, spriteName, isStage, inCloneContext);
                     }
                 } else if (block.next) {
-                    this.generateBlock(block.next, indent + 1, spriteName, isStage);
+                    this.generateBlock(block.next, indent + 1, spriteName, isStage, inCloneContext);
                     consumedNext = true;
                 }
                 this.output += `${spaces}    await scratchRuntime.wait(0.01);\n`;
                 this.output += `${spaces}}\n`;
                 break;
             }
+            case "stopAll":
+                this.output += `${spaces}scratchRuntime.stopAll(); return;\n`;
+                break;
+            case "stopThisScript":
+                this.output += `${spaces}return;\n`;
+                break;
             case "stop":
                 const stopTarget = block.args[0];
                 if (stopTarget === "all") {
@@ -956,9 +974,10 @@ export class MultiSpriteCodeGenerator {
         return consumedNext;
     }
 
-    private generateSensingBlock(block: BlockNode, indent: number, spriteName: string, isStage: boolean): void {
+    private generateSensingBlock(block: BlockNode, indent: number, spriteName: string, isStage: boolean, inCloneContext: boolean = false): void {
         const spaces = "    ".repeat(indent);
-        const spriteRef = isStage ? `null` : `scratchRuntime.sprites["${spriteName}"]`;
+        const spriteRef = isStage ? `null` : 
+            (inCloneContext ? `scratchRuntime.sprites[scratchRuntime.currentSprite]` : `scratchRuntime.sprites["${spriteName}"]`);
         
         switch (block.name) {
             case "ask":
@@ -1254,7 +1273,12 @@ export class MultiSpriteCodeGenerator {
         
         if (block.name === "define") {
             const procName = String(block.args[0]);
-            const params = block.args.slice(1).map(a => String(a)).join(", ");
+            const paramNames = block.args.slice(1).map(a => String(a));
+            const params = paramNames.join(", ");
+            
+            // Set procedure parameters in scope for formatArg to use
+            this.currentProcedureParams = new Set(paramNames);
+            
             this.output += `${spaces}scratchRuntime.procedures["${procName}"] = async function(${params}) {\n`;
             this.output += `${spaces}    scratchRuntime.currentSprite = "${spriteName}";\n`;
             if (block.body) {
@@ -1266,6 +1290,9 @@ export class MultiSpriteCodeGenerator {
                 this.generateBlock(block.next, indent + 1, spriteName, isStage);
             }
             this.output += `${spaces}};\n`;
+            
+            // Clear procedure parameters after exiting the procedure
+            this.currentProcedureParams = new Set();
         } else if (block.name === "call") {
             const procName = String(block.args[0]);
             const args = block.args.slice(1).map(a => this.formatArg(a)).join(", ");
@@ -1320,6 +1347,11 @@ export class MultiSpriteCodeGenerator {
                 const builtInCode = this.getBuiltInReporterCode(varName);
                 if (builtInCode) {
                     return builtInCode;
+                }
+                
+                // Check if this is a procedure parameter (local scope takes precedence)
+                if (this.currentProcedureParams.has(varName)) {
+                    return varName;
                 }
                 
                 return `scratchRuntime.variables["${varName}"]`;
@@ -1658,10 +1690,37 @@ export class MultiSpriteCodeGenerator {
      * Handles patterns like: [{expr}, "=", value, "then", {body}] or [{expr}, ">", value, "then", {body}]
      * Also handles complex expressions like: [var, "mod", 2, "=", 0, "then", {body}]
      * Also handles simple conditions like: [{cond}]
+     * Also handles "key X pressed" patterns: ["key", "space", "pressed", "then", ...]
      */
     private buildConditionFromArgs(args: (string | number | BlockNode)[]): string {
         if (args.length === 0) {
             return "true";
+        }
+
+        // Check for "key X pressed" pattern: ["key", keyName, "pressed", ...]
+        if (args.length >= 3 && args[0] === "key" && typeof args[1] === "string") {
+            // Find "pressed" keyword (it might be at index 2 or later if key name is multi-word like "up arrow")
+            let keyName = args[1] as string;
+            let pressedIdx = 2;
+            
+            // Handle multi-word key names like "up arrow", "left arrow", etc.
+            if (args[2] === "arrow" || args[2] === "Arrow") {
+                keyName = keyName + " arrow";
+                pressedIdx = 3;
+            }
+            
+            if (args[pressedIdx] === "pressed") {
+                // Map arrow key names to standard key names
+                const keyMap: Record<string, string> = {
+                    "up arrow": "ArrowUp",
+                    "down arrow": "ArrowDown", 
+                    "left arrow": "ArrowLeft",
+                    "right arrow": "ArrowRight",
+                    "space": " ",
+                };
+                const mappedKey = keyMap[keyName.toLowerCase()] || keyName.toLowerCase();
+                return `scratchRuntime.isKeyPressed("${mappedKey}")`;
+            }
         }
 
         // First, check for logical operators (and/or) - these have LOWEST precedence

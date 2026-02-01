@@ -1,0 +1,8 @@
+// Test: Clone with pick random and delete this clone
+when green flag clicked
+    create clone of myself
+
+when I start as a clone
+    go to x: pick random -200 to 200 y: pick random -150 to 150
+    wait 2 seconds
+    delete this clone

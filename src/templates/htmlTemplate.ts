@@ -352,7 +352,7 @@ export function generateHTMLTemplate(jsCode: string): string {
             const flagBtn = document.getElementById('flag-btn');
             if (isRunning) {
                 flagBtn.classList.add('disabled');
-                flagBtn.title = 'Program is running';
+                flagBtn.title = 'Please stop the program before re-running';
             } else {
                 flagBtn.classList.remove('disabled');
                 flagBtn.title = 'Run program';

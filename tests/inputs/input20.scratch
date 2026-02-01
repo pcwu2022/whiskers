@@ -1,0 +1,8 @@
+// Test: Stop all inside forever loop
+when green flag clicked
+    forever
+        if key space pressed then
+            stop all
+        end
+        wait 0.1 seconds
+    end

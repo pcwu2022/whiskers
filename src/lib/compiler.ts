@@ -174,6 +174,79 @@ export class ScratchTextCompiler {
         
         return errors;
     }
+    
+    // List of motion block names that are not allowed on Stage
+    private static MOTION_BLOCK_NAMES = [
+        "move", "turn", "turnRight", "turnLeft", "go", "goto", "goTo", "goToXY",
+        "goToRandom", "goToMouse", "goToSprite", "glide", "glideTo", "glideToXY",
+        "point", "pointInDirection", "pointTowards", "setX", "setY", "changeX",
+        "changeY", "ifOnEdgeBounce", "setRotationStyle"
+    ];
+    
+    // Check for motion blocks used in Stage (not allowed)
+    private validateStageNoMotionBlocks(spriteName: string, code: string, program: ReturnType<Parser["parse"]>): CompilerError[] {
+        const errors: CompilerError[] = [];
+        const lines = code.split('\n');
+        
+        const checkBlock = (block: BlockNode) => {
+            // Check if this block is a motion block
+            if (block.type === "motion" || ScratchTextCompiler.MOTION_BLOCK_NAMES.includes(block.name)) {
+                // Find the line containing this block keyword
+                const blockKeyword = block.name.toLowerCase();
+                // Search for the block in the code
+                for (let i = 0; i < lines.length; i++) {
+                    const line = lines[i].toLowerCase();
+                    // Check for various motion block patterns
+                    if (line.includes("move ") || 
+                        line.includes("turn ") || 
+                        line.includes("go to ") ||
+                        line.includes("goto ") ||
+                        line.includes("glide ") ||
+                        line.includes("point ") ||
+                        line.includes("set x ") ||
+                        line.includes("set y ") ||
+                        line.includes("change x ") ||
+                        line.includes("change y ") ||
+                        line.includes("if on edge") ||
+                        line.includes("rotation style")) {
+                        errors.push({
+                            code: "E110",
+                            message: `[${spriteName}] The Stage can't use motion blocks like 'move', 'turn', or 'go to'. Only sprites can move!`,
+                            line: i + 1,
+                            column: 1,
+                            severity: "error",
+                            suggestion: "💡 Motion blocks only work on sprites. If you want something to move, add a sprite and put the motion code there.",
+                        });
+                        break; // Only report once per block
+                    }
+                }
+            }
+            
+            // Recursively check nested blocks
+            if (block.body) {
+                for (const child of block.body) {
+                    checkBlock(child);
+                }
+            }
+            if (block.elseBody) {
+                for (const child of block.elseBody) {
+                    checkBlock(child);
+                }
+            }
+            if (block.next) {
+                checkBlock(block.next);
+            }
+        };
+        
+        // Check all scripts
+        for (const script of program.scripts) {
+            for (const block of script.blocks) {
+                checkBlock(block);
+            }
+        }
+        
+        return errors;
+    }
 
     // compile: Main method that takes Scratch-like text code as input and returns JavaScript code.
     compile(code: string): CompilationResult {
@@ -337,6 +410,16 @@ export class ScratchTextCompiler {
                         sprite.soundNames || []
                     );
                     allErrors.push(...validationErrors);
+                }
+
+                // Validate Stage doesn't use motion blocks
+                if (sprite.isStage) {
+                    const motionErrors = this.validateStageNoMotionBlocks(
+                        sprite.name,
+                        sprite.code,
+                        program
+                    );
+                    allErrors.push(...motionErrors);
                 }
 
                 this.debugger.log("info", `Parsed sprite: ${sprite.name}`, program);

@@ -7,7 +7,8 @@ export const SCRATCH_COLORS = {
     control: "#FFAB19",     // Light Orange
     sensing: "#5CB1D6",     // Sky Blue
     operators: "#59C059",   // Green
-    variables: "#FFB61A",   // Orange
+    variables: "#FF9C1A",   // Orange
+    lists: "#FF8C1A",       // Orange (not used)
     myBlocks: "#FF6680",    // Pink
     pen: "#0FBD8C",         // Teal (Pen extension)
 };

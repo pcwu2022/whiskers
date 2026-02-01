@@ -154,13 +154,14 @@ export const languageSelector = (monacoInstance: typeof monaco): languages.Compl
                     range: range,
                 },
                 {
-                    label: "when key pressed",
+                    label: "when _ key pressed",
                     kind: monacoInstance.languages.CompletionItemKind.Event,
                     insertText: "when ${1|space,up arrow,down arrow,left arrow,right arrow,any,a,b,c,d,e,f,g,h,i,j,k,l,m,n,o,p,q,r,s,t,u,v,w,x,y,z,0,1,2,3,4,5,6,7,8,9|} key pressed\n    $0\nend",
                     insertTextRules: monacoInstance.languages.CompletionItemInsertTextRule.InsertAsSnippet,
-                    documentation: "Run code when a specific key is pressed. Use space, up arrow, etc.",
+                    documentation: "Run code when a specific key is pressed. Use space, up arrow, etc. Syntax: when [space/arrow/letter] key pressed",
                     detail: "🟡 Events: Key press trigger",
                     range: range,
+                    filterText: "when key pressed",  // Match typing 'when' but show correct syntax
                 },
                 // Key constants for use in expressions and events
                 {
@@ -330,6 +331,8 @@ export const languageSelector = (monacoInstance: typeof monaco): languages.Compl
                     documentation: "Repeat code until a condition becomes true",
                     detail: "🟠 Control: Repeat until",
                     range: range,
+                    filterText: "repeat until",  // Only match when typing 'repeat u...'
+                    sortText: "repeat_until",    // Sort after 'repeat' in the list
                 },
                 {
                     label: "stop all",

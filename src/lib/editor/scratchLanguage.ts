@@ -5,7 +5,8 @@ export const languageConfiguration: languages.LanguageConfiguration = {
     // Words that trigger indent after Enter
     indentationRules: {
         // Increase indent after these patterns (blocks that have bodies)
-        increaseIndentPattern: /^\s*(when\s.*|repeat\s+\d+|repeat\s+until.*|forever|if\s.*then|if\s.*|else|define\s.*|when\s+flag\s+clicked|when\s+flagClicked|when\s+I\s+receive.*|when\s+I\s+start\s+as\s+a\s+clone|when\s+this\s+sprite\s+clicked|when\s+backdrop\s+switches\s+to.*|when\s+key\s+.*\s+pressed)\s*$/,
+        // Note: "if on edge, bounce" is NOT a control block, so we exclude it with negative lookahead
+        increaseIndentPattern: /^\s*(when\s.*|repeat\s+\d+|repeat\s+until.*|forever|if\s+(?!on\s+edge).*then|if\s+(?!on\s+edge).*|else|define\s.*|when\s+flag\s+clicked|when\s+flagClicked|when\s+I\s+receive.*|when\s+I\s+start\s+as\s+a\s+clone|when\s+this\s+sprite\s+clicked|when\s+backdrop\s+switches\s+to.*|when\s+key\s+.*\s+pressed)\s*$/,
         // Decrease indent patterns (typically "else" or "end" type blocks)
         decreaseIndentPattern: /^\s*(else)\s*$/,
     },
@@ -43,8 +44,8 @@ export const languageConfiguration: languages.LanguageConfiguration = {
             action: { indentAction: 1 },
         },
         {
-            // After 'if ... then' or just 'if ...'
-            beforeText: /^\s*if\s+.*(then)?\s*$/,
+            // After 'if ... then' or just 'if ...' (but NOT 'if on edge, bounce')
+            beforeText: /^\s*if\s+(?!on\s+edge).*?(then)?\s*$/,
             action: { indentAction: 1 },
         },
         {

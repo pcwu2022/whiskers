@@ -32,6 +32,12 @@ const scratchRuntime = {
     pressedKeys: {},
     dragMode: 'not draggable',
     activeSounds: [],  // Track currently playing audio elements
+    
+    // Script tracking for auto-stop feature
+    activeScripts: 0,           // Number of currently running scripts
+    activeForeverLoops: 0,      // Number of currently running forever loops
+    hasInteractiveHandlers: false,  // True if there are key/click/broadcast handlers
+    autoStopEnabled: true,      // Whether to auto-stop when all scripts finish
 
     // Initialize a sprite with full Scratch capabilities
     initSprite: function(name, options) {
@@ -141,26 +147,37 @@ const scratchRuntime = {
                 const halfHeight = 15 * (this.size / 100);
                 const stageHalfWidth = self.stage.width / 2;
                 const stageHalfHeight = self.stage.height / 2;
+                const epsilon = 0.5; // Small buffer to prevent re-triggering
                 
+                let bounced = false;
+                
+                // Check left/right edges (vertical walls) - flip X component: direction = -direction
                 if (this.x + halfWidth > stageHalfWidth) {
-                    this.x = stageHalfWidth - halfWidth;
-                    this.direction = 180 - this.direction;
+                    this.x = stageHalfWidth - halfWidth - epsilon;
+                    this.direction = -this.direction;
+                    bounced = true;
+                } else if (this.x - halfWidth < -stageHalfWidth) {
+                    this.x = -stageHalfWidth + halfWidth + epsilon;
+                    this.direction = -this.direction;
+                    bounced = true;
                 }
-                if (this.x - halfWidth < -stageHalfWidth) {
-                    this.x = -stageHalfWidth + halfWidth;
-                    this.direction = 180 - this.direction;
-                }
+                
+                // Check top/bottom edges (horizontal walls) - flip Y component: direction = 180 - direction
                 if (this.y + halfHeight > stageHalfHeight) {
-                    this.y = stageHalfHeight - halfHeight;
-                    this.direction = -this.direction;
+                    this.y = stageHalfHeight - halfHeight - epsilon;
+                    this.direction = 180 - this.direction;
+                    bounced = true;
+                } else if (this.y - halfHeight < -stageHalfHeight) {
+                    this.y = -stageHalfHeight + halfHeight + epsilon;
+                    this.direction = 180 - this.direction;
+                    bounced = true;
                 }
-                if (this.y - halfHeight < -stageHalfHeight) {
-                    this.y = -stageHalfHeight + halfHeight;
-                    this.direction = -this.direction;
+                
+                if (bounced) {
+                    this.direction = ((this.direction % 360) + 360) % 360;
+                    self.updateSpritePosition(name);
+                    self.updateSpriteTransform(name);
                 }
-                this.direction = ((this.direction % 360) + 360) % 360;
-                self.updateSpritePosition(name);
-                self.updateSpriteTransform(name);
             },
             setRotationStyle: function(style) {
                 this.rotationStyle = style;
@@ -598,7 +615,7 @@ const scratchRuntime = {
             const self = this;
             this.events['cloneStart_' + spriteName].forEach(function(callback) {
                 self.currentSprite = cloneId;
-                callback();
+                self.trackScript(callback)();
             });
         }
         
@@ -695,8 +712,10 @@ const scratchRuntime = {
         document.addEventListener('keydown', function(e) {
             self.pressedKeys[e.key.toLowerCase()] = true;
             const keyEvent = 'keyPressed_' + e.key.toLowerCase();
-            if (self.events[keyEvent] && Array.isArray(self.events[keyEvent])) {
-                self.events[keyEvent].forEach(function(callback) { callback(); });
+            if (self.running && self.events[keyEvent] && Array.isArray(self.events[keyEvent])) {
+                self.events[keyEvent].forEach(function(callback) { 
+                    self.trackScript(callback)(); 
+                });
             }
         });
         
@@ -709,8 +728,10 @@ const scratchRuntime = {
             const target = e.target;
             if (target && target.id && target.id.startsWith('sprite-')) {
                 const spriteName = target.id.replace('sprite-', '');
-                if (self.events['spriteClicked_' + spriteName]) {
-                    self.events['spriteClicked_' + spriteName].forEach(function(callback) { callback(); });
+                if (self.running && self.events['spriteClicked_' + spriteName]) {
+                    self.events['spriteClicked_' + spriteName].forEach(function(callback) { 
+                        self.trackScript(callback)(); 
+                    });
                 }
             }
         });
@@ -775,10 +796,15 @@ const scratchRuntime = {
             el.remove();
         });
         
+        // Reset script tracking
+        this.activeScripts = 0;
+        this.activeForeverLoops = 0;
+        
         console.log('🚩 Green flag clicked!');
         this.greenFlagHandlers.forEach(function(handler) {
             try {
-                handler();
+                // Wrap handler in tracking
+                self.trackScript(handler)();
             } catch (e) {
                 console.error('Error in green flag handler:', e);
             }
@@ -788,6 +814,8 @@ const scratchRuntime = {
     // Stop all scripts
     stopAll: function() {
         this.running = false;
+        this.activeScripts = 0;  // Reset active scripts count
+        this.activeForeverLoops = 0;  // Reset forever loops count
         // Delete all clones
         const self = this;
         this.clones.slice().forEach(function(clone) {
@@ -819,17 +847,21 @@ const scratchRuntime = {
 
     // Broadcasting system
     broadcast: function(message) {
+        const self = this;
         console.log('📢 Broadcasting: ' + message);
         if (this.broadcasts[message] && Array.isArray(this.broadcasts[message])) {
-            this.broadcasts[message].forEach(function(callback) { callback(); });
+            this.broadcasts[message].forEach(function(callback) { 
+                self.trackScript(callback)(); 
+            });
         }
     },
     
     broadcastAndWait: async function(message) {
+        const self = this;
         console.log('📢 Broadcasting and waiting: ' + message);
         if (this.broadcasts[message] && Array.isArray(this.broadcasts[message])) {
             const promises = this.broadcasts[message].map(function(callback) {
-                return Promise.resolve(callback());
+                return Promise.resolve(self.trackScript(callback)());
             });
             await Promise.all(promises);
         }
@@ -841,6 +873,8 @@ const scratchRuntime = {
             this.broadcasts[message] = [];
         }
         this.broadcasts[message].push(callback);
+        // Broadcasts can be triggered at any time, so they're interactive
+        this.hasInteractiveHandlers = true;
     },
 
     // Register an event handler
@@ -849,6 +883,55 @@ const scratchRuntime = {
             this.events[event] = [];
         }
         this.events[event].push(callback);
+        
+        // Check if this is an interactive event handler that should keep the program alive
+        // Interactive events: key presses, sprite clicks, clone start (clones can be created anytime)
+        if (event.startsWith('keyPressed_') || 
+            event.startsWith('spriteClicked_') || 
+            event.startsWith('cloneStart_')) {
+            this.hasInteractiveHandlers = true;
+        }
+    },
+    
+    // Script tracking - wrap a script function to track when it starts/finishes
+    trackScript: function(scriptFn) {
+        const self = this;
+        return async function() {
+            self.activeScripts++;
+            try {
+                await scriptFn.apply(this, arguments);
+            } catch (e) {
+                // Script might be interrupted by stopAll, that's OK
+                if (self.running) {
+                    console.error('Script error:', e);
+                }
+            } finally {
+                self.activeScripts--;
+                self.checkAutoStop();
+            }
+        };
+    },
+    
+    // Track forever loop start/end
+    startForeverLoop: function() {
+        this.activeForeverLoops++;
+    },
+    
+    endForeverLoop: function() {
+        this.activeForeverLoops--;
+        this.checkAutoStop();
+    },
+    
+    // Check if we should auto-stop (all scripts done, no forever loops, no interactive handlers)
+    checkAutoStop: function() {
+        if (this.autoStopEnabled && 
+            this.running && 
+            this.activeScripts === 0 && 
+            this.activeForeverLoops === 0 &&
+            !this.hasInteractiveHandlers) {
+            console.log('✨ All scripts finished, auto-stopping');
+            this.stopAll();
+        }
     },
 
     // Variable display management

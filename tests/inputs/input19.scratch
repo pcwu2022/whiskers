@@ -1,0 +1,6 @@
+// Test: If on edge, bounce motion block
+when green flag clicked
+    forever
+        move 10 steps
+        if on edge, bounce
+    end

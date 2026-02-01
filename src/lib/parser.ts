@@ -591,74 +591,83 @@ export class Parser {
 
     // isBlockStart: Checks if the current token can start a block
     private isBlockStart(): boolean {
-        if (!this.match(TokenType.KEYWORD)) return false;
+        // Keywords are the primary block starters
+        if (this.match(TokenType.KEYWORD)) {
+            const blockStartKeywords = [
+                // Events
+                "when",
+                "broadcast",
+                "receive",
+                
+                // Motion
+                "move",
+                "turn",
+                "go",
+                "goto",
+                "glide",
+                "point",
+                
+                // Looks
+                "say",
+                "think",
+                "show",
+                "hide",
+                "switch",
+                "change",
+                "set",
+                "clear",
+                "next",
+                
+                // Sound
+                "play",
+                "start",
+                "stop",
+                
+                // Control
+                "wait",
+                "repeat",
+                "forever",
+                "if",
+                "else",
+                "until",
+                "create",
+                "delete",
+                
+                // Sensing
+                "ask",
+                "touching",
+                "reset",
+                
+                // Variables
+                "var",
+                "variable",
+                "add",
+                "insert",
+                "replace",
+                
+                // Operators (rarely start blocks)
+                "join",
+                "pick",
+                
+                // Pen
+                "pen",
+                "stamp",
+                "erase",
+                
+                // Custom
+                "define",
+                "call",
+            ];
 
-        const blockStartKeywords = [
-            // Events
-            "when",
-            "broadcast",
-            "receive",
-            
-            // Motion
-            "move",
-            "turn",
-            "go",
-            "goto",
-            "glide",
-            "point",
-            
-            // Looks
-            "say",
-            "think",
-            "show",
-            "hide",
-            "switch",
-            "change",
-            "set",
-            "clear",
-            "next",
-            
-            // Sound
-            "play",
-            "start",
-            "stop",
-            
-            // Control
-            "wait",
-            "repeat",
-            "forever",
-            "if",
-            "else",
-            "until",
-            "create",
-            "delete",
-            
-            // Sensing
-            "ask",
-            "touching",
-            "reset",
-            
-            // Variables
-            "var",
-            "variable",
-            "add",
-            "insert",
-            "replace",
-            
-            // Operators (rarely start blocks)
-            "join",
-            "pick",
-            
-            // Pen
-            "pen",
-            "stamp",
-            "erase",
-            
-            // Custom
-            "define",
-        ];
-
-        return blockStartKeywords.includes(this.current.value);
+            return blockStartKeywords.includes(this.current.value);
+        }
+        
+        // IDENTIFIER can start a block (procedure call)
+        if (this.match(TokenType.IDENTIFIER)) {
+            return true;
+        }
+        
+        return false;
     }
 
     // parseBlock: Parses a single block.
@@ -668,8 +677,54 @@ export class Parser {
             return null;
         }
 
-        // Get the block name (keyword)
-        let blockKeyword = this.consume(TokenType.KEYWORD, "Expected block keyword").value;
+        // Get the block name - could be a keyword or identifier (procedure call)
+        let blockKeyword: string;
+        let isProcedureCall = false;
+        
+        if (this.match(TokenType.IDENTIFIER)) {
+            // This is a procedure call (e.g., "check threshold value")
+            blockKeyword = this.advance().value;
+            isProcedureCall = true;
+        } else {
+            blockKeyword = this.consume(TokenType.KEYWORD, "Expected block keyword").value;
+        }
+        
+        // If this is a procedure call, handle it specially
+        if (isProcedureCall) {
+            // Parse procedure call arguments (remaining identifiers until newline/indent/dedent)
+            const args: (string | number | BlockNode)[] = [];
+            while (!this.isAtEnd() && 
+                   !this.match(TokenType.NEWLINE) && 
+                   !this.match(TokenType.INDENT) && 
+                   !this.match(TokenType.DEDENT)) {
+                this.skipIrrelevant();
+                if (this.isAtEnd() || this.match(TokenType.NEWLINE) || 
+                    this.match(TokenType.INDENT) || this.match(TokenType.DEDENT)) break;
+                    
+                if (this.match(TokenType.IDENTIFIER) || this.match(TokenType.KEYWORD)) {
+                    const argName = this.advance().value;
+                    // Check if this identifier is a declared variable - if so, prefix with $
+                    if (this.declaredVariables.has(argName)) {
+                        args.push(`$${argName}`);
+                    } else {
+                        // Treat as a literal argument (e.g., procedure name itself)
+                        args.push(argName);
+                    }
+                } else if (this.match(TokenType.NUMBER)) {
+                    args.push(parseFloat(this.advance().value));
+                } else if (this.match(TokenType.STRING)) {
+                    args.push(this.advance().value);
+                } else {
+                    break;
+                }
+            }
+            
+            return {
+                type: "procedure",
+                name: "call",
+                args: [blockKeyword, ...args],
+            };
+        }
 
         // Normalize multi-word block keywords (e.g., 'turn right' -> 'turnRight', 'repeat until' -> 'repeatUntil')
         if (blockKeyword === "turn") {
@@ -745,6 +800,27 @@ export class Parser {
         } else if (blockKeyword === "glide") {
             // Handle "glide N secs to x: y:" or "glide N secs to random position" etc
             blockKeyword = "glide";
+        } else if (blockKeyword === "if") {
+            // Check for "if on edge, bounce" - this is a MOTION block, not a control block!
+            this.skipIrrelevant();
+            if (!this.isAtEnd() && this.matchKeyword("on")) {
+                this.advance(); // consume "on"
+                this.skipIrrelevant();
+                if (!this.isAtEnd() && this.matchKeyword("edge")) {
+                    this.advance(); // consume "edge"
+                    this.skipIrrelevant();
+                    // Handle optional comma: "if on edge, bounce"
+                    if (!this.isAtEnd() && this.match(TokenType.COMMA)) {
+                        this.advance(); // consume comma
+                        this.skipIrrelevant();
+                    }
+                    if (!this.isAtEnd() && this.matchKeyword("bounce")) {
+                        this.advance(); // consume "bounce"
+                        blockKeyword = "ifOnEdgeBounce";
+                    }
+                }
+            }
+            // If not "if on edge, bounce", it stays as "if" (control block)
         } else if (blockKeyword === "point") {
             // Handle "point in direction N" or "point towards X"
             this.skipIrrelevant();;
@@ -1172,6 +1248,9 @@ export class Parser {
         } else if (blockKeyword === "var" || blockKeyword === "variable") {
             // Check for built-in reporter names and raise error
             args = this.parseVarBlockArguments();
+        } else if (blockKeyword === "call") {
+            // Parse "call procName arg1 arg2..." - procName is not validated as variable
+            args = this.parseCallBlockArguments();
         } else if (blockKeyword === "goToXY") {
             // Parse "x: N y: N" format
             args = this.parseGoToXYArguments();
@@ -1183,6 +1262,47 @@ export class Parser {
             args = this.parseLayersArguments();
         } else {
             args = this.parseBlockArguments();
+        }
+        
+        // Post-process "say/think ... for N seconds" pattern
+        // Example: say "Hello" for 2 seconds -> ["Hello", "for", 2, "seconds"] -> ["Hello", 2]
+        // Example: say val * 2 for 1 seconds -> ["$val", "*", 2, "for", 1, "seconds"] -> [expression, 1]
+        if ((blockKeyword === "say" || blockKeyword === "think") && args.length >= 2) {
+            const forIndex = args.findIndex(a => a === "for");
+            if (forIndex >= 1) {
+                // Get all args before "for" - this is the message
+                const messageArgs = args.slice(0, forIndex);
+                // Get the duration (first arg after "for" that's a number)
+                let duration: number | string | BlockNode = 1; // default
+                for (let i = forIndex + 1; i < args.length; i++) {
+                    const arg = args[i];
+                    if (typeof arg === "number" || (typeof arg === "object" && arg !== null)) {
+                        duration = arg;
+                        break;
+                    } else if (typeof arg === "string" && arg.startsWith("$")) {
+                        // Variable reference as duration
+                        duration = arg;
+                        break;
+                    }
+                }
+                
+                // Build the message - if single arg, use as-is; if multiple, create expression block
+                let message: string | number | BlockNode;
+                if (messageArgs.length === 1) {
+                    message = messageArgs[0];
+                } else {
+                    // Create an expression block to hold the computed message
+                    message = {
+                        type: "operator" as const,
+                        name: "expression",
+                        args: messageArgs
+                    } as BlockNode;
+                }
+                
+                args.length = 0;
+                args.push(message, duration);
+                blockKeyword = blockKeyword === "say" ? "sayFor" : "thinkFor";
+            }
         }
 
         // Create the block node
@@ -1204,8 +1324,8 @@ export class Parser {
         
         this.skipIrrelevant();
         
-        // Expect "x:" or "x" followed by number, then "y:" or "y" followed by number
-        // Pattern: x: 100 y: 50  OR  x 100 y 50
+        // Expect "x:" or "x" followed by value, then "y:" or "y" followed by value
+        // Pattern: x: 100 y: 50  OR  x: pick random -200 to 200 y: pick random -150 to 150
         
         // Skip 'x' or 'x:' if present
         if (!this.isAtEnd() && this.match(TokenType.KEYWORD) && (this.current.value === "x" || this.current.value === "x:")) {
@@ -1219,14 +1339,8 @@ export class Parser {
             this.skipIrrelevant();
         }
         
-        // Get x value
-        if (!this.isAtEnd() && this.match(TokenType.NUMBER)) {
-            args.push(parseFloat(this.advance().value));
-        } else if (!this.isAtEnd() && this.match(TokenType.IDENTIFIER)) {
-            args.push(this.advance().value);
-        } else {
-            args.push(0); // default
-        }
+        // Get x value - could be number, identifier, variable, or inline operator like "pick random"
+        args.push(this.parseCoordinateValue());
         
         this.skipIrrelevant();
         
@@ -1242,16 +1356,52 @@ export class Parser {
             this.skipIrrelevant();
         }
         
-        // Get y value
-        if (!this.isAtEnd() && this.match(TokenType.NUMBER)) {
-            args.push(parseFloat(this.advance().value));
-        } else if (!this.isAtEnd() && this.match(TokenType.IDENTIFIER)) {
-            args.push(this.advance().value);
-        } else {
-            args.push(0); // default
-        }
+        // Get y value - could be number, identifier, variable, or inline operator like "pick random"
+        args.push(this.parseCoordinateValue());
         
         return args;
+    }
+    
+    // Helper to parse a coordinate value (number, variable, or inline operator like "pick random")
+    private parseCoordinateValue(): string | number | BlockNode {
+        this.skipIrrelevant();
+        
+        if (this.isAtEnd()) return 0;
+        
+        // Check for "pick random" inline operator
+        if (this.matchKeyword("pick")) {
+            const inlineOp = this.tryParseInlineOperator();
+            if (inlineOp) return inlineOp;
+        }
+        
+        // Check for parenthesized expression
+        if (this.match(TokenType.PARENTHESIS_OPEN)) {
+            return this.parseExpression();
+        }
+        
+        // Check for number
+        if (this.match(TokenType.NUMBER)) {
+            return parseFloat(this.advance().value);
+        }
+        
+        // Check for negative number
+        if (this.match(TokenType.OPERATOR) && this.current.value === "-") {
+            this.advance();
+            if (this.match(TokenType.NUMBER)) {
+                return -parseFloat(this.advance().value);
+            }
+        }
+        
+        // Check for identifier (variable reference)
+        if (this.match(TokenType.IDENTIFIER)) {
+            const name = this.advance().value;
+            if (this.declaredVariables.has(name)) {
+                return `$${name}`;
+            }
+            return name;
+        }
+        
+        return 0; // default
     }
     
     // Parse "N secs to x: N y: N" arguments for glide block
@@ -1393,6 +1543,89 @@ export class Parser {
                 args.push(this.advance().value);
             } else if (this.match(TokenType.PARENTHESIS_OPEN)) {
                 args.push(this.parseExpression());
+            }
+        }
+        
+        return args;
+    }
+
+    // Parse arguments for call block: call procName arg1 arg2 ...
+    // First argument is procedure name (not validated as variable)
+    // Subsequent arguments can be variables, numbers, strings, or expressions
+    private parseCallBlockArguments(): (string | number | BlockNode)[] {
+        const args: (string | number | BlockNode)[] = [];
+        
+        this.skipIrrelevant();
+        
+        // First argument: procedure name (identifier, not validated as variable)
+        if (this.match(TokenType.IDENTIFIER)) {
+            args.push(this.advance().value);
+        } else {
+            // Procedure name is required
+            return args;
+        }
+        
+        // Parse remaining arguments as raw tokens, then post-process into expressions
+        const rawArgs: (string | number | BlockNode)[] = [];
+        
+        while (!this.isAtEnd()) {
+            this.skipIrrelevant();
+            
+            if (this.isAtEnd()) break;
+            
+            // Stop at indent/dedent or end keyword
+            if (this.match(TokenType.INDENT) || this.match(TokenType.DEDENT)) break;
+            if (this.matchKeyword("end")) break;
+            
+            // Stop if we hit a new block-starting keyword
+            if (this.match(TokenType.KEYWORD) && this.isBlockStart()) break;
+            
+            // Parse different argument types
+            if (this.match(TokenType.STRING)) {
+                rawArgs.push(this.advance().value);
+            } else if (this.match(TokenType.NUMBER)) {
+                rawArgs.push(parseFloat(this.advance().value));
+            } else if (this.match(TokenType.IDENTIFIER)) {
+                const identifierName = this.advance().value;
+                // Check if it's a declared variable or list
+                if (this.declaredVariables.has(identifierName)) {
+                    rawArgs.push(`$${identifierName}`);
+                } else if (this.declaredLists.has(identifierName)) {
+                    rawArgs.push(`#${identifierName}`);
+                } else {
+                    // Undeclared - could be procedure parameter, push as-is
+                    rawArgs.push(`$${identifierName}`);
+                }
+            } else if (this.match(TokenType.PARENTHESIS_OPEN)) {
+                // Expression in parentheses
+                rawArgs.push(this.parseExpression());
+            } else if (this.match(TokenType.OPERATOR)) {
+                // Operator - add to raw args for expression building
+                rawArgs.push(this.advance().value);
+            } else {
+                // Unrecognized token, stop parsing arguments
+                break;
+            }
+        }
+        
+        // Post-process: combine rawArgs into expressions where needed
+        // Simple heuristic: if there are operators, wrap everything in an expression block
+        const hasOperator = rawArgs.some(a => typeof a === "string" && ["+", "-", "*", "/", "%", "mod"].includes(a));
+        
+        if (rawArgs.length > 0) {
+            if (hasOperator && rawArgs.length > 1) {
+                // Create an expression block for the arguments
+                args.push({
+                    type: "operator" as const,
+                    name: "expression",
+                    args: rawArgs
+                } as BlockNode);
+            } else if (rawArgs.length === 1) {
+                // Single argument - add as-is
+                args.push(rawArgs[0]);
+            } else {
+                // Multiple args without operators - add them all
+                args.push(...rawArgs);
             }
         }
         
@@ -2114,9 +2347,10 @@ export class Parser {
         // Expect the block name (identifier)
         const blockName = this.consume(TokenType.IDENTIFIER, "Expected custom block name").value;
 
-        // Parse parameter list if available
+        // Parse parameter list - bash-style (no parentheses): define greet name times
         const parameters: string[] = [];
 
+        // Check for parentheses-style parameters (legacy support)
         if (!this.isAtEnd() && this.match(TokenType.PARENTHESIS_OPEN)) {
             this.advance(); // Skip '('
 
@@ -2134,11 +2368,32 @@ export class Parser {
             if (!this.isAtEnd()) {
                 this.advance(); // Skip ')'
             }
+        } else {
+            // Parse bash-style parameters: define greet name times
+            // Parameters are identifiers OR keywords (like "name", "times") until we hit NEWLINE or INDENT
+            this.skipIrrelevant();
+            while (!this.isAtEnd() && 
+                   !this.match(TokenType.NEWLINE) && 
+                   !this.match(TokenType.INDENT) &&
+                   !this.match(TokenType.DEDENT)) {
+                if (this.match(TokenType.IDENTIFIER) || this.match(TokenType.KEYWORD)) {
+                    const paramName = this.advance().value;
+                    parameters.push(paramName);
+                    // Add parameters to declared variables for the procedure scope
+                    this.declaredVariables.add(paramName);
+                } else {
+                    break; // Stop if we hit something unexpected
+                }
+                this.skipIrrelevant();
+            }
         }
 
-        // Create a custom block script
-        const customScript: Script = {
-            blocks: [],
+        // Create the define block with body
+        const defineBlock: BlockNode = {
+            type: "custom",
+            name: "define",
+            args: [blockName, ...parameters],
+            body: [],
         };
 
         // Parse the custom block body
@@ -2147,25 +2402,174 @@ export class Parser {
         if (!this.isAtEnd() && this.match(TokenType.INDENT)) {
             this.advance(); // Skip indent
 
-            // Reset indentation for parsing this block
-            const oldIndentLevel = this.indentLevel;
-            this.indentLevel = 1;
-
-            // Parse the body of the custom block
-            this.parseScriptBlocks(customScript);
-
-            // Restore indentation level
-            this.indentLevel = oldIndentLevel;
+            // Parse procedure body using parseScriptBodyWithinProcedure helper
+            defineBlock.body = this.parseProcedureBody();
         }
 
-        // Add this custom block to the program
-        // For now, we'll add it as a special script with metadata
-        customScript.blocks.unshift({
-            type: "custom",
-            name: "define",
-            args: [blockName, ...parameters],
-        });
+        // Skip any trailing 'end' keyword
+        this.skipIrrelevant();
+        if (!this.isAtEnd() && this.matchKeyword("end")) {
+            this.advance();
+        }
+
+        // Create script with just the define block (body is inside the block)
+        const customScript: Script = {
+            blocks: [defineBlock],
+        };
 
         program.scripts.push(customScript);
+    }
+
+    /**
+     * Parse procedure body - handles C-blocks (if, repeat, forever) with their nested bodies
+     * Returns when it sees DEDENT that exits the procedure body level, or 'end' keyword
+     */
+    private parseProcedureBody(): BlockNode[] {
+        const blocks: BlockNode[] = [];
+        let lastBlock: BlockNode | null = null;
+        let indentLevel = 1; // Start at 1 since we're inside the procedure
+
+        while (!this.isAtEnd()) {
+            this.skipIrrelevant();
+            
+            if (this.isAtEnd()) break;
+            
+            // Check for 'end' keyword at base level
+            if (this.matchKeyword("end") && indentLevel <= 1) {
+                this.advance();
+                break;
+            }
+            
+            // Handle DEDENT
+            if (this.match(TokenType.DEDENT)) {
+                this.advance();
+                indentLevel = Math.max(0, indentLevel - 1);
+                
+                // Check for 'else' after DEDENT
+                this.skipIrrelevant();
+                if (!this.isAtEnd() && this.matchKeyword("else")) {
+                    // The previous block should be an 'if' - find it
+                    const ifBlock = lastBlock;
+                    if (ifBlock && ifBlock.name === "if") {
+                        this.advance(); // Consume 'else'
+                        ifBlock.name = "ifElse";
+                        
+                        // Check for INDENT (else body)
+                        this.skipIrrelevant();
+                        if (!this.isAtEnd() && this.match(TokenType.INDENT)) {
+                            this.advance();
+                            indentLevel++;
+                            // Sync this.indentLevel for parseElseBody
+                            this.indentLevel = indentLevel;
+                            // Parse else body recursively
+                            ifBlock.elseBody = this.parseElseBody();
+                            // Sync back after parseElseBody
+                            indentLevel = this.indentLevel;
+                            // After else body, dedent happens and we continue
+                        }
+                        continue;
+                    }
+                }
+                
+                // If we've exited the procedure body
+                if (indentLevel <= 0) break;
+                continue;
+            }
+            
+            // Handle INDENT - this is for C-block body (if body, repeat body, etc.)
+            if (this.match(TokenType.INDENT)) {
+                this.advance();
+                indentLevel++;
+                
+                // Find the last C-block to attach body to
+                if (lastBlock && this.isCBlock(lastBlock.name)) {
+                    // Parse the body of this C-block
+                    const cBlockBody = this.parseCBlockBody(lastBlock.name);
+                    
+                    // Attach body to the C-block
+                    // For 'if', the body goes in 'body' property
+                    // We don't use args for body in this context
+                    if (!lastBlock.body) {
+                        lastBlock.body = [];
+                    }
+                    lastBlock.body = cBlockBody;
+                    
+                    // After parsing C-block body, indentLevel should have been decremented
+                    // by the DEDENT handling in parseCBlockBody
+                    indentLevel = Math.max(1, indentLevel - 1);
+                }
+                continue;
+            }
+            
+            // Parse a block at this level
+            if (this.isBlockStart()) {
+                const block = this.parseBlock();
+                if (block) {
+                    if (lastBlock) {
+                        lastBlock.next = block;
+                    } else {
+                        blocks.push(block);
+                    }
+                    lastBlock = block;
+                }
+            } else {
+                this.advance(); // Skip unrecognized tokens
+            }
+        }
+        
+        return blocks;
+    }
+
+    /**
+     * Parse body of a C-block (if, repeat, forever) until DEDENT
+     * Returns the array of blocks that make up the body
+     */
+    private parseCBlockBody(parentBlockName: string): BlockNode[] {
+        const blocks: BlockNode[] = [];
+        let lastBlock: BlockNode | null = null;
+
+        while (!this.isAtEnd()) {
+            this.skipIrrelevant();
+            
+            if (this.isAtEnd()) break;
+            
+            // End of body: DEDENT
+            if (this.match(TokenType.DEDENT)) {
+                // Don't consume - let caller handle
+                break;
+            }
+            
+            // Handle nested INDENT (for nested C-blocks)
+            if (this.match(TokenType.INDENT)) {
+                this.advance();
+                
+                // Find the last C-block to attach body to
+                if (lastBlock && this.isCBlock(lastBlock.name)) {
+                    const nestedBody = this.parseCBlockBody(lastBlock.name);
+                    if (!lastBlock.body) {
+                        lastBlock.body = [];
+                    }
+                    lastBlock.body = nestedBody;
+                }
+                continue;
+            }
+            
+            // Parse blocks at this level
+            if (this.isBlockStart()) {
+                const block = this.parseBlock();
+                if (block) {
+                    if (lastBlock) {
+                        lastBlock.next = block;
+                    } else {
+                        blocks.push(block);
+                    }
+                    lastBlock = block;
+                }
+            } else {
+                this.advance();
+            }
+        }
+        
+        return blocks;
     }
 }

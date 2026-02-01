@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef, useEffect, useCallback } from "react";
+import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import Editor, { useMonaco } from "@monaco-editor/react";
 import * as monaco from "monaco-editor";
 import Link from "next/link";
@@ -104,6 +104,83 @@ function sanitizeCodeForDisplay(code: string): string {
     );
 }
 
+// Helper to extract variable and list names from code
+function extractVariablesFromCode(code: string): { variables: string[], lists: string[] } {
+    const variables: string[] = [];
+    const lists: string[] = [];
+    
+    // Match variable declarations: var myVar = value
+    const varRegex = /^\s*var\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*=/gm;
+    let match;
+    while ((match = varRegex.exec(code)) !== null) {
+        if (!variables.includes(match[1])) {
+            variables.push(match[1]);
+        }
+    }
+    
+    // Match list declarations: list myList = []
+    const listRegex = /^\s*list\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*=/gm;
+    while ((match = listRegex.exec(code)) !== null) {
+        if (!lists.includes(match[1])) {
+            lists.push(match[1]);
+        }
+    }
+    
+    return { variables, lists };
+}
+
+// Helper to create enhanced toolbox categories with user-defined variables
+function createEnhancedToolboxCategories(
+    baseCategories: ToolboxCategory[],
+    variables: string[],
+    lists: string[]
+): ToolboxCategory[] {
+    // If no variables or lists, return base categories unchanged
+    if (variables.length === 0 && lists.length === 0) {
+        return baseCategories;
+    }
+    
+    // Create a copy of the categories
+    return baseCategories.map(category => {
+        if (category.name !== "Variables") {
+            return category;
+        }
+        
+        // Create variable reporter blocks
+        const variableBlocks: ToolboxCommand[] = variables.map(varName => ({
+            label: varName,
+            code: varName,
+            description: `Variable: ${varName}`,
+            blockType: "reporter" as BlockType,
+        }));
+        
+        // Create list reporter blocks
+        const listBlocks: ToolboxCommand[] = lists.map(listName => ({
+            label: listName,
+            code: listName,
+            description: `List: ${listName}`,
+            blockType: "reporter" as BlockType,
+        }));
+        
+        // Add user-defined blocks after the declaration blocks but before list operations
+        const baseCommands = category.commands;
+        const declarationBlocks = baseCommands.slice(0, 5); // var, set, change, show, hide
+        const listDeclarationBlocks = baseCommands.slice(5, 6); // list declaration
+        const listOperationBlocks = baseCommands.slice(6); // add, delete, etc.
+        
+        return {
+            ...category,
+            commands: [
+                ...declarationBlocks,
+                ...variableBlocks,
+                ...listDeclarationBlocks,
+                ...listBlocks,
+                ...listOperationBlocks,
+            ],
+        };
+    });
+}
+
 // ProjectNameModal and ResizeDivider have been moved to their own files
 
 export default function CodeEditor() {
@@ -116,6 +193,7 @@ export default function CodeEditor() {
     const [_loading, setLoading] = useState(false);
     const [compiled, setCompiled] = useState(false);
     const [_running, setRunning] = useState(false);
+    const [isRunning, setIsRunning] = useState(false);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
     const [compilerErrors, setCompilerErrors] = useState<CompilerError[]>([]);
     const [htmlContent, setHtmlContent] = useState<string | null>(null);
@@ -316,6 +394,8 @@ export default function CodeEditor() {
             } else if (event.data && event.data.type === 'scratch-ready') {
                 // Iframe is ready - send autostart immediately if pending
                 sendAutoStart();
+            } else if (event.data && event.data.type === 'scratch-running') {
+                setIsRunning(event.data.running);
             } else if (event.data && event.data.type === 'scratch-fullscreen') {
                 setIsFullscreen(event.data.enabled);
                 // Try to use browser fullscreen API
@@ -383,6 +463,27 @@ export default function CodeEditor() {
     // Get active sprite
     const activeSprite = project?.sprites.find((s) => s.id === project.activeSprite);
     const currentCode = activeSprite?.code || DEFAULT_SPRITE_CODE;
+    
+    // Extract variables from ALL sprites in the project and create enhanced toolbox
+    const enhancedToolboxCategories = useMemo(() => {
+        if (!project) return toolboxCategories;
+        
+        // Collect variables and lists from all sprites
+        const allVariables = new Set<string>();
+        const allLists = new Set<string>();
+        
+        for (const sprite of project.sprites) {
+            const { variables, lists } = extractVariablesFromCode(sprite.code);
+            variables.forEach(v => allVariables.add(v));
+            lists.forEach(l => allLists.add(l));
+        }
+        
+        return createEnhancedToolboxCategories(
+            toolboxCategories,
+            Array.from(allVariables),
+            Array.from(allLists)
+        );
+    }, [project]);
 
     // Handle editor mount
     const handleEditorDidMount = (editor: monaco.editor.IStandaloneCodeEditor, monacoRef: monacoType) => {
@@ -718,6 +819,22 @@ export default function CodeEditor() {
         });
     };
 
+    // Undo handler
+    const handleUndo = useCallback(() => {
+        if (editorRef.current) {
+            editorRef.current.trigger('keyboard', 'undo', null);
+            editorRef.current.focus();
+        }
+    }, []);
+
+    // Redo handler
+    const handleRedo = useCallback(() => {
+        if (editorRef.current) {
+            editorRef.current.trigger('keyboard', 'redo', null);
+            editorRef.current.focus();
+        }
+    }, []);
+
     // Start editing project name
     const startEditingName = () => {
         if (project) {
@@ -882,8 +999,34 @@ export default function CodeEditor() {
     }, [currentCode, monacoInstance]);
 
     const handleRun = async () => {
+        // Check if program is already running - prompt to stop first
+        if (isRunning) {
+            const shouldStop = window.confirm(
+                "A program is already running.\n\nStop it and run the new code?"
+            );
+            if (!shouldStop) {
+                return;
+            }
+            // Stop the running program
+            if (previewIframeRef.current?.contentWindow) {
+                previewIframeRef.current.contentWindow.postMessage({ type: 'scratch-stop' }, '*');
+            }
+            setIsRunning(false);
+        }
+
         setRunning(true);
         setErrorMessage(null);
+
+        // Check for event blocks in code before compiling (ignore stage, only check sprites)
+        const spriteCode = project?.sprites.filter(s => !s.isStage).map(s => s.code).join('\n') || '';
+        const hasEventBlocks = /when\s+(green\s+flag|.*key\s+pressed|this\s+sprite\s+clicked|I\s+receive|backdrop\s+switches|timer\s*>|I\s+start\s+as\s+a\s+clone)/i.test(spriteCode);
+        
+        if (!hasEventBlocks && spriteCode.trim()) {
+            notify.warning(
+                "Your sprites have no event blocks (like 'when green flag clicked'). " +
+                "Add an event block to make your code run!"
+            );
+        }
 
         const result = await handleCompile();
 
@@ -981,6 +1124,34 @@ export default function CodeEditor() {
                             </svg>
                         </a>
                     </Tooltip> */}
+
+                    {/* Undo/Redo Buttons */}
+                    <div className="flex items-center gap-1">
+                        <Tooltip content="Undo (Ctrl+Z)">
+                            <button
+                                onClick={handleUndo}
+                                className="p-1.5 rounded hover:bg-gray-700 transition-colors text-gray-400 hover:text-white"
+                                aria-label="Undo"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M3 7v6h6"/>
+                                    <path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/>
+                                </svg>
+                            </button>
+                        </Tooltip>
+                        <Tooltip content="Redo (Ctrl+Y)">
+                            <button
+                                onClick={handleRedo}
+                                className="p-1.5 rounded hover:bg-gray-700 transition-colors text-gray-400 hover:text-white"
+                                aria-label="Redo"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M21 7v6h-6"/>
+                                    <path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3L21 13"/>
+                                </svg>
+                            </button>
+                        </Tooltip>
+                    </div>
                 </div>
                 <div className="flex items-center gap-3">
                     <ProjectToolbar
@@ -1082,7 +1253,7 @@ export default function CodeEditor() {
                                         }
                                     `}</style>
                                     <div className="toolbox-scroll flex-1 overflow-y-auto">
-                                        {toolboxCategories.map((category) => (
+                                        {enhancedToolboxCategories.map((category) => (
                                             <div key={category.name} className="border-b border-gray-800">
                                                 {/* Category Header */}
                                                 <button
@@ -1209,6 +1380,7 @@ export default function CodeEditor() {
                                 minimap: { enabled: false },
                                 fontSize: 14,
                                 padding: { top: 10 },
+                                dropIntoEditor: { enabled: false }, // Disable Monaco's native drop to prevent $0 insertion
                             }}
                             onChange={(value) => updateCode(value || "")}
                             beforeMount={handleEditorWillMount}

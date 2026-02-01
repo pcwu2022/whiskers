@@ -220,6 +220,7 @@ export const blockTypeMap: Record<string, BlockType> = {
     stopOtherScripts: "control",
     createClone: "control",
     deleteClone: "control",
+    deleteThisClone: "control",
     whenCloneStarts: "event",
     create: "control",
     delete: "control",

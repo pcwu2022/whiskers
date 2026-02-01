@@ -1,0 +1,14 @@
+// Test: Custom block with if-else inside procedure body
+set value to 75
+set threshold to 50
+
+define check threshold value
+    if value > threshold then
+        say "Above" for 1 seconds
+    else
+        say "Below" for 1 seconds
+    end
+end
+
+when green flag clicked
+    check threshold value

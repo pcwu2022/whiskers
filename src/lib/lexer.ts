@@ -232,6 +232,7 @@ export class Lexer {
         // Custom blocks keywords
         "define",
         "procedure",
+        "call",
         "return",
         "run",
         "without",
