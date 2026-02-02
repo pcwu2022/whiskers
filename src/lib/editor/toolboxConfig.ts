@@ -221,18 +221,20 @@ export const toolboxCategories: ToolboxCategory[] = [
             { label: "call _", code: "call ⬤", description: "Call custom block", blockType: "statement" },
         ],
     },
-    {
-        name: "Pen",
-        color: SCRATCH_COLORS.pen,
-        icon: "",
-        commands: [
-            { label: "erase all", code: "erase all", description: "Clear all pen marks", blockType: "statement" },
-            { label: "stamp", code: "stamp", description: "Stamp sprite", blockType: "statement" },
-            { label: "pen down", code: "pen down", description: "Start drawing", blockType: "statement" },
-            { label: "pen up", code: "pen up", description: "Stop drawing", blockType: "statement" },
-            { label: "set pen color to _", code: 'set pen color to "⬤"', description: "Set pen color", blockType: "statement" },
-            { label: "change pen size by _", code: "change pen size by ⬤", description: "Change pen size", blockType: "statement" },
-            { label: "set pen size to _", code: "set pen size to ⬤", description: "Set pen size", blockType: "statement" },
-        ],
-    },
+    // Pen category temporarily disabled due to bugs
+    // TODO: Re-enable when pen extension is properly implemented
+    // {
+    //     name: "Pen",
+    //     color: SCRATCH_COLORS.pen,
+    //     icon: "",
+    //     commands: [
+    //         { label: "erase all", code: "erase all", description: "Clear all pen marks", blockType: "statement" },
+    //         { label: "stamp", code: "stamp", description: "Stamp sprite", blockType: "statement" },
+    //         { label: "pen down", code: "pen down", description: "Start drawing", blockType: "statement" },
+    //         { label: "pen up", code: "pen up", description: "Stop drawing", blockType: "statement" },
+    //         { label: "set pen color to _", code: 'set pen color to "⬤"', description: "Set pen color", blockType: "statement" },
+    //         { label: "change pen size by _", code: "change pen size by ⬤", description: "Change pen size", blockType: "statement" },
+    //         { label: "set pen size to _", code: "set pen size to ⬤", description: "Set pen size", blockType: "statement" },
+    //     ],
+    // },
 ];

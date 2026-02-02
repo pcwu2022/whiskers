@@ -28,6 +28,23 @@ async function loadDefaultCostumeData(isStage: boolean = false): Promise<string 
     }
 }
 
+// Helper to load an image as a base64 data URL
+async function loadImageAsBase64(url: string): Promise<string | null> {
+    try {
+        const response = await fetch(url);
+        const blob = await response.blob();
+        return new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result as string);
+            reader.onerror = () => resolve(null);
+            reader.readAsDataURL(blob);
+        });
+    } catch (error) {
+        console.error(`Failed to load image ${url}:`, error);
+        return null;
+    }
+}
+
 // Helper to load default costumes for all sprites in a project
 async function loadDefaultCostumesForProject(project: ScratchProject): Promise<ScratchProject> {
     const updatedSprites = await Promise.all(
@@ -237,6 +254,12 @@ export default function ProjectToolbar({
             updatedAt: project.updatedAt,
         }, null, 2));
 
+        // Load flag and stop images as base64 for embedding in HTML
+        const [flagBase64, stopBase64] = await Promise.all([
+            loadImageAsBase64("/flag.png"),
+            loadImageAsBase64("/stop.png"),
+        ]);
+
         // Compile the project and add the HTML
         try {
             const response = await fetch("/api/compile", {
@@ -257,8 +280,16 @@ export default function ProjectToolbar({
             });
             const data = await response.json();
             if (data.success && data.html) {
+                // Replace image paths with base64 data URLs for standalone HTML
+                let standaloneHtml = data.html;
+                if (flagBase64) {
+                    standaloneHtml = standaloneHtml.replace(/src="\/flag\.png"/g, `src="${flagBase64}"`);
+                }
+                if (stopBase64) {
+                    standaloneHtml = standaloneHtml.replace(/src="\/stop\.png"/g, `src="${stopBase64}"`);
+                }
                 // Add compiled HTML that can run standalone in a browser
-                zip.file(`${project.name}.html`, data.html);
+                zip.file(`${project.name}.html`, standaloneHtml);
             }
         } catch (error) {
             console.error("Failed to compile for download:", error);

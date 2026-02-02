@@ -1,6 +1,10 @@
 // HTML Template for Scratch Program Output
 // This template wraps the generated JavaScript code in an HTML page
 
+// Default paths for images (used in iframe preview)
+const DEFAULT_FLAG_SRC = "/flag.png";
+const DEFAULT_STOP_SRC = "/stop.png";
+
 // Generate an empty preview template (no code, but workable green flag for recompile)
 export function generateEmptyPreviewTemplate(): string {
     return generateHTMLTemplate(`
@@ -10,7 +14,16 @@ export function generateEmptyPreviewTemplate(): string {
     `);
 }
 
-export function generateHTMLTemplate(jsCode: string): string {
+// Options for HTML generation
+interface HTMLTemplateOptions {
+    flagImageSrc?: string;  // Base64 data URL or path for flag image
+    stopImageSrc?: string;  // Base64 data URL or path for stop image
+}
+
+export function generateHTMLTemplate(jsCode: string, options?: HTMLTemplateOptions): string {
+    const flagSrc = options?.flagImageSrc || DEFAULT_FLAG_SRC;
+    const stopSrc = options?.stopImageSrc || DEFAULT_STOP_SRC;
+    
     return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -267,8 +280,8 @@ export function generateHTMLTemplate(jsCode: string): string {
 <body>
     <div class="stage-container">
         <div class="controls">
-            <button id="flag-btn" class="control-btn flag-btn" title="Run program"><img src="/flag.png" alt="Run"></button>
-            <button id="stop-btn" class="control-btn stop-btn" title="Stop and Reset"><img src="/stop.png" alt="Stop"></button>
+            <button id="flag-btn" class="control-btn flag-btn" title="Run program"><img src="${flagSrc}" alt="Run"></button>
+            <button id="stop-btn" class="control-btn stop-btn" title="Stop and Reset"><img src="${stopSrc}" alt="Stop"></button>
             <button id="fullscreen-btn" class="control-btn fullscreen-btn" title="Toggle Fullscreen">⛶</button>
         </div>
         <div id="stage-wrapper">
@@ -277,7 +290,7 @@ export function generateHTMLTemplate(jsCode: string): string {
                     <!-- Sprites go here -->
                 </div>
                 <div id="stage-overlay">
-                    <div class="icon"><img src="/flag.png" width="50" height="50" alt="Run"></div>
+                    <div class="icon"><img src="${flagSrc}" width="50" height="50" alt="Run"></div>
                     <div class="message">Click the green flag to run</div>
                 </div>
             </div>
