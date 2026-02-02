@@ -18,8 +18,10 @@ import {
     setCurrentRole,
     UserRole,
 } from '@/lib/analytics';
+import { useTranslation } from '@/i18n';
 
 export default function LandingPage() {
+    const { t } = useTranslation();
     const [isMobile, setIsMobile] = useState(false);
     const [showBackToTop, setShowBackToTop] = useState(false);
     const [userRole, setUserRole] = useState<UserRole | null>(null);
@@ -82,12 +84,12 @@ export default function LandingPage() {
                 {/* Hero Section */}
                 <TrackedSection id="hero" className="hero-section">
                     <div className="hero-content">
-                        <h1 className="hero-title">From blocks to code</h1>
+                        <h1 className="hero-title">{t.landing.hero.title}</h1>
                         <button 
                             onClick={handleHeroCTAClick}
                             className="hero-cta"
                         >
-                            Real programming starts here
+                            {t.landing.hero.cta}
                             <span className="arrow">↓</span>
                         </button>
                     </div>
@@ -96,31 +98,31 @@ export default function LandingPage() {
                 {/* Role Selection Section */}
                 <TrackedSection id="role-selection" className="role-selection-section">
                     <div className="role-selection-content">
-                        <h2>I&apos;m a...</h2>
+                        <h2>{t.landing.roleSelection.title}</h2>
                         <div className="role-buttons">
                             <button
                                 onClick={() => handleRoleSelection('student')}
                                 className={`role-button ${userRole === 'student' ? 'active' : ''}`}
                             >
                                 <span className="role-icon"><img src="ip/student.png" alt="student icon" /></span>
-                                <span className="role-label">Student</span>
-                                <span className="role-desc">Ready to write real code</span>
+                                <span className="role-label">{t.landing.roleSelection.student}</span>
+                                <span className="role-desc">{t.landing.roleSelection.studentDesc}</span>
                             </button>
                             <button
                                 onClick={() => handleRoleSelection('parent')}
                                 className={`role-button ${userRole === 'parent' ? 'active' : ''}`}
                             >
                                 <span className="role-icon"><img src="ip/parent.png" alt="parent icon" /></span>
-                                <span className="role-label">Parent</span>
-                                <span className="role-desc">Helping my child learn</span>
+                                <span className="role-label">{t.landing.roleSelection.parent}</span>
+                                <span className="role-desc">{t.landing.roleSelection.parentDesc}</span>
                             </button>
                             <button
                                 onClick={() => handleRoleSelection('teacher')}
                                 className={`role-button ${userRole === 'teacher' ? 'active' : ''}`}
                             >
                                 <span className="role-icon"><img src="ip/teacher.png" alt="teacher icon" /></span>
-                                <span className="role-label">Teacher</span>
-                                <span className="role-desc">Bridging blocks to text</span>
+                                <span className="role-label">{t.landing.roleSelection.teacher}</span>
+                                <span className="role-desc">{t.landing.roleSelection.teacherDesc}</span>
                             </button>
                         </div>
                     </div>
@@ -192,7 +194,7 @@ export default function LandingPage() {
                 {/* Footer */}
                 <TrackedSection id="footer" className="landing-footer-wrapper">
                     <footer className="landing-footer">
-                        <p>Developed by <a href='https://pcwu2022.github.io'>Po-Chun Wu</a>. Empowering the next generation of programmers.</p>
+                        <p>{t.landing.footer.developedBy} <a href='https://pcwu2022.github.io'>{t.landing.footer.authorName}</a>. {t.landing.footer.mission}</p>
                     </footer>
                 </TrackedSection>
 
@@ -201,7 +203,7 @@ export default function LandingPage() {
                     <button
                         onClick={scrollToTop}
                         className="back-to-top"
-                        aria-label="Back to top"
+                        aria-label={t.landing.backToTop}
                     >
                         ↑
                     </button>

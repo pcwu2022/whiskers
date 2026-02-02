@@ -3,6 +3,7 @@
 import React, { useRef, useState, useCallback, useEffect } from "react";
 import { Sound, createSound } from "@/types/projectTypes";
 import { InputModal, Tooltip } from "./ui";
+import { useTranslation } from "@/i18n";
 
 interface SoundSidebarProps {
     sounds: Sound[];
@@ -19,6 +20,7 @@ export default function SoundSidebar({
     width,
     spriteName,
 }: SoundSidebarProps) {
+    const { t } = useTranslation();
     const fileInputRef = useRef<HTMLInputElement>(null);
     const audioRef = useRef<HTMLAudioElement | null>(null);
     const [playingId, setPlayingId] = useState<string | null>(null);
@@ -66,7 +68,7 @@ export default function SoundSidebar({
             console.log('[SoundUpload] Extension:', fileExt, 'isAudioByType:', isAudioByType, 'isAudioByExtension:', isAudioByExtension);
             
             if (!isAudioByType && !isAudioByExtension) {
-                alert(`"${file.name}" is not a recognized audio file.`);
+                alert(`"${file.name}" ${t.playground.soundSidebar.notAnAudio}`);
                 processedCount++;
                 return;
             }
@@ -313,7 +315,7 @@ export default function SoundSidebar({
                     className="w-full px-3 py-2 bg-pink-600 hover:bg-pink-700 text-white text-sm rounded transition-colors flex items-center justify-center gap-2"
                 >
                     <span>+</span>
-                    <span>Upload Sound</span>
+                    <span>{t.playground.soundSidebar.uploadSound}</span>
                 </button>
             </div>
 
@@ -361,7 +363,7 @@ export default function SoundSidebar({
 
                                 {/* Action Buttons */}
                                 <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <Tooltip content="Move Up">
+                                    <Tooltip content={t.playground.soundSidebar.moveUp}>
                                         <button
                                             onClick={() => handleMoveUp(index)}
                                             disabled={index === 0}
@@ -374,7 +376,7 @@ export default function SoundSidebar({
                                             ↑
                                         </button>
                                     </Tooltip>
-                                    <Tooltip content="Move Down">
+                                    <Tooltip content={t.playground.soundSidebar.moveDown}>
                                         <button
                                             onClick={() => handleMoveDown(index)}
                                             disabled={index === sounds.length - 1}
@@ -387,7 +389,7 @@ export default function SoundSidebar({
                                             ↓
                                         </button>
                                     </Tooltip>
-                                    <Tooltip content="Rename">
+                                    <Tooltip content={t.playground.soundSidebar.rename}>
                                         <button
                                             onClick={() => handleRename(index)}
                                             className="p-1 rounded text-xs bg-gray-700 hover:bg-gray-600 text-gray-300"
@@ -395,7 +397,7 @@ export default function SoundSidebar({
                                             ✏️
                                         </button>
                                     </Tooltip>
-                                    <Tooltip content="Delete">
+                                    <Tooltip content={t.playground.soundSidebar.delete}>
                                         <button
                                             onClick={() => handleDelete(index)}
                                             className="p-1 rounded text-xs bg-red-900 hover:bg-red-800 text-red-300"
@@ -413,11 +415,11 @@ export default function SoundSidebar({
             {/* Rename Modal */}
             <InputModal
                 isOpen={renameModal.isOpen}
-                title="Rename Sound"
-                message="Enter a new name for this sound:"
+                title={t.playground.soundSidebar.renameSoundTitle}
+                message={t.playground.soundSidebar.renameSoundMessage}
                 defaultValue={renameModal.currentName}
-                placeholder="Sound name"
-                confirmText="Rename"
+                placeholder={t.playground.soundSidebar.soundPlaceholder}
+                confirmText={t.playground.soundSidebar.renameButton}
                 onConfirm={handleRenameConfirm}
                 onCancel={() => setRenameModal({ isOpen: false, soundIndex: -1, currentName: "" })}
             />

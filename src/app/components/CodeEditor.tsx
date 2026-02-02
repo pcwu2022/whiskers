@@ -5,6 +5,9 @@ import Editor, { useMonaco } from "@monaco-editor/react";
 import * as monaco from "monaco-editor";
 import Link from "next/link";
 import { languageDef, languageConfiguration, languageSelector, registerScratchTheme, toolboxCategories, ToolboxCategory, ToolboxCommand, BlockType } from "@/lib/codeEditorConfig";
+import { useTranslation } from "@/i18n";
+import { useTranslatedToolbox } from "@/lib/editor/useTranslatedToolbox";
+import { createErrorTranslator } from "@/lib/editor/useTranslatedErrors";
 import FileTabs from "./FileTabs";
 import ProjectToolbar from "./ProjectToolbar";
 import ProjectNameModal from "./ProjectNameModal";
@@ -184,6 +187,11 @@ function createEnhancedToolboxCategories(
 // ProjectNameModal and ResizeDivider have been moved to their own files
 
 export default function CodeEditor() {
+    // i18n
+    const { t } = useTranslation();
+    const translatedToolboxCategories = useTranslatedToolbox();
+    const errorTranslator = useMemo(() => createErrorTranslator(t), [t]);
+
     // Project state
     const [project, setProject] = useState<ScratchProject | null>(null);
     const [isLoaded, setIsLoaded] = useState(false);
@@ -368,13 +376,13 @@ export default function CodeEditor() {
             if ((e.ctrlKey || e.metaKey) && e.key === 's') {
                 e.preventDefault();
                 // Project is already auto-saved, just show notification
-                notify.success("Project auto-saved to browser storage");
+                notify.success(t.playground.notifications.projectAutoSaved);
             }
         };
 
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [notify]);
+    }, [notify, t]);
 
     // Listen for messages from the preview iframe
     useEffect(() => {
@@ -408,11 +416,7 @@ export default function CodeEditor() {
                 // Runtime error occurred in the generated code
                 // This is likely a bug in our compiler, show a friendly message
                 console.error('Runtime error from preview:', event.data.message, event.data.details);
-                notify.error(
-                    "Oops! Something went wrong while running your code. " +
-                    "This might be a bug on our end — we're sorry about that! " +
-                    "Try simplifying your code or check for any unusual syntax."
-                );
+                notify.error(t.playground.notifications.runtimeError);
             }
         };
 
@@ -475,7 +479,7 @@ export default function CodeEditor() {
     
     // Extract variables from ALL sprites in the project and create enhanced toolbox
     const enhancedToolboxCategories = useMemo(() => {
-        if (!project) return toolboxCategories;
+        if (!project) return translatedToolboxCategories;
         
         // Collect variables and lists from all sprites
         const allVariables = new Set<string>();
@@ -488,11 +492,11 @@ export default function CodeEditor() {
         }
         
         return createEnhancedToolboxCategories(
-            toolboxCategories,
+            translatedToolboxCategories,
             Array.from(allVariables),
             Array.from(allLists)
         );
-    }, [project]);
+    }, [project, translatedToolboxCategories]);
 
     // Handle editor mount
     const handleEditorDidMount = (editor: monaco.editor.IStandaloneCodeEditor, monacoRef: monacoType) => {
@@ -874,7 +878,7 @@ export default function CodeEditor() {
         handleProjectNameChange(name);
         setShowFirstLoadNameModal(false);
         setIsFirstLoad(false);
-        notify.info(`Welcome to "${name}"!`);
+        notify.info(t.playground.notifications.welcomeProject.replace('{name}', name));
     };
 
     // Handle first load name cancel (use default)
@@ -937,11 +941,13 @@ export default function CodeEditor() {
             
             // Handle errors from compilation
             if (data.errors && data.errors.length > 0) {
-                setCompilerErrors(data.errors);
+                // Translate errors using current locale
+                const translatedErrors = errorTranslator.translateErrors(data.errors);
+                setCompilerErrors(translatedErrors);
                 setShowErrors(true);
                 
-                // Also update Monaco editor with error markers
-                updateEditorMarkers(data.errors);
+                // Also update Monaco editor with error markers (use translated errors)
+                updateEditorMarkers(translatedErrors);
             }
             
             if (data.success) {
@@ -954,7 +960,10 @@ export default function CodeEditor() {
             } else {
                 // Compilation failed - show error message but still show preview with working green flag
                 const errorCount = data.errors?.length || 0;
-                setErrorMessage(`Found ${errorCount} problem${errorCount !== 1 ? 's' : ''} in your code. Check the red underlines and fix them, then click the green flag! 🚩`);
+                const errorBarMessage = errorCount === 1 
+                    ? t.playground.errorPanel.problemFound 
+                    : t.playground.errorPanel.problemsFound.replace('{count}', String(errorCount));
+                setErrorMessage(errorBarMessage);
                 // Generate empty preview so user can still interact with the stage
                 setHtmlContent(generateEmptyPreviewTemplate());
                 retValue = { js: "", html: "", success: false };
@@ -962,7 +971,7 @@ export default function CodeEditor() {
         } catch (error) {
             console.error("Error compiling:", error);
             setCompiledJsCode("Something went wrong!");
-            setErrorMessage("Oops! Something unexpected happened. Try refreshing the page.");
+            setErrorMessage(t.playground.errorPanel.unexpectedError);
             // Generate empty preview so user can still interact with the stage
             setHtmlContent(generateEmptyPreviewTemplate());
         } finally {
@@ -1032,10 +1041,7 @@ export default function CodeEditor() {
         const hasEventBlocks = /when\s+(green\s+flag|.*key\s+pressed|this\s+sprite\s+clicked|I\s+receive|backdrop\s+switches|timer\s*>|I\s+start\s+as\s+a\s+clone)/i.test(spriteCode);
         
         if (!hasEventBlocks && spriteCode.trim()) {
-            notify.warning(
-                "Your sprites have no event blocks (like 'when green flag clicked'). " +
-                "Add an event block to make your code run!"
-            );
+            notify.warning(t.playground.notifications.noEventBlocks);
         }
 
         const result = await handleCompile();
@@ -1201,7 +1207,7 @@ export default function CodeEditor() {
                         >
                             {/* Sidebar Tabs */}
                             <div className="flex border-b border-gray-700">
-                                <Tooltip content="Code blocks">
+                                <Tooltip content={t.playground.sidebar.toolbox}>
                                     <button
                                         onClick={() => setActiveSidebar("toolbox")}
                                         className={`flex-1 px-2 py-2 text-sm font-medium transition-colors ${
@@ -1210,10 +1216,10 @@ export default function CodeEditor() {
                                                 : "bg-gray-900 text-gray-500 hover:text-gray-300 hover:bg-gray-800"
                                         }`}
                                     >
-                                        📦 Blocks
+                                        📦 {t.playground.sidebar.toolbox}
                                     </button>
                                 </Tooltip>
-                                <Tooltip content="Sprite costumes">
+                                <Tooltip content={t.playground.sidebar.costumes}>
                                     <button
                                         onClick={() => setActiveSidebar("costumes")}
                                         className={`flex-1 px-2 py-2 text-sm font-medium transition-colors ${
@@ -1222,10 +1228,10 @@ export default function CodeEditor() {
                                                 : "bg-gray-900 text-gray-500 hover:text-gray-300 hover:bg-gray-800"
                                         }`}
                                     >
-                                        🎨 Costumes
+                                        🎨 {t.playground.sidebar.costumes}
                                     </button>
                                 </Tooltip>
-                                <Tooltip content="Sprite sounds">
+                                <Tooltip content={t.playground.sidebar.sounds}>
                                     <button
                                         onClick={() => setActiveSidebar("sounds")}
                                         className={`flex-1 px-2 py-2 text-sm font-medium transition-colors ${
@@ -1234,7 +1240,7 @@ export default function CodeEditor() {
                                                 : "bg-gray-900 text-gray-500 hover:text-gray-300 hover:bg-gray-800"
                                         }`}
                                     >
-                                        🔊 Sounds
+                                        🔊 {t.playground.sidebar.sounds}
                                     </button>
                                 </Tooltip>
                             </div>
@@ -1502,7 +1508,7 @@ export default function CodeEditor() {
                                 onClick={() => setShowErrors(!showErrors)}
                                 className="text-red-300 hover:text-white text-sm underline"
                             >
-                                {showErrors ? "Hide Details" : "Show Details"}
+                                {showErrors ? t.playground.errorPanel.hideDetails : t.playground.errorPanel.showDetails}
                             </button>
                         )}
                         <button
@@ -1523,7 +1529,9 @@ export default function CodeEditor() {
                 <div className="max-h-48 border-t border-red-700 bg-gray-900 overflow-y-auto">
                     <div className="px-3 py-2 bg-red-900/50 border-b border-red-800 flex justify-between items-center sticky top-0">
                         <span className="text-red-300 text-sm font-medium">
-                            🐛 {compilerErrors.length} Error{compilerErrors.length !== 1 ? 's' : ''} Found
+                            🐛 {compilerErrors.length === 1 
+                                ? t.playground.errorPanel.errorFound 
+                                : t.playground.errorPanel.errorsFound.replace('{count}', String(compilerErrors.length))}
                         </span>
                         <button
                             onClick={() => setShowErrors(false)}
@@ -1560,11 +1568,13 @@ export default function CodeEditor() {
                                         <p className="text-gray-200 text-sm">{err.message}</p>
                                         {err.suggestion && (
                                             <p className="text-green-400 text-xs mt-1">
-                                                💡 {err.suggestion}
+                                                {err.suggestion}
                                             </p>
                                         )}
                                         <p className="text-gray-500 text-xs mt-1">
-                                            Line {err.line}, Column {err.column}
+                                            {t.playground.errorPanel.lineColumn
+                                                .replace('{line}', String(err.line))
+                                                .replace('{column}', String(err.column))}
                                         </p>
                                     </div>
                                 </div>

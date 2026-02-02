@@ -6,6 +6,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { SpriteFile, canDeleteSprite, BACKDROP_ID } from "@/types/projectTypes";
 import { Tooltip } from "./ui";
+import { useTranslation } from "@/i18n";
 
 interface FileTabsProps {
     sprites: SpriteFile[];
@@ -30,6 +31,7 @@ export default function FileTabs({
     showToolbox,
     onToggleToolbox,
 }: FileTabsProps) {
+    const { t } = useTranslation();
     const [editingId, setEditingId] = useState<string | null>(null);
     const [editingName, setEditingName] = useState("");
     const [contextMenu, setContextMenu] = useState<{ x: number; y: number; spriteId: string } | null>(null);
@@ -87,11 +89,11 @@ export default function FileTabs({
     const handleDelete = (id: string) => {
         const sprite = sprites.find(s => s.id === id);
         if (!sprite || !canDeleteSprite(sprite)) {
-            alert(sprite?.isStage ? "Cannot delete the Stage!" : "Cannot delete the last sprite!");
+            alert(sprite?.isStage ? t.playground.tabs.cannotDeleteStage : t.playground.tabs.cannotDeleteLastSprite);
             setContextMenu(null);
             return;
         }
-        if (confirm("Are you sure you want to delete this sprite?")) {
+        if (confirm(t.playground.tabs.confirmDeleteSprite)) {
             onDeleteSprite(id);
         }
         setContextMenu(null);
@@ -136,13 +138,13 @@ export default function FileTabs({
                 style={{ minHeight: '40px' }}
             >
                 {/* Toolbox Toggle Button */}
-                <Tooltip content={showToolbox ? "Hide Toolbox" : "Show Toolbox"}>
+                <Tooltip content={showToolbox ? t.playground.sidebar.hideToolbox : t.playground.sidebar.showToolbox}>
                     <button
                         onClick={onToggleToolbox}
                         className={`flex-shrink-0 px-2 py-2 border-r border-gray-700 transition-colors ${
                             showToolbox ? "text-yellow-400" : "text-gray-500 hover:text-gray-300"
                         }`}
-                        title={showToolbox ? "Hide Toolbox" : "Show Toolbox"}
+                        title={showToolbox ? t.playground.sidebar.hideToolbox : t.playground.sidebar.showToolbox}
                     >
                         <span className="text-sm">🧰</span>
                     </button>
@@ -158,7 +160,7 @@ export default function FileTabs({
                                 : "bg-gray-750 text-gray-400 hover:bg-gray-700 hover:text-gray-200"
                         }`}
                         onClick={() => onSelectSprite(backdrop.id)}
-                        title="Stage - backdrop scripts"
+                        title={t.playground.tabs.stageTooltip}
                     >
                         <span className="text-sm">🎭</span>
                         <span className="text-sm font-medium">{backdrop.name}</span>
@@ -204,7 +206,7 @@ export default function FileTabs({
                                     handleDelete(sprite.id);
                                 }}
                                 className="ml-1 text-gray-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
-                                title="Delete sprite"
+                                title={t.playground.tabs.deleteSprite}
                             >
                                 ×
                             </button>
@@ -214,7 +216,7 @@ export default function FileTabs({
             </div>
 
             {/* Add Sprite Button */}
-            <Tooltip content="Add new sprite">
+            <Tooltip content={t.playground.tabs.addSprite}>
                 <button
                     onClick={onAddSprite}
                     className="flex-shrink-0 px-3 py-2 text-gray-400 hover:text-green-400 hover:bg-gray-700 transition-colors"
@@ -244,7 +246,7 @@ export default function FileTabs({
                                         }}
                                         className="w-full px-4 py-2 text-left text-sm text-gray-200 hover:bg-gray-700"
                                     >
-                                        ✏️ Rename
+                                        ✏️ {t.playground.tabs.rename}
                                     </button>
                                 )}
                                 {!isStage && (
@@ -255,7 +257,7 @@ export default function FileTabs({
                                         }}
                                         className="w-full px-4 py-2 text-left text-sm text-gray-200 hover:bg-gray-700"
                                     >
-                                        📋 Duplicate
+                                        📋 {t.playground.tabs.duplicate}
                                     </button>
                                 )}
                                 {!isStage && <hr className="border-gray-600 my-1" />}
@@ -267,12 +269,12 @@ export default function FileTabs({
                                         }`}
                                         disabled={!canDeleteSprite(sprite!)}
                                     >
-                                        🗑️ Delete
+                                        🗑️ {t.playground.tabs.delete}
                                     </button>
                                 )}
                                 {isStage && (
                                     <div className="px-4 py-2 text-sm text-gray-500 italic">
-                                        Stage cannot be modified
+                                        {t.playground.tabs.stageCannotBeModified}
                                     </div>
                                 )}
                             </>

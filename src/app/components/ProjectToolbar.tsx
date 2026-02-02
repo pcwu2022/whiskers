@@ -8,6 +8,7 @@ import Link from "next/link";
 import { ScratchProject, SpriteFile, Costume, Sound, createSprite, createProject, createCostume, createSound } from "@/types/projectTypes";
 import JSZip from "jszip";
 import { Tooltip } from "./ui";
+import { useTranslation } from "@/i18n";
 
 // Helper to load default costume image as data URL
 async function loadDefaultCostumeData(isStage: boolean = false): Promise<string | null> {
@@ -64,6 +65,7 @@ function ConfirmModal({
     onSave,
     onDiscard,
     onCancel,
+    labels,
 }: {
     isOpen: boolean;
     title: string;
@@ -71,6 +73,12 @@ function ConfirmModal({
     onSave: () => void;
     onDiscard: () => void;
     onCancel: () => void;
+    labels: {
+        cancel: string;
+        discard: string;
+        save: string;
+        howSavingWorks: string;
+    };
 }) {
     if (!isOpen) return null;
 
@@ -84,26 +92,26 @@ function ConfirmModal({
                     target="_blank"
                     className="text-blue-400 hover:text-blue-300 text-sm underline mb-4 inline-block"
                 >
-                    How does saving work? →
+                    {labels.howSavingWorks} →
                 </Link>
                 <div className="flex gap-3 justify-end mt-4">
                     <button
                         onClick={onCancel}
                         className="px-4 py-2 text-sm bg-gray-700 text-gray-200 rounded hover:bg-gray-600 transition-colors"
                     >
-                        Cancel
+                        {labels.cancel}
                     </button>
                     <button
                         onClick={onDiscard}
                         className="px-4 py-2 text-sm bg-red-700 text-white rounded hover:bg-red-600 transition-colors"
                     >
-                        Discard
+                        {labels.discard}
                     </button>
                     <button
                         onClick={onSave}
                         className="px-4 py-2 text-sm bg-green-700 text-white rounded hover:bg-green-600 transition-colors"
                     >
-                        Save Project
+                        {labels.save}
                     </button>
                 </div>
             </div>
@@ -118,12 +126,18 @@ function ProjectNameModal({
     defaultValue,
     onConfirm,
     onCancel,
+    labels,
 }: {
     isOpen: boolean;
     title: string;
     defaultValue: string;
     onConfirm: (value: string) => void;
     onCancel: () => void;
+    labels: {
+        placeholder: string;
+        cancel: string;
+        create: string;
+    };
 }) {
     const [value, setValue] = useState(defaultValue);
     const inputRef = useRef<HTMLInputElement>(null);
@@ -158,7 +172,7 @@ function ProjectNameModal({
                         type="text"
                         value={value}
                         onChange={(e) => setValue(e.target.value)}
-                        placeholder="Enter project name"
+                        placeholder={labels.placeholder}
                         className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 mb-4"
                     />
                     
@@ -168,14 +182,14 @@ function ProjectNameModal({
                             onClick={onCancel}
                             className="px-4 py-2 text-sm bg-gray-700 text-gray-200 rounded hover:bg-gray-600 transition-colors"
                         >
-                            Cancel
+                            {labels.cancel}
                         </button>
                         <button
                             type="submit"
                             disabled={!value.trim()}
                             className="px-4 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                            Create Project
+                            {labels.create}
                         </button>
                     </div>
                 </form>
@@ -192,6 +206,7 @@ export default function ProjectToolbar({
     onProjectNameChange,
     onNotify,
 }: ProjectToolbarProps) {
+    const { t } = useTranslation();
     const fileInputRef = useRef<HTMLInputElement>(null);
     const openProjectInputRef = useRef<HTMLInputElement>(null);
     
@@ -798,32 +813,32 @@ export default function ProjectToolbar({
                 />
 
                 {/* New Project Button */}
-                <Tooltip content="Create a new project">
+                <Tooltip content={t.playground.toolbar.newProject}>
                     <button
                         onClick={handleNewProject}
                         className="px-3 py-1.5 text-sm bg-green-700 text-white rounded hover:bg-green-600 transition-colors"
                     >
-                        New Project
+                        {t.playground.toolbar.newProject}
                     </button>
                 </Tooltip>
 
                 {/* Open Project Button */}
-                <Tooltip content="Open a project (.zip)">
+                <Tooltip content={t.playground.toolbar.openProject}>
                     <button
                         onClick={handleOpenProjectClick}
                         className="px-3 py-1.5 text-sm bg-blue-700 text-white rounded hover:bg-blue-600 transition-colors"
                     >
-                        Open Project
+                        {t.playground.toolbar.openProject}
                     </button>
                 </Tooltip>
 
                 {/* Save Project Button */}
-                <Tooltip content="Download your project (.zip)">
+                <Tooltip content={t.playground.toolbar.saveProject}>
                     <button
                         onClick={downloadProject}
                         className="px-3 py-1.5 text-sm bg-indigo-700 text-white rounded hover:bg-indigo-600 transition-colors"
                     >
-                        Save Project
+                        {t.playground.toolbar.saveProject}
                     </button>
                 </Tooltip>
 
@@ -877,20 +892,31 @@ export default function ProjectToolbar({
             {/* Confirmation Modal */}
             <ConfirmModal
                 isOpen={showConfirmModal}
-                title={pendingAction === "new" ? "Create New Project?" : "Open Another Project?"}
-                message="Your current project will be lost unless you save it first. Would you like to save your project before continuing?"
+                title={pendingAction === "new" ? t.playground.modals.newProjectTitle : t.playground.modals.unsavedChangesTitle}
+                message={t.playground.modals.unsavedChangesMessage}
                 onSave={handleSaveAndContinue}
                 onDiscard={handleDiscardAndContinue}
                 onCancel={handleCancel}
+                labels={{
+                    cancel: t.common.cancel,
+                    discard: t.common.discard,
+                    save: t.playground.toolbar.saveProject,
+                    howSavingWorks: t.playground.modals.howSavingWorks,
+                }}
             />
 
             {/* Project Name Modal */}
             <ProjectNameModal
                 isOpen={showNameModal}
-                title="Name Your Project"
-                defaultValue="New Project"
+                title={t.playground.modals.projectNameTitle}
+                defaultValue={t.playground.toolbar.newProject}
                 onConfirm={handleNameConfirm}
                 onCancel={handleNameCancel}
+                labels={{
+                    placeholder: t.playground.modals.projectNamePlaceholder,
+                    cancel: t.common.cancel,
+                    create: t.common.confirm,
+                }}
             />
         </>
     );

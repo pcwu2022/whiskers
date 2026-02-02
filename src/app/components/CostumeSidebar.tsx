@@ -3,6 +3,7 @@
 import React, { useRef, useState, useCallback } from "react";
 import { Costume, createCostume, DEFAULT_SPRITE_COSTUME_URL, DEFAULT_STAGE_COSTUME_URL } from "@/types/projectTypes";
 import { InputModal, Tooltip } from "./ui";
+import { useTranslation } from "@/i18n";
 
 interface CostumeSidebarProps {
     costumes: Costume[];
@@ -23,6 +24,7 @@ export default function CostumeSidebar({
     spriteName,
     isStage,
 }: CostumeSidebarProps) {
+    const { t } = useTranslation();
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [renameModal, setRenameModal] = useState<{
         isOpen: boolean;
@@ -47,7 +49,7 @@ export default function CostumeSidebar({
         // Filter valid image files first
         const imageFiles = Array.from(files).filter((file) => {
             if (!file.type.startsWith("image/")) {
-                alert(`"${file.name}" is not an image file.`);
+                alert(`"${file.name}" ${t.playground.costumeSidebar.notAnImage}`);
                 return false;
             }
             return true;
@@ -146,7 +148,7 @@ export default function CostumeSidebar({
     const handleDelete = (index: number) => {
         // Don't allow deleting the last costume
         if (costumes.length <= 1) {
-            alert("Cannot delete the last costume. A sprite must have at least one costume.");
+            alert(t.playground.costumeSidebar.cannotDeleteLast);
             return;
         }
 
@@ -265,7 +267,7 @@ export default function CostumeSidebar({
                     className="w-full px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm rounded transition-colors flex items-center justify-center gap-2"
                 >
                     <span>+</span>
-                    <span>Upload Costume</span>
+                    <span>{t.playground.costumeSidebar.uploadCostume}</span>
                 </button>
             </div>
 
@@ -305,7 +307,7 @@ export default function CostumeSidebar({
 
                         {/* Action Buttons (visible on hover) */}
                         <div className="absolute top-1 right-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <Tooltip content="Move Up">
+                            <Tooltip content={t.playground.costumeSidebar.moveUp}>
                                 <button
                                     onClick={(e) => {
                                         e.stopPropagation();
@@ -321,7 +323,7 @@ export default function CostumeSidebar({
                                     ↑
                                 </button>
                             </Tooltip>
-                            <Tooltip content="Move Down">
+                            <Tooltip content={t.playground.costumeSidebar.moveDown}>
                                 <button
                                     onClick={(e) => {
                                         e.stopPropagation();
@@ -337,7 +339,7 @@ export default function CostumeSidebar({
                                     ↓
                                 </button>
                             </Tooltip>
-                            <Tooltip content="Rename">
+                            <Tooltip content={t.playground.costumeSidebar.rename}>
                                 <button
                                     onClick={(e) => {
                                         e.stopPropagation();
@@ -348,7 +350,7 @@ export default function CostumeSidebar({
                                     ✏️
                                 </button>
                             </Tooltip>
-                            <Tooltip content={costumes.length <= 1 ? "Cannot delete last costume" : "Delete"}>
+                            <Tooltip content={costumes.length <= 1 ? t.playground.costumeSidebar.cannotDeleteLast : t.playground.costumeSidebar.delete}>
                                 <button
                                     onClick={(e) => {
                                         e.stopPropagation();
@@ -372,11 +374,11 @@ export default function CostumeSidebar({
             {/* Rename Modal */}
             <InputModal
                 isOpen={renameModal.isOpen}
-                title="Rename Costume"
-                message="Enter a new name for this costume:"
+                title={t.playground.costumeSidebar.renameCostumeTitle}
+                message={t.playground.costumeSidebar.renameCostumeMessage}
                 defaultValue={renameModal.currentName}
-                placeholder="Costume name"
-                confirmText="Rename"
+                placeholder={t.playground.costumeSidebar.costumePlaceholder}
+                confirmText={t.playground.costumeSidebar.renameButton}
                 onConfirm={handleRenameConfirm}
                 onCancel={() => setRenameModal({ isOpen: false, costumeIndex: -1, currentName: "" })}
             />

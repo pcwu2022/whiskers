@@ -1,26 +1,26 @@
+'use client';
+
 import React from 'react'
+import { useTranslation } from '@/i18n'
 
 const WhySection = () => {
+    const { t } = useTranslation();
+    
     return (
         <div>
             <section id="why" className="content-section gap-section">
-                <h2 className="section-title">Why Whiskers exists</h2>
+                <h2 className="section-title">{t.landing.why.title}</h2>
                 <div className="gap-content">
                     <div className="gap-card">
-                        <h3 className="card-title">The Challenge</h3>
+                        <h3 className="card-title">{t.landing.why.challengeTitle}</h3>
                         <p>
-                            For many young learners, block-based programming is a great start.
-                            Platforms such as <b><a href="https://scratch.mit.edu">Scratch</a></b> trains logical thinking and problem-solving skills.
-                            However, when transitioning to text-based programming languages,
-                            learners are often overwhelmed by the complexity of syntax and structure.
+                            {t.landing.why.challengeText}
                         </p>
                     </div>
                     <div className="gap-card highlight">
-                        <h3 className="card-title">The Solution</h3>
+                        <h3 className="card-title">{t.landing.why.solutionTitle}</h3>
                         <p>
-                            Whiskers bridges this gap. 
-                            Starting from drag-and-drop coding, learners can gradually get familiar with real code syntax using concepts they already know from <b><a href="https://scratch.mit.edu">Scratch</a></b>.
-                            When they are ready, they can naturally shift to typing with the help of intelligent guidance and live feedback.
+                            {t.landing.why.solutionText}
                         </p>
                     </div>
                 </div>

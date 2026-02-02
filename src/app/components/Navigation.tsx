@@ -1,10 +1,16 @@
+'use client';
+
 import Link from 'next/link';
+import { useTranslation } from '@/i18n';
+import LanguageSelector from './LanguageSelector';
 
 interface NavigationProps {
     variant?: 'landing' | 'playground';
 }
 
 export default function Navigation({ variant = 'landing' }: NavigationProps) {
+    const { t } = useTranslation();
+    
     return (
         <nav className="bg-gray-800 px-4 py-2 flex justify-between items-center border-b border-gray-700">
             <Link href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
@@ -15,9 +21,9 @@ export default function Navigation({ variant = 'landing' }: NavigationProps) {
                 />
                 <div className="flex flex-col justify-center">
                     <h1 className="text-white font-bold text-lg leading-tight">
-                        {variant === 'playground' ? 'Whiskers Playground' : 'Whiskers'}
+                        {variant === 'playground' ? `${t.common.appName} Playground` : t.common.appName}
                     </h1>
-                    <span className="text-gray-500 text-[10px] leading-tight">Real programming starts here</span>
+                    <span className="text-gray-500 text-[10px] leading-tight">{t.common.tagline}</span>
                 </div>
             </Link>
 
@@ -27,9 +33,12 @@ export default function Navigation({ variant = 'landing' }: NavigationProps) {
                         href="/playground"
                         className="px-4 py-2 bg-gradient-to-r from-orange-500 to-orange-700 hover:from-orange-600 hover:to-orange-800 text-white font-medium text-sm rounded-lg transition-all"
                     >
-                        Try it now
+                        {t.common.tryItNow}
                     </Link>
                 )}
+                
+                {/* Language Selector */}
+                <LanguageSelector />
                 
                 {/* GitHub Logo Link */}
                 <a
@@ -37,7 +46,7 @@ export default function Navigation({ variant = 'landing' }: NavigationProps) {
                     target="_blank"
                     rel="noopener noreferrer"
                     className="flex items-center p-2 hover:bg-gray-700 rounded-lg transition-colors"
-                    title="Contribute"
+                    title={t.common.contribute}
                 >
                     <svg
                         xmlns="http://www.w3.org/2000/svg"

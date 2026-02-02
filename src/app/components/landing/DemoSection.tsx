@@ -1,28 +1,25 @@
+'use client';
+
 import React from 'react'
 import Link from 'next/link'
+import { useTranslation } from '@/i18n'
 
 interface DemoSectionProps {
     isMobile: boolean
 }
 
 const DemoSection: React.FC<DemoSectionProps> = ({ isMobile }) => {
+    const { t } = useTranslation();
+    
     return (
         <section id="demo" className="content-section demo-section">
-            <h2>What is Whiskers?</h2>
+            <h2>{t.landing.demo.title}</h2>
             <div className="demo-container">
-                {/* <div className="demo-placeholder">
-                    <div className="demo-image-placeholder">
-                        <p>🎬 Demo Video/GIF</p>
-                        <span className="placeholder-text">
-                            Show: typing code with autocomplete, running a simple animation
-                        </span>
-                    </div>
-                </div> */}
                 <div style={{ display: 'flex', justifyContent: 'center' }}>
                     <iframe
                         width="640"
                         height="360"
-                        src="https://www.youtube.com/embed/8qW1R7OqQgE"
+                        src={t.landing.demo.videoUrl}
                         title="Whiskers - From Blocks to Code"
                         frameBorder="0"
                         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
@@ -36,11 +33,11 @@ const DemoSection: React.FC<DemoSectionProps> = ({ isMobile }) => {
                     href="/playground"
                     className="demo-cta-button"
                 >
-                    {isMobile ? 'Try it now (Desktop recommended)' : 'Try it now'}
+                    {isMobile ? t.landing.demo.ctaMobile : t.landing.demo.cta}
                 </Link>
                 {isMobile && (
                     <p className="mobile-notice">
-                        💡 For the best experience, we recommend using Whiskers on a desktop or laptop computer.
+                        {t.landing.demo.mobileNotice}
                     </p>
                 )}
             </div>

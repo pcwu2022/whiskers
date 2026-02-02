@@ -39,16 +39,20 @@ export const ErrorCodes = {
     UNTERMINATED_STRING: "E005",
     INCONSISTENT_INDENT: "E006",
     
-    // Parser errors (E1xx)
-    UNDECLARED_VARIABLE: "E101",
-    RESERVED_KEYWORD: "E102",
-    MISSING_VALUE: "E103",
-    UNEXPECTED_TOKEN: "E104",
-    MISSING_END: "E105",
-    INVALID_SYNTAX: "E106",
-    MISSING_INDENT: "E107",
-    UNKNOWN_BLOCK: "E108",
-    PROCEDURE_ARG_MISMATCH: "E109",
+    // Compiler pre-check errors (E1xx - 100-109)
+    EMPTY_CIRCLE: "E100",
+    EMPTY_DIAMOND: "E101",
+    
+    // Parser errors (E1xx - 110+)
+    UNDECLARED_VARIABLE: "E110",
+    RESERVED_KEYWORD: "E111",
+    MISSING_VALUE: "E112",
+    UNEXPECTED_TOKEN: "E113",
+    MISSING_END: "E114",
+    INVALID_SYNTAX: "E115",
+    MISSING_INDENT: "E116",
+    UNKNOWN_BLOCK: "E117",
+    PROCEDURE_ARG_MISMATCH: "E118",
     
     // Type errors (E2xx)
     TYPE_MISMATCH: "E201",
