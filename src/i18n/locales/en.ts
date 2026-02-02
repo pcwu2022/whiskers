@@ -90,7 +90,7 @@ export const en: TranslationSchema = {
         },
         footer: {
             developedBy: 'Developed by',
-            authorName: 'Po-Chun Wu',
+            authorName: 'Po-Chun Wu 🇹🇼',
             mission: 'Empowering the next generation of programmers.',
         },
         backToTop: 'Back to top',

@@ -288,6 +288,8 @@ export default function ProjectToolbar({
                 if (stopBase64) {
                     standaloneHtml = standaloneHtml.replace(/src="\/stop\.png"/g, `src="${stopBase64}"`);
                 }
+                // Replace the default title with the project name
+                standaloneHtml = standaloneHtml.replace(/<title>Whiskers Preview<\/title>/g, `<title>${project.name}</title>`);
                 // Add compiled HTML that can run standalone in a browser
                 zip.file(`${project.name}.html`, standaloneHtml);
             }

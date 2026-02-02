@@ -21,13 +21,13 @@ export const zhTW: TranslationSchema = {
     // Landing Page
     landing: {
         hero: {
-            title: '從方塊到程式碼',
+            title: '從拉方塊到寫程式',
             cta: '真正的程式設計，從這裡開始',
         },
         roleSelection: {
             title: '我是一位...',
             student: '學生',
-            studentDesc: '準備來寫真正的程式',
+            studentDesc: '準備來解鎖程式的威力',
             parent: '家長',
             parentDesc: '幫助小孩學習',
             teacher: '老師',

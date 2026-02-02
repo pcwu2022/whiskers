@@ -18,18 +18,20 @@ export function generateEmptyPreviewTemplate(): string {
 interface HTMLTemplateOptions {
     flagImageSrc?: string;  // Base64 data URL or path for flag image
     stopImageSrc?: string;  // Base64 data URL or path for stop image
+    title?: string;         // Page title (defaults to "Whiskers Preview")
 }
 
 export function generateHTMLTemplate(jsCode: string, options?: HTMLTemplateOptions): string {
     const flagSrc = options?.flagImageSrc || DEFAULT_FLAG_SRC;
     const stopSrc = options?.stopImageSrc || DEFAULT_STOP_SRC;
+    const pageTitle = options?.title || "Whiskers Preview";
     
     return `<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Whiskers Preview</title>
+    <title>${pageTitle}</title>
     <style>
         * {
             box-sizing: border-box;
