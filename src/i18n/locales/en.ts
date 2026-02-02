@@ -105,8 +105,10 @@ export const en: TranslationSchema = {
             downloadHtml: 'Download as HTML',
             help: 'Help',
             run: 'Run',
-            stop: 'Stop',
-        },
+            stop: 'Stop',            showOutput: 'Show Output',
+            hideOutput: 'Hide Output',
+            menu: 'Menu',
+            support: 'Help & Support',        },
         sidebar: {
             toolbox: 'Toolbox',
             costumes: 'Costumes',

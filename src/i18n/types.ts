@@ -115,6 +115,10 @@ export interface TranslationSchema {
             help: string;
             run: string;
             stop: string;
+            showOutput: string;
+            hideOutput: string;
+            menu: string;
+            support: string;
         };
         sidebar: {
             toolbox: string;

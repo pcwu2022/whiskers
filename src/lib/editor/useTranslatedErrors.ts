@@ -58,8 +58,16 @@ export function translateError(
     
     const errorTranslation = translations.errors[translationKey];
     
-    if (!errorTranslation) {
-        // No translation found, return original error
+    // Ensure errorTranslation is an object with string properties
+    if (!errorTranslation || typeof errorTranslation !== 'object') {
+        return error;
+    }
+    
+    const translatedMessage = typeof errorTranslation.message === 'string' ? errorTranslation.message : '';
+    const translatedSuggestion = typeof errorTranslation.suggestion === 'string' ? errorTranslation.suggestion : '';
+    
+    if (!translatedMessage) {
+        // No valid translation found, return original error
         return error;
     }
     
@@ -70,8 +78,8 @@ export function translateError(
     // Return translated error with prefix preserved
     return {
         ...error,
-        message: prefix + (errorTranslation.message || error.message.replace(SPRITE_PREFIX_REGEX, '')),
-        suggestion: errorTranslation.suggestion || error.suggestion,
+        message: prefix + translatedMessage,
+        suggestion: translatedSuggestion || error.suggestion,
     };
 }
 

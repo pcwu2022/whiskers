@@ -5,7 +5,7 @@ import Editor, { useMonaco } from "@monaco-editor/react";
 import * as monaco from "monaco-editor";
 import Link from "next/link";
 import { languageDef, languageConfiguration, languageSelector, registerScratchTheme, toolboxCategories, ToolboxCategory, ToolboxCommand, BlockType } from "@/lib/codeEditorConfig";
-import { useTranslation } from "@/i18n";
+import { useTranslation, SUPPORTED_LOCALES, LOCALE_NAMES } from "@/i18n";
 import { useTranslatedToolbox } from "@/lib/editor/useTranslatedToolbox";
 import { createErrorTranslator } from "@/lib/editor/useTranslatedErrors";
 import FileTabs from "./FileTabs";
@@ -42,6 +42,54 @@ type monacoType = typeof monaco;
 
 // Sidebar type - only one can be open at a time
 type SidebarType = "toolbox" | "costumes" | "sounds" | null;
+
+// Language Selector Component
+function LanguageSelector() {
+    const { locale, setLocale } = useTranslation();
+    const [isOpen, setIsOpen] = useState(false);
+
+    return (
+        <div className="relative">
+            <Tooltip content="Language">
+                <button
+                    onClick={() => setIsOpen(!isOpen)}
+                    className="p-2 text-sm bg-gray-700 text-gray-200 rounded hover:bg-gray-600 transition-colors"
+                    aria-label="Select language"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="12" cy="12" r="10"/>
+                        <line x1="2" y1="12" x2="22" y2="12"/>
+                        <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+                    </svg>
+                </button>
+            </Tooltip>
+
+            {isOpen && (
+                <>
+                    <div 
+                        className="fixed inset-0 z-40" 
+                        onClick={() => setIsOpen(false)}
+                    />
+                    <div className="absolute right-0 top-full mt-1 bg-gray-800 border border-gray-600 rounded-lg shadow-xl py-1 z-50 min-w-36">
+                        {SUPPORTED_LOCALES.map((loc) => (
+                            <button
+                                key={loc}
+                                onClick={() => { setLocale(loc); setIsOpen(false); }}
+                                className={`w-full px-4 py-2.5 text-left text-sm flex items-center gap-3 transition-colors ${
+                                    locale === loc 
+                                        ? "bg-blue-600 text-white" 
+                                        : "text-gray-200 hover:bg-gray-700"
+                                }`}
+                            >
+                                {LOCALE_NAMES[loc]}
+                            </button>
+                        ))}
+                    </div>
+                </>
+            )}
+        </div>
+    );
+}
 
 // Helper to load default costume image as data URL
 async function loadDefaultCostumeData(isStage: boolean = false): Promise<string | null> {
@@ -1169,7 +1217,9 @@ export default function CodeEditor() {
                         </Tooltip>
                     </div>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
+                    {/* Language Selector */}
+                    <LanguageSelector />
                     <ProjectToolbar
                         project={project}
                         onImportProject={handleImportProject}
@@ -1177,22 +1227,10 @@ export default function CodeEditor() {
                         onNewProject={handleNewProject}
                         onProjectNameChange={handleProjectNameChange}
                         onNotify={handleNotify}
+                        showOutput={showCode}
+                        onToggleOutput={() => setShowCode(!showCode)}
+                        canShowOutput={compiled && !!compiledJsCode}
                     />
-                    <Tooltip content={!compiled ? "Run code first to see output" : (showCode ? "Hide generated Code" : "Show generated Code")}>
-                        <button
-                            onClick={() => compiled && compiledJsCode ? setShowCode(!showCode) : undefined}
-                            disabled={!compiled || !compiledJsCode}
-                            className={`px-4 py-1.5 rounded font-medium text-sm transition-colors ${
-                                !compiled || !compiledJsCode
-                                ? "bg-gray-700 text-gray-500 cursor-not-allowed"
-                                : showCode
-                                ? "bg-purple-800 text-white"
-                                : "bg-purple-900 hover:bg-purple-800 text-white"
-                            }`}
-                        >
-                            {showCode ? "Hide Output" : "Show Output"}
-                        </button>
-                    </Tooltip>
                 </div>
             </div>
 

@@ -304,24 +304,27 @@ export function useTranslatedToolbox() {
         return toolboxCategories.map(category => {
             // Get translated category name
             const categoryKey = categoryKeyMap[category.name];
-            const translatedName = categoryKey 
-                ? t.toolbox.categories[categoryKey] || category.name
+            const translatedCategoryValue = categoryKey ? t.toolbox.categories[categoryKey] : undefined;
+            const translatedName = (typeof translatedCategoryValue === 'string' && translatedCategoryValue)
+                ? translatedCategoryValue
                 : category.name;
             
             // Translate command labels and descriptions
             const translatedCommands = category.commands.map(command => {
-                // Translate label
+                // Translate label - ensure we get a string
                 const labelKey = blockLabelKeyMap[command.label];
-                const translatedLabel = labelKey
-                    ? t.toolbox.blocks[labelKey] || command.label
+                const translatedLabelValue = labelKey ? t.toolbox.blocks[labelKey] : undefined;
+                const translatedLabel = (typeof translatedLabelValue === 'string' && translatedLabelValue)
+                    ? translatedLabelValue
                     : command.label;
                 
-                // Translate description
+                // Translate description - ensure we get a string
                 let translatedDesc = command.description;
                 if (command.description) {
                     const descKey = descriptionKeyMap[command.description];
-                    translatedDesc = descKey
-                        ? t.toolbox.descriptions[descKey] || command.description
+                    const translatedDescValue = descKey ? t.toolbox.descriptions[descKey] : undefined;
+                    translatedDesc = (typeof translatedDescValue === 'string' && translatedDescValue)
+                        ? translatedDescValue
                         : command.description;
                 }
                 

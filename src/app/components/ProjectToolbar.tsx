@@ -55,6 +55,10 @@ interface ProjectToolbarProps {
     onNewProject: (project: ScratchProject) => void;
     onProjectNameChange: (name: string) => void;
     onNotify: (message: string, type: "success" | "error" | "info" | "warning") => void;
+    // Show output toggle
+    showOutput: boolean;
+    onToggleOutput: () => void;
+    canShowOutput: boolean;
 }
 
 // Confirmation Modal Component
@@ -205,6 +209,9 @@ export default function ProjectToolbar({
     onNewProject,
     onProjectNameChange,
     onNotify,
+    showOutput,
+    onToggleOutput,
+    canShowOutput,
 }: ProjectToolbarProps) {
     const { t } = useTranslation();
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -792,9 +799,12 @@ export default function ProjectToolbar({
         }
     };
 
+    // State for dropdown menu
+    const [isMenuOpen, setIsMenuOpen] = useState(false);
+
     return (
         <>
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1 relative">
                 {/* Hidden file inputs */}
                 <input
                     ref={fileInputRef}
@@ -812,81 +822,90 @@ export default function ProjectToolbar({
                     className="hidden"
                 />
 
-                {/* New Project Button */}
-                <Tooltip content={t.playground.toolbar.newProject}>
+                {/* Hamburger Menu Button */}
+                <Tooltip content={t.playground.toolbar.menu}>
                     <button
-                        onClick={handleNewProject}
-                        className="px-3 py-1.5 text-sm bg-green-700 text-white rounded hover:bg-green-600 transition-colors"
-                    >
-                        {t.playground.toolbar.newProject}
-                    </button>
-                </Tooltip>
-
-                {/* Open Project Button */}
-                <Tooltip content={t.playground.toolbar.openProject}>
-                    <button
-                        onClick={handleOpenProjectClick}
-                        className="px-3 py-1.5 text-sm bg-blue-700 text-white rounded hover:bg-blue-600 transition-colors"
-                    >
-                        {t.playground.toolbar.openProject}
-                    </button>
-                </Tooltip>
-
-                {/* Save Project Button */}
-                <Tooltip content={t.playground.toolbar.saveProject}>
-                    <button
-                        onClick={downloadProject}
-                        className="px-3 py-1.5 text-sm bg-indigo-700 text-white rounded hover:bg-indigo-600 transition-colors"
-                    >
-                        {t.playground.toolbar.saveProject}
-                    </button>
-                </Tooltip>
-
-                {/* Separator */}
-                <span className="text-gray-600 mx-1">|</span>
-
-                {/* Upload Button (Icon only) */}
-                {/* <Tooltip content="Import sprite (.scratch) or project (.zip)">
-                    <button
-                        onClick={() => fileInputRef.current?.click()}
+                        onClick={() => setIsMenuOpen(!isMenuOpen)}
                         className="p-2 text-sm bg-gray-700 text-gray-200 rounded hover:bg-gray-600 transition-colors"
+                        aria-label={t.playground.toolbar.menu}
                     >
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                            <polyline points="17 8 12 3 7 8" />
-                            <line x1="12" y1="3" x2="12" y2="15" />
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <line x1="3" y1="6" x2="21" y2="6" />
+                            <line x1="3" y1="12" x2="21" y2="12" />
+                            <line x1="3" y1="18" x2="21" y2="18" />
                         </svg>
                     </button>
-                </Tooltip> */}
+                </Tooltip>
 
-                {/* Download Dropdown (Icon only) */}
-                {/* <div className="relative group">
-                    <Tooltip content="Download project or sprite">
-                        <button
-                            className="p-2 text-sm bg-gray-700 text-gray-200 rounded hover:bg-gray-600 transition-colors"
-                        >
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                                <polyline points="7 10 12 15 17 10" />
-                                <line x1="12" y1="15" x2="12" y2="3" />
-                            </svg>
-                        </button>
-                    </Tooltip>
-                    <div className="absolute right-0 top-full mt-1 bg-gray-800 border border-gray-600 rounded shadow-lg py-1 hidden group-hover:block z-50 min-w-44">
-                        <button
-                            onClick={downloadProject}
-                            className="w-full px-4 py-2 text-left text-sm text-gray-200 hover:bg-gray-700 flex items-center gap-2"
-                        >
-                            <span>📦</span> Save Project (.zip)
-                        </button>
-                        <button
-                            onClick={handleDownloadSprite}
-                            className="w-full px-4 py-2 text-left text-sm text-gray-200 hover:bg-gray-700 flex items-center gap-2"
-                        >
-                            <span>📄</span> Save Current Sprite
-                        </button>
-                    </div>
-                </div> */}
+                {/* Dropdown Menu */}
+                {isMenuOpen && (
+                    <>
+                        {/* Backdrop to close menu when clicking outside */}
+                        <div 
+                            className="fixed inset-0 z-40" 
+                            onClick={() => setIsMenuOpen(false)}
+                        />
+                        <div className="absolute right-0 top-full mt-1 bg-gray-800 border border-gray-600 rounded-lg shadow-xl py-1 z-50 min-w-48">
+                            {/* New Project */}
+                            <button
+                                onClick={() => { handleNewProject(); setIsMenuOpen(false); }}
+                                className="w-full px-4 py-2.5 text-left text-sm text-gray-200 hover:bg-gray-700 flex items-center gap-3 transition-colors"
+                            >
+                                <span className="text-green-400">✨</span>
+                                {t.playground.toolbar.newProject}
+                            </button>
+
+                            {/* Open Project */}
+                            <button
+                                onClick={() => { handleOpenProjectClick(); setIsMenuOpen(false); }}
+                                className="w-full px-4 py-2.5 text-left text-sm text-gray-200 hover:bg-gray-700 flex items-center gap-3 transition-colors"
+                            >
+                                <span className="text-blue-400">📂</span>
+                                {t.playground.toolbar.openProject}
+                            </button>
+
+                            {/* Save Project */}
+                            <button
+                                onClick={() => { downloadProject(); setIsMenuOpen(false); }}
+                                className="w-full px-4 py-2.5 text-left text-sm text-gray-200 hover:bg-gray-700 flex items-center gap-3 transition-colors"
+                            >
+                                <span className="text-indigo-400">💾</span>
+                                {t.playground.toolbar.saveProject}
+                            </button>
+
+                            {/* Divider */}
+                            <div className="border-t border-gray-700 my-1" />
+
+                            {/* Show/Hide Output */}
+                            <button
+                                onClick={() => { if (canShowOutput) { onToggleOutput(); setIsMenuOpen(false); } }}
+                                disabled={!canShowOutput}
+                                className={`w-full px-4 py-2.5 text-left text-sm flex items-center gap-3 transition-colors ${
+                                    canShowOutput 
+                                        ? "text-gray-200 hover:bg-gray-700" 
+                                        : "text-gray-500 cursor-not-allowed"
+                                }`}
+                            >
+                                <span className={canShowOutput ? "text-purple-400" : "text-gray-500"}>📄</span>
+                                {showOutput ? t.playground.toolbar.hideOutput : t.playground.toolbar.showOutput}
+                            </button>
+
+                            {/* Divider */}
+                            <div className="border-t border-gray-700 my-1" />
+
+                            {/* Help & Support */}
+                            <Link
+                                href="/support"
+                                target="_blank"
+                                onClick={() => setIsMenuOpen(false)}
+                                className="w-full px-4 py-2.5 text-left text-sm text-gray-200 hover:bg-gray-700 flex items-center gap-3 transition-colors"
+                            >
+                                <span className="text-yellow-400">❓</span>
+                                {t.playground.toolbar.support}
+                            </Link>
+                        </div>
+                    </>
+                )}
             </div>
 
             {/* Confirmation Modal */}

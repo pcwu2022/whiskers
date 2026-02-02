@@ -105,8 +105,10 @@ export const zhTW: TranslationSchema = {
             downloadHtml: '下載為 HTML',
             help: '說明',
             run: '執行',
-            stop: '停止',
-        },
+            stop: '停止',            showOutput: '顯示輸出',
+            hideOutput: '隱藏輸出',
+            menu: '選單',
+            support: '說明與支援',        },
         sidebar: {
             toolbox: '工具箱',
             costumes: '造型',
