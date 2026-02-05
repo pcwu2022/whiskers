@@ -175,9 +175,15 @@ export class MultiSpriteCodeGenerator {
             const sprite = this.sprites[i];
             const safeName = sprite.name.replace(/[^a-zA-Z0-9_]/g, "_");
             
-            // Skip backdrop/stage visual initialization (it's the background)
+            // Handle Stage/backdrop initialization separately
             if (sprite.isStage) {
-                this.output += `// Stage (backdrop) initialized - no visual sprite element\n`;
+                // Initialize stage backdrops (costumes for the stage)
+                const backdropNames = sprite.costumeNames || ['backdrop1'];
+                const backdropUrls = sprite.costumeUrls || [];
+                this.output += `// Stage (backdrop) initialization\n`;
+                this.output += `scratchRuntime.stage.backdrops = ${JSON.stringify(backdropNames)};\n`;
+                this.output += `scratchRuntime.stage.backdropUrls = ${JSON.stringify(backdropUrls)};\n`;
+                this.output += `scratchRuntime.stage.currentBackdrop = 0;\n`;
                 continue;
             }
             

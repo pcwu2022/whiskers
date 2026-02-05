@@ -11,7 +11,8 @@ window.scratchRuntime = {
         height: 360, 
         backgroundColor: 'white',
         currentBackdrop: 0,
-        backdrops: ['backdrop1'], // Placeholder for costume names
+        backdrops: ['backdrop1'], // Backdrop names (will be populated by code generator)
+        backdropUrls: [],          // Backdrop image URLs (will be populated by code generator)
         volume: 100
     },
     currentSprite: 'Sprite1',
@@ -652,6 +653,9 @@ window.scratchRuntime = {
         const backdropName = this.stage.backdrops[this.stage.currentBackdrop];
         console.log('Switched to backdrop: ' + backdropName);
         
+        // Update the visual backdrop
+        this.updateBackdrop();
+        
         // Trigger backdrop change event
         if (this.events['backdropSwitch_' + backdropName]) {
             this.events['backdropSwitch_' + backdropName].forEach(function(callback) { callback(); });
@@ -661,6 +665,64 @@ window.scratchRuntime = {
     nextBackdrop: function() {
         this.stage.currentBackdrop = (this.stage.currentBackdrop + 1) % this.stage.backdrops.length;
         console.log('Switched to backdrop: ' + this.stage.backdrops[this.stage.currentBackdrop]);
+        this.updateBackdrop();
+    },
+    
+    // Update backdrop visual display
+    // Scales the backdrop to fit the full 480x360 stage while preserving aspect ratio
+    // The image is centered within the stage
+    updateBackdrop: function() {
+        const stageContent = document.getElementById('stage-content');
+        if (!stageContent) return;
+        
+        let backdropEl = document.getElementById('backdrop-image');
+        const backdropUrl = this.stage.backdropUrls[this.stage.currentBackdrop];
+        
+        if (backdropUrl) {
+            if (!backdropEl) {
+                // Create backdrop element if it doesn't exist
+                backdropEl = document.createElement('img');
+                backdropEl.id = 'backdrop-image';
+                backdropEl.style.position = 'absolute';
+                backdropEl.style.zIndex = '-1';
+                backdropEl.style.pointerEvents = 'none';
+                stageContent.insertBefore(backdropEl, stageContent.firstChild);
+            }
+            
+            // Load the image to calculate proper scaling
+            const img = new Image();
+            const self = this;
+            img.onload = function() {
+                const imgWidth = img.naturalWidth;
+                const imgHeight = img.naturalHeight;
+                const stageWidth = 480;
+                const stageHeight = 360;
+                
+                // Calculate scale to fit while preserving aspect ratio
+                const scaleX = stageWidth / imgWidth;
+                const scaleY = stageHeight / imgHeight;
+                const scale = Math.min(scaleX, scaleY);  // Use min to fit within stage (contain)
+                
+                // Calculate new dimensions
+                const newWidth = imgWidth * scale;
+                const newHeight = imgHeight * scale;
+                
+                // Center the image on the stage
+                const left = (stageWidth - newWidth) / 2;
+                const top = (stageHeight - newHeight) / 2;
+                
+                backdropEl.style.width = newWidth + 'px';
+                backdropEl.style.height = newHeight + 'px';
+                backdropEl.style.left = left + 'px';
+                backdropEl.style.top = top + 'px';
+            };
+            img.src = backdropUrl;
+            backdropEl.src = backdropUrl;
+            backdropEl.style.display = 'block';
+        } else if (backdropEl) {
+            // No backdrop URL, hide the element
+            backdropEl.style.display = 'none';
+        }
     },
 
     // Initialize the runtime
@@ -796,6 +858,10 @@ window.scratchRuntime = {
         document.querySelectorAll('[id^="speech-"]').forEach(function(el) {
             el.remove();
         });
+        
+        // Reset backdrop to initial state and show first backdrop
+        this.stage.currentBackdrop = 0;
+        this.updateBackdrop();
         
         // Reset script tracking
         this.activeScripts = 0;
