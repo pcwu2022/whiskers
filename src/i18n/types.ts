@@ -101,6 +101,7 @@ export interface TranslationSchema {
             developedBy: string;
             authorName: string;
             mission: string;
+            contact: string;
         };
         backToTop: string;
     };
@@ -119,6 +120,7 @@ export interface TranslationSchema {
             hideOutput: string;
             menu: string;
             support: string;
+            contact: string;
         };
         sidebar: {
             toolbox: string;
@@ -697,5 +699,31 @@ export interface TranslationSchema {
             message: string;
             suggestion: string;
         };
+    };
+
+    // Contact page
+    contact: {
+        pageTitle: string;
+        subtitle: string;
+        categoryLabel: string;
+        categories: {
+            bug: string;
+            feature: string;
+            question: string;
+            other: string;
+        };
+        messageLabel: string;
+        messagePlaceholder: string;
+        emailLabel: string;
+        emailPlaceholder: string;
+        emailHint: string;
+        submit: string;
+        sending: string;
+        successTitle: string;
+        successMessage: string;
+        sendAnother: string;
+        errorGeneric: string;
+        errorRateLimit: string;
+        charCount: string;
     };
 }

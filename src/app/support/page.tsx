@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from "@/i18n";
 import Navigation from "../components/Navigation";
+import Link from 'next/link';
 import { AnalyticsProvider } from "../components/AnalyticsProvider";
 import TrackedSection from "../components/TrackedSection";
 
@@ -229,6 +230,11 @@ export default function SupportPage() {
                 <TrackedSection id="footer" className="landing-footer-wrapper">
                     <footer className="landing-footer">
                         <p>{t.landing.footer.developedBy} <a href='https://pcwu2022.github.io'>{t.landing.footer.authorName}</a>. {t.landing.footer.mission}</p>
+                        <p className="mt-2">
+                            <Link href="/contact" className="text-blue-400 hover:text-blue-300 underline text-sm">
+                                {t.landing.footer.contact}
+                            </Link>
+                        </p>
                     </footer>
                 </TrackedSection>
 

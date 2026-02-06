@@ -936,6 +936,17 @@ export default function ProjectToolbar({
                                 <span className="text-yellow-400">❓</span>
                                 {t.playground.toolbar.support}
                             </Link>
+
+                            {/* Contact Us */}
+                            <Link
+                                href="/contact"
+                                target="_blank"
+                                onClick={() => setIsMenuOpen(false)}
+                                className="w-full px-4 py-2.5 text-left text-sm text-gray-200 hover:bg-gray-700 flex items-center gap-3 transition-colors"
+                            >
+                                <span className="text-cyan-400">✉️</span>
+                                {t.playground.toolbar.contact}
+                            </Link>
                         </div>
                     </>
                 )}

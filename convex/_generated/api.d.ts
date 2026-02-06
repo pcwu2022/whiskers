@@ -10,6 +10,7 @@
 
 import type * as analytics from "../analytics.js";
 import type * as dashboard from "../dashboard.js";
+import type * as feedback from "../feedback.js";
 
 import type {
   ApiFromModules,
@@ -20,6 +21,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   analytics: typeof analytics;
   dashboard: typeof dashboard;
+  feedback: typeof feedback;
 }>;
 
 /**

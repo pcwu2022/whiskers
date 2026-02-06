@@ -36,4 +36,17 @@ export default defineSchema({
   })
     .index("by_date", ["date"])
     .index("by_type_date", ["metricType", "date"]),
+
+  // Contact / feedback form submissions
+  feedback: defineTable({
+    sessionId: v.string(),
+    category: v.string(), // 'bug' | 'feature' | 'question' | 'other'
+    message: v.string(),
+    email: v.optional(v.string()), // optional contact email
+    timestamp: v.number(),
+    status: v.string(), // 'new' | 'read' | 'resolved'
+  })
+    .index("by_session", ["sessionId"])
+    .index("by_status", ["status"])
+    .index("by_timestamp", ["timestamp"]),
 });
