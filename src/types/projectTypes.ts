@@ -68,6 +68,7 @@ end
 export const DEFAULT_BACKDROP_CODE = `// Stage scripts go here
 when green flag clicked
     // Stage initialization
+end
 `;
 
 // Create a placeholder costume (uses default logo if no data provided)
