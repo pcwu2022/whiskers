@@ -285,6 +285,10 @@ export default function CodeEditor() {
     const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
     const handleRunRef = useRef<() => void>(() => {});
     
+    // Compilation cache - skip recompile when code hasn't changed
+    const lastCompileFingerprintRef = useRef<string>("");
+    const lastCompileResultRef = useRef<{ js: string; html: string; userCode: string } | null>(null);
+
     // Drag and drop state
     const [isDragging, setIsDragging] = useState(false);
     const [draggedCommand, setDraggedCommand] = useState<ToolboxCommand | null>(null);
@@ -956,6 +960,32 @@ export default function CodeEditor() {
     const handleCompile = async (): Promise<{ js: string; html: string; success: boolean }> => {
         if (!project) return { js: "", html: "", success: false };
 
+        // Build a fingerprint of the current sprites data to detect changes
+        const spritesPayload = project.sprites.map((s) => ({
+            name: s.name,
+            code: s.code,
+            isStage: s.isStage,
+            costumeNames: s.costumes.map(c => c.name),
+            costumeUrls: s.costumes.map(c => c.data),
+            currentCostume: s.currentCostume,
+            soundNames: s.sounds.map(snd => snd.name),
+            soundUrls: s.sounds.map(snd => snd.data),
+        }));
+        const currentFingerprint = JSON.stringify(spritesPayload);
+
+        // If code hasn't changed and we have a cached successful result, reuse it
+        if (currentFingerprint === lastCompileFingerprintRef.current && lastCompileResultRef.current) {
+            const cached = lastCompileResultRef.current;
+            const displayCode = sanitizeCodeForDisplay(cached.userCode || cached.js);
+            setCompiledJsCode(displayCode);
+            setErrorMessage(null);
+            setCompilerErrors([]);
+            setHtmlContent(cached.html || null);
+            setCompileCounter(c => c + 1); // Force iframe to remount & restart
+            setCompiled(true);
+            return { js: cached.js, html: cached.html, success: true };
+        }
+
         setLoading(true);
         setCompiledJsCode(null);
         setErrorMessage(null);
@@ -971,18 +1001,7 @@ export default function CodeEditor() {
                 headers: {
                     "Content-Type": "application/json",
                 },
-                body: JSON.stringify({
-                    sprites: project.sprites.map((s) => ({
-                        name: s.name,
-                        code: s.code,
-                        isStage: s.isStage,
-                        costumeNames: s.costumes.map(c => c.name),
-                        costumeUrls: s.costumes.map(c => c.data),
-                        currentCostume: s.currentCostume,
-                        soundNames: s.sounds.map(snd => snd.name),
-                        soundUrls: s.sounds.map(snd => snd.data),
-                    })),
-                }),
+                body: JSON.stringify({ sprites: spritesPayload }),
             });
 
             const data = await response.json();
@@ -1005,6 +1024,10 @@ export default function CodeEditor() {
                 setHtmlContent(data.html || null);
                 setCompileCounter(c => c + 1); // Force iframe to remount
                 retValue = { js: data.js, html: data.html, success: true };
+
+                // Cache the successful compilation result
+                lastCompileFingerprintRef.current = currentFingerprint;
+                lastCompileResultRef.current = { js: data.js, html: data.html, userCode: data.userCode || data.js };
             } else {
                 // Compilation failed - show error message but still show preview with working green flag
                 const errorCount = data.errors?.length || 0;
@@ -1015,6 +1038,10 @@ export default function CodeEditor() {
                 // Generate empty preview so user can still interact with the stage
                 setHtmlContent(generateEmptyPreviewTemplate());
                 retValue = { js: "", html: "", success: false };
+
+                // Invalidate cache on failure
+                lastCompileFingerprintRef.current = "";
+                lastCompileResultRef.current = null;
             }
         } catch (error) {
             console.error("Error compiling:", error);
@@ -1022,6 +1049,9 @@ export default function CodeEditor() {
             setErrorMessage(t.playground.errorPanel.unexpectedError);
             // Generate empty preview so user can still interact with the stage
             setHtmlContent(generateEmptyPreviewTemplate());
+            // Invalidate cache on error
+            lastCompileFingerprintRef.current = "";
+            lastCompileResultRef.current = null;
         } finally {
             setLoading(false);
             setCompiled(true);

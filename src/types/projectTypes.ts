@@ -98,7 +98,8 @@ export function createSound(name: string, data: string | null = null, mimeType: 
 // Empty code for additional sprites
 export const EMPTY_SPRITE_CODE = `// Add your code here
 when green flag clicked
-    // Your code goes here
+    // 👇 Drag blocks here 👇
+end
 `;
 
 // Create a new sprite with default values
