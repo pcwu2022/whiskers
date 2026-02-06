@@ -95,6 +95,32 @@ Source Code → Lexer → Tokens → Parser → AST → TypeValidator → CodeGe
 | **Lists** | `addToList`, `deleteOfList`, `insertAtList`, `replaceItemOfList`, `itemOfList`, `lengthOfList`, `listContains` |
 | **Custom Blocks** | `define`, `call` (procedures with arguments) |
 
+### Operator Precedence
+
+Expressions are evaluated before being passed to statement blocks. This means
+`say 1 + 1` displays **2**, not "1". Parentheses `()` can always be used to
+make grouping explicit.
+
+| Priority | Category | Examples | Notes |
+|----------|----------|----------|-------|
+| 1 (highest) | Parenthesized expressions | `(1 + 2)`, `(score > 10)` | Always evaluated first |
+| 2 | Inline reporters | `pick random 1 to 10`, `join "a" "b"`, `round 3.7`, `length of "hi"` | Parsed as nested blocks |
+| 3 | Arithmetic / String | `+`, `-`, `*`, `/`, `mod` | Left-to-right, no infix precedence between `*` and `+` — use parentheses |
+| 4 | Comparison | `>`, `<`, `=` | Compare left and right sides |
+| 5 | Boolean | `and`, `or`, `not` | Combine conditions |
+| 6 (lowest) | Statement blocks | `say …`, `move …`, `repeat …`, `if … then`, `set … to …` | Consume the evaluated result as an argument |
+
+**Examples:**
+
+```scratch
+say 1 + 1           // says "2" — the addition is evaluated first
+move 10 * 2 steps   // moves 20 steps
+repeat 3 + 2        // repeats 5 times
+wait 1 + 2 seconds  // waits 3 seconds
+if score > 10       // compares score to 10, then branches
+say (1 + 2) * 3     // says "9" — parentheses force grouping
+```
+
 ## 🚀 Getting Started
 
 ### Prerequisites

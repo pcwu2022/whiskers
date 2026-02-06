@@ -137,6 +137,9 @@ export class DropZoneManager {
                     label: "inside control block",
                 });
                 blockStack.push({ indent: controlIndent, line: lineNum });
+
+                // Scan control structure lines for reporter/boolean slots
+                this.scanLineForSlots(lineContent, lineNum, draggedBlockType);
                 continue;
             }
 
@@ -202,72 +205,8 @@ export class DropZoneManager {
                     label: "after statement",
                 });
 
-                // Check for reporter slots (⬤) for reporter blocks
-                if (draggedBlockType === "reporter") {
-                    let match;
-                    const slotPattern = new RegExp(REPORTER_SLOT_PATTERN.source, "g");
-                    while ((match = slotPattern.exec(lineContent)) !== null) {
-                        this.addDropZone({
-                            type: "value-slot",
-                            line: lineNum,
-                            column: match.index + 1,
-                            indent: "",
-                            acceptsBlockTypes: ["reporter"],
-                            priority: 15,
-                            label: "reporter slot",
-                        });
-                    }
-                    
-                    // Also check for quoted strings that can be replaced by reporters
-                    const quotedPattern = new RegExp(QUOTED_STRING_PATTERN.source, "g");
-                    while ((match = quotedPattern.exec(lineContent)) !== null) {
-                        // Skip if it's just a slot "⬤"
-                        if (match[0] === '"⬤"') continue;
-                        this.addDropZone({
-                            type: "quoted-string",
-                            line: lineNum,
-                            column: match.index + 1,
-                            endColumn: match.index + match[0].length + 1,
-                            indent: "",
-                            acceptsBlockTypes: ["reporter"],
-                            priority: 10, // Lower priority than empty slots
-                            label: `replace: ${match[0]}`,
-                        });
-                    }
-                }
-
-                // Check for boolean slots (⯁) for boolean blocks
-                if (draggedBlockType === "boolean") {
-                    let match;
-                    const slotPattern = new RegExp(BOOLEAN_SLOT_PATTERN.source, "g");
-                    while ((match = slotPattern.exec(lineContent)) !== null) {
-                        this.addDropZone({
-                            type: "boolean-slot",
-                            line: lineNum,
-                            column: match.index + 1,
-                            indent: "",
-                            acceptsBlockTypes: ["boolean"],
-                            priority: 15,
-                            label: "boolean slot",
-                        });
-                    }
-                    
-                    // Also check for existing boolean expressions that can be replaced
-                    // Look for patterns like "a < b", "a > b", "a = b" after "if" or "until"
-                    const exprPattern = new RegExp(BOOLEAN_EXPRESSION_PATTERN.source, "g");
-                    while ((match = exprPattern.exec(lineContent)) !== null) {
-                        this.addDropZone({
-                            type: "boolean-expr",
-                            line: lineNum,
-                            column: match.index + 1,
-                            endColumn: match.index + match[0].length + 1,
-                            indent: "",
-                            acceptsBlockTypes: ["boolean"],
-                            priority: 12, // Lower priority than empty slots
-                            label: `replace: ${match[0]}`,
-                        });
-                    }
-                }
+                // Scan for reporter/boolean slots in this line
+                this.scanLineForSlots(lineContent, lineNum, draggedBlockType);
             }
         }
 
@@ -545,6 +484,80 @@ export class DropZoneManager {
             column: cursorColumn,
         });
         this.editor.focus();
+    }
+
+    /**
+     * Scan a line for reporter (⬤) and boolean (⯁) slot placeholders
+     * and add corresponding drop zones. Called for both regular statement
+     * lines AND control structure lines.
+     */
+    private scanLineForSlots(lineContent: string, lineNum: number, draggedBlockType: BlockType): void {
+        // Check for reporter slots (⬤) for reporter blocks
+        if (draggedBlockType === "reporter") {
+            let match;
+            const slotPattern = new RegExp(REPORTER_SLOT_PATTERN.source, "g");
+            while ((match = slotPattern.exec(lineContent)) !== null) {
+                this.addDropZone({
+                    type: "value-slot",
+                    line: lineNum,
+                    column: match.index + 1,
+                    indent: "",
+                    acceptsBlockTypes: ["reporter"],
+                    priority: 15,
+                    label: "reporter slot",
+                });
+            }
+
+            // Also check for quoted strings that can be replaced by reporters
+            const quotedPattern = new RegExp(QUOTED_STRING_PATTERN.source, "g");
+            while ((match = quotedPattern.exec(lineContent)) !== null) {
+                // Skip if it's just a slot "⬤"
+                if (match[0] === '"⬤"') continue;
+                this.addDropZone({
+                    type: "quoted-string",
+                    line: lineNum,
+                    column: match.index + 1,
+                    endColumn: match.index + match[0].length + 1,
+                    indent: "",
+                    acceptsBlockTypes: ["reporter"],
+                    priority: 10, // Lower priority than empty slots
+                    label: `replace: ${match[0]}`,
+                });
+            }
+        }
+
+        // Check for boolean slots (⯁) for boolean blocks
+        if (draggedBlockType === "boolean") {
+            let match;
+            const slotPattern = new RegExp(BOOLEAN_SLOT_PATTERN.source, "g");
+            while ((match = slotPattern.exec(lineContent)) !== null) {
+                this.addDropZone({
+                    type: "boolean-slot",
+                    line: lineNum,
+                    column: match.index + 1,
+                    indent: "",
+                    acceptsBlockTypes: ["boolean"],
+                    priority: 15,
+                    label: "boolean slot",
+                });
+            }
+
+            // Also check for existing boolean expressions that can be replaced
+            // Look for patterns like "a < b", "a > b", "a = b" after "if" or "until"
+            const exprPattern = new RegExp(BOOLEAN_EXPRESSION_PATTERN.source, "g");
+            while ((match = exprPattern.exec(lineContent)) !== null) {
+                this.addDropZone({
+                    type: "boolean-expr",
+                    line: lineNum,
+                    column: match.index + 1,
+                    endColumn: match.index + match[0].length + 1,
+                    indent: "",
+                    acceptsBlockTypes: ["boolean"],
+                    priority: 12, // Lower priority than empty slots
+                    label: `replace: ${match[0]}`,
+                });
+            }
+        }
     }
 
     private addDropZone(zone: DropZone): void {

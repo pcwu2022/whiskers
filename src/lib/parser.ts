@@ -1327,6 +1327,10 @@ export class Parser {
         } else {
             args = this.parseBlockArguments();
         }
+
+        // Fold inline operator expressions in args so that e.g. "say 1 + 1"
+        // parses as say(expression(1+1)) instead of say(1, "+", 1)
+        args = this.foldExpressions(args);
         
         // Post-process "say/think ... for N seconds" pattern
         // Example: say "Hello" for 2 seconds -> ["Hello", "for", 2, "seconds"] -> ["Hello", 2]
@@ -1913,6 +1917,65 @@ export class Parser {
         }
         
         return "";
+    }
+
+    /**
+     * Fold inline operator expressions in a flat args array.
+     * Scans for patterns like [value, operator, value, ...] and wraps them
+     * in expression BlockNodes so operators are evaluated before being passed
+     * as block arguments.
+     * 
+     * Example: [1, "+", 1] → [{type:"operators", name:"expression", args:[1,"+",1]}]
+     * Example: [10, "*", 2, "steps"] → [{expr}, "steps"]
+     * Example: ["$score", "by", 1, "+", "$score"] → ["$score", "by", {expr}]
+     */
+    private foldExpressions(args: (string | number | BlockNode)[]): (string | number | BlockNode)[] {
+        const operatorSet = new Set(["+", "-", "*", "/", "%", "mod", ">", "<", "=", "and", "or"]);
+
+        // Quick check: does the array even contain an operator?
+        const hasOperator = args.some(a => typeof a === "string" && operatorSet.has(a));
+        if (!hasOperator) return args;
+
+        const result: (string | number | BlockNode)[] = [];
+        let i = 0;
+
+        while (i < args.length) {
+            // Look ahead: is the next element an operator?
+            if (i + 2 <= args.length &&
+                typeof args[i + 1] === "string" && operatorSet.has(args[i + 1] as string)) {
+                // Start an expression group with the current item as left operand
+                const exprArgs: (string | number | BlockNode)[] = [args[i]];
+                i++;
+
+                // Consume operator-value pairs as long as we see them
+                while (i + 1 < args.length &&
+                       typeof args[i] === "string" && operatorSet.has(args[i] as string)) {
+                    exprArgs.push(args[i]); // operator
+                    i++;
+                    exprArgs.push(args[i]); // right operand
+                    i++;
+                }
+
+                // Wrap in an expression BlockNode
+                if (exprArgs.length >= 3) {
+                    result.push({
+                        type: "operators" as const,
+                        name: "expression",
+                        args: exprArgs,
+                    } as BlockNode);
+                } else {
+                    // Didn't form a full expression, push args individually
+                    for (const a of exprArgs) {
+                        result.push(a);
+                    }
+                }
+            } else {
+                result.push(args[i]);
+                i++;
+            }
+        }
+
+        return result;
     }
 
     // parseBlockArguments: Parse arguments for a block based on its type
