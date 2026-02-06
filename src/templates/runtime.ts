@@ -106,7 +106,7 @@ window.scratchRuntime = {
                 }
                 const dx = targetX - this.x;
                 const dy = targetY - this.y;
-                this.direction = (Math.atan2(dx, dy) * 180 / Math.PI + 90) % 360;
+                this.direction = Math.atan2(dx, dy) * 180 / Math.PI;
                 if (this.direction < 0) this.direction += 360;
                 self.updateSpriteTransform(name);
             },

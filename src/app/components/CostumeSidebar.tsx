@@ -4,6 +4,7 @@ import React, { useRef, useState, useCallback } from "react";
 import { Costume, createCostume, DEFAULT_SPRITE_COSTUME_URL, DEFAULT_STAGE_COSTUME_URL } from "@/types/projectTypes";
 import { InputModal, Tooltip } from "./ui";
 import { useTranslation } from "@/i18n";
+import { ToolboxCommand } from "@/lib/codeEditorConfig";
 
 interface CostumeSidebarProps {
     costumes: Costume[];
@@ -13,6 +14,8 @@ interface CostumeSidebarProps {
     width: number;
     spriteName: string;  // Name of the sprite (for display purposes)
     isStage: boolean;    // Whether this is the stage
+    onDragStart?: (command: ToolboxCommand, rect: DOMRect) => void;
+    onDragEnd?: () => void;
 }
 
 export default function CostumeSidebar({
@@ -23,6 +26,8 @@ export default function CostumeSidebar({
     width,
     spriteName,
     isStage,
+    onDragStart,
+    onDragEnd,
 }: CostumeSidebarProps) {
     const { t } = useTranslation();
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -38,6 +43,38 @@ export default function CostumeSidebar({
 
     // Get the default costume URL based on sprite type
     const getDefaultCostumeUrl = () => isStage ? DEFAULT_STAGE_COSTUME_URL : DEFAULT_SPRITE_COSTUME_URL;
+
+    // Build a drag command for a costume
+    const buildCostumeCommand = useCallback((costumeName: string): ToolboxCommand => {
+        const keyword = isStage ? "backdrop" : "costume";
+        return {
+            label: `switch ${keyword} to "${costumeName}"`,
+            code: `switch ${keyword} to "${costumeName}"`,
+            description: `Switch ${keyword} to ${costumeName}`,
+            blockType: "statement",
+        };
+    }, [isStage]);
+
+    // Handle costume drag start
+    const handleCostumeDragStart = useCallback((e: React.DragEvent<HTMLDivElement>, costume: Costume) => {
+        const command = buildCostumeCommand(costume.name);
+        e.dataTransfer.setData("application/x-scratch-block", JSON.stringify({
+            code: command.code,
+            blockType: command.blockType,
+            needsIndent: false,
+        }));
+        e.dataTransfer.setData("text/plain", command.code);
+        e.dataTransfer.effectAllowed = "copy";
+
+        const target = e.currentTarget;
+        if (target && onDragStart) {
+            onDragStart(command, target.getBoundingClientRect());
+        }
+    }, [buildCostumeCommand, onDragStart]);
+
+    const handleCostumeDragEnd = useCallback(() => {
+        onDragEnd?.();
+    }, [onDragEnd]);
 
     // Handle file upload
     const handleFileUpload = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
@@ -276,12 +313,16 @@ export default function CostumeSidebar({
                 {costumes.map((costume, index) => (
                     <div
                         key={costume.id}
-                        className={`relative group rounded border-2 transition-colors cursor-pointer ${
+                        draggable
+                        onDragStart={(e) => handleCostumeDragStart(e, costume)}
+                        onDragEnd={handleCostumeDragEnd}
+                        className={`relative group rounded border-2 transition-colors cursor-grab active:cursor-grabbing ${
                             index === selectedCostume
                                 ? "border-purple-500 bg-purple-900/30"
                                 : "border-gray-700 hover:border-gray-600 bg-gray-800"
                         }`}
                         onClick={() => handleSelectCostume(index)}
+                        title={`Drag to editor: switch ${isStage ? "backdrop" : "costume"} to "${costume.name}"`}
                     >
                         {/* Costume Preview */}
                         <div className="aspect-square bg-gray-900/50 flex items-center justify-center p-2">

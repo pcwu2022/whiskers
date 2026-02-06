@@ -4,6 +4,7 @@ import React, { useRef, useState, useCallback, useEffect } from "react";
 import { Sound, createSound } from "@/types/projectTypes";
 import { InputModal, Tooltip } from "./ui";
 import { useTranslation } from "@/i18n";
+import { ToolboxCommand } from "@/lib/codeEditorConfig";
 
 interface SoundSidebarProps {
     sounds: Sound[];
@@ -11,6 +12,8 @@ interface SoundSidebarProps {
     onClose: () => void;
     width: number;
     spriteName: string;  // Name of the sprite (for display purposes)
+    onDragStart?: (command: ToolboxCommand, rect: DOMRect) => void;
+    onDragEnd?: () => void;
 }
 
 export default function SoundSidebar({
@@ -19,6 +22,8 @@ export default function SoundSidebar({
     onClose,
     width,
     spriteName,
+    onDragStart,
+    onDragEnd,
 }: SoundSidebarProps) {
     const { t } = useTranslation();
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -277,6 +282,37 @@ export default function SoundSidebar({
         return `${mins}:${secs.toString().padStart(2, "0")}`;
     };
 
+    // Build a drag command for a sound
+    const buildSoundCommand = useCallback((soundName: string): ToolboxCommand => {
+        return {
+            label: `play sound "${soundName}" until done`,
+            code: `play sound "${soundName}" until done`,
+            description: `Play sound ${soundName}`,
+            blockType: "statement",
+        };
+    }, []);
+
+    // Handle sound drag start
+    const handleSoundDragStart = useCallback((e: React.DragEvent<HTMLDivElement>, sound: Sound) => {
+        const command = buildSoundCommand(sound.name);
+        e.dataTransfer.setData("application/x-scratch-block", JSON.stringify({
+            code: command.code,
+            blockType: command.blockType,
+            needsIndent: false,
+        }));
+        e.dataTransfer.setData("text/plain", command.code);
+        e.dataTransfer.effectAllowed = "copy";
+
+        const target = e.currentTarget;
+        if (target && onDragStart) {
+            onDragStart(command, target.getBoundingClientRect());
+        }
+    }, [buildSoundCommand, onDragStart]);
+
+    const handleSoundDragEnd = useCallback(() => {
+        onDragEnd?.();
+    }, [onDragEnd]);
+
     return (
         <>
             {/* Scrollbar styles */}
@@ -331,11 +367,15 @@ export default function SoundSidebar({
                     sounds.map((sound, index) => (
                         <div
                             key={sound.id}
-                            className={`relative group rounded border transition-colors ${
+                            draggable
+                            onDragStart={(e) => handleSoundDragStart(e, sound)}
+                            onDragEnd={handleSoundDragEnd}
+                            className={`relative group rounded border transition-colors cursor-grab active:cursor-grabbing ${
                                 playingId === sound.id
                                     ? "border-pink-500 bg-pink-900/30"
                                     : "border-gray-700 hover:border-gray-600 bg-gray-800"
                             }`}
+                            title={`Drag to editor: play sound "${sound.name}" until done`}
                         >
                             {/* Sound Info */}
                             <div className="p-3 flex items-center gap-3">

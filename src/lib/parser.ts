@@ -694,6 +694,7 @@ export class Parser {
         // Get the block name - could be a keyword or identifier (procedure call)
         let blockKeyword: string;
         let isProcedureCall = false;
+        let preCollectedArgs: (string | number | BlockNode)[] | null = null; // For keywords that consume their own args
         const identifierToken = this.match(TokenType.IDENTIFIER) ? this.current : null;
         
         if (this.match(TokenType.IDENTIFIER)) {
@@ -1132,6 +1133,38 @@ export class Parser {
                 this.advance(); // consume "sound"
                 blockKeyword = "playSound";
             }
+        } else if (blockKeyword === "play") {
+            // Handle "play sound <name>" and "play sound <name> until done"
+            this.skipIrrelevant();
+            if (!this.isAtEnd() && this.matchKeyword("sound")) {
+                this.advance(); // consume "sound"
+                this.skipIrrelevant();
+                // Capture the sound name argument (string, number, identifier, or expression)
+                let soundArg: string | number | BlockNode | undefined;
+                if (this.match(TokenType.STRING)) {
+                    soundArg = this.advance().value;
+                } else if (this.match(TokenType.NUMBER)) {
+                    soundArg = parseFloat(this.advance().value);
+                } else if (this.match(TokenType.PARENTHESIS_OPEN)) {
+                    soundArg = this.parseExpression();
+                } else if (this.match(TokenType.IDENTIFIER)) {
+                    soundArg = "$" + this.advance().value; // Variable reference
+                }
+                this.skipIrrelevant();
+                // Check for "until done" suffix
+                if (!this.isAtEnd() && this.matchKeyword("until")) {
+                    this.advance(); // consume "until"
+                    this.skipIrrelevant();
+                    if (!this.isAtEnd() && this.matchKeyword("done")) {
+                        this.advance(); // consume "done"
+                    }
+                    blockKeyword = "playSoundUntilDone";
+                } else {
+                    blockKeyword = "playSound";
+                }
+                // Store the sound name so it's used as the argument later
+                preCollectedArgs = soundArg !== undefined ? [soundArg] : [];
+            }
         } else if (blockKeyword === "when") {
             // Handle multi-word "when" keywords
             this.skipIrrelevant();
@@ -1268,7 +1301,10 @@ export class Parser {
         // Parse block arguments (with special handling for certain blocks)
         let args: (string | number | BlockNode)[];
         
-        if (keyPressedKey !== null) {
+        if (preCollectedArgs !== null) {
+            // Args were already collected during keyword resolution (e.g., "play sound X until done")
+            args = preCollectedArgs;
+        } else if (keyPressedKey !== null) {
             // Key was already captured during "when X key pressed" parsing
             args = [keyPressedKey];
         } else if (blockKeyword === "var" || blockKeyword === "variable") {

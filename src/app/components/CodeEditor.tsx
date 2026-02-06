@@ -1385,6 +1385,8 @@ export default function CodeEditor() {
                                     width={toolboxWidth}
                                     spriteName={activeSprite.name}
                                     isStage={activeSprite.isStage}
+                                    onDragStart={handleBlockDragStart}
+                                    onDragEnd={handleBlockDragEnd}
                                 />
                             )}
 
@@ -1396,6 +1398,8 @@ export default function CodeEditor() {
                                     onClose={() => setActiveSidebar(null)}
                                     width={toolboxWidth}
                                     spriteName={activeSprite.name}
+                                    onDragStart={handleBlockDragStart}
+                                    onDragEnd={handleBlockDragEnd}
                                 />
                             )}
                         </div>
