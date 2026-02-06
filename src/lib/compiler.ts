@@ -356,10 +356,12 @@ export class ScratchTextCompiler {
 
             this.debugger.log("info", "Parser output (program) ", program);
             
-            // Step 2.5: Type validation (after parsing, before code generation)
-            const procedureDefinitions = this.extractProcedureDefinitions(program);
-            const typeErrors = this.performTypeValidation(code, program, procedureDefinitions);
-            allErrors.push(...typeErrors);
+            // Type validation (only if no errors so far, to avoid cascading)
+            if (allErrors.length === 0) {
+                const procedureDefinitions = this.extractProcedureDefinitions(program);
+                const typeErrors = this.performTypeValidation(code, program, procedureDefinitions);
+                allErrors.push(...typeErrors);
+            }
 
             // If there are errors, don't generate code
             if (allErrors.some(e => e.severity === "error")) {
@@ -497,15 +499,17 @@ export class ScratchTextCompiler {
                     allErrors.push(...motionErrors);
                 }
                 
-                // Type validation for this sprite
-                const procedureDefinitions = this.extractProcedureDefinitions(program);
-                const typeErrors = this.performTypeValidation(
-                    sprite.code, 
-                    program, 
-                    procedureDefinitions, 
-                    sprite.name
-                );
-                allErrors.push(...typeErrors);
+                // Type validation for this sprite (only if no errors so far)
+                if (!allErrors.some(e => e.severity === "error")) {
+                    const procedureDefinitions = this.extractProcedureDefinitions(program);
+                    const typeErrors = this.performTypeValidation(
+                        sprite.code, 
+                        program, 
+                        procedureDefinitions, 
+                        sprite.name
+                    );
+                    allErrors.push(...typeErrors);
+                }
 
                 this.debugger.log("info", `Parsed sprite: ${sprite.name}`, program);
 

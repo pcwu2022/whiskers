@@ -353,7 +353,8 @@ export class Parser {
         this.skipIrrelevant();
 
         // Loop through the tokens until we reach the end.
-        while (!this.isAtEnd()) {
+        // Stop early if an error was found to avoid cascading errors that confuse learners.
+        while (!this.isAtEnd() && this.errors.length === 0) {
             try {
                 // Skip any additional newlines or comments
                 this.skipIrrelevant();
@@ -465,7 +466,8 @@ export class Parser {
     // parseScriptBlocks: Parse all blocks in a script after the first block
     private parseScriptBlocks(script: Script): void {
         // Continue parsing blocks until we reach the end of the script
-        while (!this.isAtEnd()) {
+        // Stop early if an error was found to avoid cascading errors
+        while (!this.isAtEnd() && this.errors.length === 0) {
             this.skipIrrelevant();
 
             if (this.isAtEnd()) break;
@@ -508,7 +510,7 @@ export class Parser {
 
                 // Parse additional sibling blocks at the same indentation level
                 let currentBlock = firstNestedBlock;
-                while (!this.isAtEnd() && !this.match(TokenType.DEDENT) && !this.match(TokenType.INDENT)) {
+                while (!this.isAtEnd() && !this.match(TokenType.DEDENT) && !this.match(TokenType.INDENT) && this.errors.length === 0) {
                     this.skipIrrelevant();
                     if (this.isAtEnd() || this.match(TokenType.DEDENT) || this.match(TokenType.INDENT)) break;
 
